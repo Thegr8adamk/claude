@@ -27,7 +27,7 @@ LESSONS.final = {
   steps: [
     { say: `Welcome to City Hall, {name}! This is your <b>final review</b>: ${FINAL_QS.length} questions about everything you learned. There's no rush and no failing. If you pick a wrong answer, just try another one!`, next: 'Start the review ▶', build: S => infoCard(S, `<div style="text-align:center"><div style="font-size:4em">🏛️</div><h3>Final Review</h3><p>${FINAL_QS.length} questions · unlimited tries · a certificate at the end!</p></div>`) },
     ...FINAL_QS.map((f, i) => ({ say: `Question ${i + 1} of ${FINAL_QS.length}`, build: (S, api) => quiz(S, api, f) })),
-    { say: 'You did it, {name}! Here is your certificate. You can print it with the button below. Then click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">🖨️ Print certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
+    { say: 'You did it, {name}! Here is your certificate. Click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">📜 ${window.CQ_ARTIFACT ? 'Show' : 'Print'} certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
   ]
 };
 
@@ -326,8 +326,9 @@ const Game = {
   },
   printCertificate() {
     $('#printArea').innerHTML = certHTML();
-    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px"><button class="btn gold big" id="doPrint">🖨️ Print</button></div>`);
-    $('#doPrint').onclick = () => window.print();
+    const canPrint = !window.CQ_ARTIFACT;
+    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">${canPrint ? '<button class="btn gold big" id="doPrint">🖨️ Print</button>' : '<p>📸 To keep it, take a screenshot or a photo of your certificate.</p>'}</div>`);
+    if (canPrint) $('#doPrint').onclick = () => window.print();
   }
 };
 window.addEventListener('DOMContentLoaded', () => Game.boot());

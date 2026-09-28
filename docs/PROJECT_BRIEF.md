@@ -62,6 +62,13 @@ and ship as **one full HTML file**.
    temporary. The plan is in **`docs/CHARACTER_HANDOFF.md`**: build them on Adam's PC with the
    game-character-builder skill, then switch the game to skinned characters.
 
+10. **Open in a browser from a link, and make the link shareable.** The game is published as a
+    hosted page: https://claude.ai/artifact/2D8cuwX1Fwq64zeSBSJStk (private until shared from the
+    page's Share menu). Build that version with `python3 tools/build.py --artifact OUT.html`: it drops the
+    html/head/body wrapper (the host adds its own) and replaces the certificate's Print button with a
+    "take a screenshot" note, because hosted pages cannot open the print dialog. Republish to the same
+    link after every change.
+
 ## Chapters (one building each)
 
 | # | Building | Skill | Badge |

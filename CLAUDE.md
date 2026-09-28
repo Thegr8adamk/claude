@@ -34,7 +34,7 @@ tools/tests/*.test.js       Playwright end-to-end tests
 ```bash
 python3 tools/build.py                        # rebuild computer-quest.html (always after editing src/ or the .glb)
 python3 blender/build_assets.py               # rebuild 3D assets (needs `pip install bpy`, Python 3.11)
-node --check <(cat src/js/*.js)               # quick syntax check of all game code
+cat src/js/*.js > /tmp/cq.js && node --check /tmp/cq.js   # quick syntax check of all game code
 PLAYWRIGHT_PATH=/opt/node22/lib/node_modules/playwright node tools/tests/lessons.test.js   # plays all 10 chapters
 PLAYWRIGHT_PATH=/opt/node22/lib/node_modules/playwright node tools/tests/missions.test.js  # town + missions
 ```
