@@ -56,6 +56,12 @@ and ship as **one full HTML file**.
 8. **Internet security, spam and malware.** New **Chapter 9: Cyber Safety HQ** (new building on a new
    4th street; City Hall moved back to become Chapter 10). See the chapter list below.
 
+9. **Character builder rules (saved skill).** Adam's saved rules want realistic humans made from **MPFB**
+   (MakeHuman in Blender) with a Mixamo/Unity rig, face shape keys, animations, and front/side approval
+   pictures first. MPFB cannot be downloaded in the cloud container, so the current characters are
+   temporary. The plan is in **`docs/CHARACTER_HANDOFF.md`**: build them on Adam's PC with the
+   game-character-builder skill, then switch the game to skinned characters.
+
 ## Chapters (one building each)
 
 | # | Building | Skill | Badge |
