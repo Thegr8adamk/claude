@@ -90,6 +90,12 @@ and ship as **one full HTML file**.
     (`World.buildDynamic` + `collide`), cars stop for people and Glitches, and sidewalk props were
     moved off the walking lanes.
 
+15. **Make all the streets connect.** Two edge roads (x = ±43) join both ends of all four streets, and the
+    avenues (x = ±13) now run exactly from the first street to the last, making one connected road grid
+    (`CROSS_X` in `02_world.js`). Sidewalks stop at every crossing, with crosswalks. Cars no longer vanish
+    at the town edge: they drive loops through the grid (`lanePath`, `updateCars`), turn at corners,
+    keep right, and stop for people, Glitches and other cars.
+
 ## Chapters (one building each)
 
 | # | Building | Skill | Badge |

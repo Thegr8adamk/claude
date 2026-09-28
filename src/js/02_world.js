@@ -2,6 +2,8 @@
    3D WORLD — Tech Town (three.js + Blender-made glTF assets)
    ===================================================================== */
 const STREETS = [0, -36, -72, -108];
+const CROSS_X = [-43, -13, 13, 43]; // north-south roads: edge roads (±43) and avenues (±13) join every street
+const onCrossRoad = x => CROSS_X.some(cx => Math.abs(x - cx) < 3.2);
 // Building placement. ext = how far porches/steps stick out in front of the wall. dz = door trigger distance from wall.
 const BLD = {
   home: { x: -26, row: 0, W: 10, D: 8, ext: 2.5, dz: 1.4 },
@@ -309,18 +311,20 @@ const World = {
       g.fillStyle = '#e8e8e8'; g.fillRect(0, 6, 256, 5); g.fillRect(0, 245, 256, 5); g.restore();
     });
     const rt = roadTex(false); rt.repeat.set(92 / 6, 1);
-    const at = roadTex(true); at.repeat.set(1, 120 / 6);
+    const at = roadTex(true); at.repeat.set(1, (STREETS[0] - STREETS[STREETS.length - 1]) / 6);
     const plainAsph = this.canvasTex(128, 128, g => this.noise(g, 128, 128, '#4a4f57', 1500, .08, 2)); plainAsph.repeat.set(1.5, 1.5);
     const walkTex = this.canvasTex(256, 256, g => { this.noise(g, 256, 256, '#cfc9bd', 2500, .05, 2); g.strokeStyle = '#a9a396'; g.lineWidth = 3; for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, 256); g.stroke(); g.beginPath(); g.moveTo(0, i * 64); g.lineTo(256, i * 64); g.stroke(); } });
     const flat = (w, d, x, z, y, mat) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; sc.add(m); return m; };
     const slab = (w, d, x, z, h, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, h / 2, z); m.receiveShadow = true; sc.add(m); this.worldUV(m.geometry, .25); return m; };
     const walkMat = new THREE.MeshStandardMaterial({ map: walkTex, roughness: .95 });
+    const S0 = STREETS[0], SN = STREETS[STREETS.length - 1];
     STREETS.forEach(s => {
       flat(92, 6, 0, s, .02, new THREE.MeshStandardMaterial({ map: rt, roughness: .95 }));
-      slab(92, 2.4, 0, s - 4.2, .16, walkMat); slab(92, 2.4, 0, s + 4.2, .16, walkMat);
+      // sidewalks stop at every crossing road so the roads connect
+      [[-40, -16], [-10, 10], [16, 40]].forEach(([x0, x1]) => { slab(x1 - x0, 2.4, (x0 + x1) / 2, s - 4.2, .16, walkMat); slab(x1 - x0, 2.4, (x0 + x1) / 2, s + 4.2, .16, walkMat); });
     });
-    [-13, 13].forEach(x => {
-      flat(6, 120, x, -56, .03, new THREE.MeshStandardMaterial({ map: at, roughness: .95 }));
+    CROSS_X.forEach(x => {
+      flat(6, S0 - SN, x, (S0 + SN) / 2, .03, new THREE.MeshStandardMaterial({ map: at, roughness: .95 }));
       STREETS.forEach(s => {
         flat(6.2, 6.2, x, s, .04, new THREE.MeshStandardMaterial({ map: plainAsph, roughness: .95 }));
         for (let k = 0; k < 5; k++) { const cw = new THREE.Mesh(new THREE.PlaneGeometry(.55, 2.4), new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: .9 })); cw.rotation.x = -Math.PI / 2; cw.position.set(x - 2.2 + k * 1.1, .05, s - 4.2); sc.add(cw); const cw2 = cw.clone(); cw2.position.z = s + 4.2; sc.add(cw2); }
@@ -357,10 +361,10 @@ const World = {
 
     // back yards are hedged off so the camera never ends up inside a building
     const rows = [[-30.5, -18.5], [-66.5, -58.5], [-102.5, -91]];
-    rows.forEach(([a, b]) => { this.block(-60, -16.2, a, b); this.block(-9.8, 9.8, a, b); this.block(16.2, 60, a, b); });
+    rows.forEach(([a, b]) => { this.block(-39.6, -16.2, a, b); this.block(-9.8, 9.8, a, b); this.block(16.2, 39.6, a, b); });
     this.block(-60, 60, -180, -134.5);
     rows.forEach(([a, b]) => {
-      for (let x = -44; x <= 44; x += 5.5) { if (Math.abs(Math.abs(x) - 13) < 4) continue;
+      for (let x = -35.5; x <= 35.5; x += 5.5) { if (Math.abs(Math.abs(x) - 13) < 4) continue;
         this.add(Math.random() < .5 ? 'P_tree_round' : 'P_tree_pine', x + (Math.random() - .5) * 2, (a + b) / 2 + (Math.random() - .5) * 5, Math.random() * 6, .9 + Math.random() * .4);
         this.add('P_bush', x + 2, a + .6, Math.random() * 6, 1); this.add('P_bush', x + 2, b - .6, Math.random() * 6, 1); }
     });
@@ -372,7 +376,7 @@ const World = {
     for (let z = 22; z >= -136; z -= 7) { [-50, 50].forEach(x => this.add(Math.random() < .5 ? 'P_tree_pine' : 'P_tree_round', x + (Math.random() - .5) * 4, z, Math.random() * 6, 1 + Math.random() * .5)); }
     for (let x = -48; x <= 48; x += 6) this.add(Math.random() < .5 ? 'P_tree_pine' : 'P_tree_round', x, 29 + Math.random() * 4, Math.random() * 6, 1.1 + Math.random() * .4);
     // lawn trees in front strips between buildings
-    [[-39, 0], [-39, 1], [39, 0], [39, 1], [-39, 2], [39, 2], [-17.8, 2], [17.8, 2]].forEach(([x, r]) => { const z = STREETS[r] - 9; this.add('P_tree_round', x, z, 0, 1); this.circle(x, z, .5); });
+    [[-36.5, 0], [-36.5, 1], [36.5, 0], [36.5, 1], [-36.5, 2], [36.5, 2], [-17.8, 2], [17.8, 2]].forEach(([x, r]) => { const z = STREETS[r] - 9; this.add('P_tree_round', x, z, 0, 1); this.circle(x, z, .5); });
 
     // park
     this.add('P_fountain', 0, 14); this.circle(0, 14, 3.2);
@@ -383,7 +387,7 @@ const World = {
     // street furniture: lamps, hydrants, stop signs
     STREETS.forEach((s, ri) => {
       for (let x = -40; x <= 40; x += 13) {
-        if ([-26, 0, 26].some(dx => Math.abs(x - dx) < 5) || Math.abs(Math.abs(x) - 13) < 4) continue;
+        if ([-26, 0, 26].some(dx => Math.abs(x - dx) < 5) || Math.abs(Math.abs(x) - 13) < 4 || Math.abs(x + 6) > 38) continue;
         const l = this.add('P_lamp', x, s - 5.4, Math.PI); this.circle(x, s - 5.4, .25);
         const l2 = this.add('P_lamp', x + 6, s + 5.4, 0); this.circle(x + 6, s + 5.4, .25);
         void l; void l2;
@@ -507,23 +511,60 @@ const World = {
 
   spawnNPCs() {
     const looks = NPCS.map(n => [n.shirt, n.hair, n.skin]);
-    const paths = [[[-40, 4.4], [40, 4.4]], [[40, -4.4], [-40, -4.4]], [[-40, -31.6], [40, -31.6]], [[40, -40.4], [-40, -40.4]], [[-40, -103.6], [40, -103.6]]];
+    const paths = [[[-37, 4.4], [37, 4.4]], [[37, -4.4], [-37, -4.4]], [[-37, -31.6], [37, -31.6]], [[37, -40.4], [-37, -40.4]], [[-37, -103.6], [37, -103.6]]];
     looks.forEach((l, i) => {
       const p = this.makePerson({ shirt: l[0], hair: l[1], skin: l[2], pants: '#3a3f4a', long: !!NPCS[i].long, bun: !!NPCS[i].bun });
       p.path = paths[i]; p.t = Math.random(); p.dir = 1; p.root.position.set(0, .16, 0); this.scene.add(p.root); this.npcs.push(p);
     });
   },
+  // A loop through intersections -> lane points on the right-hand side, cutting each corner a little
+  lanePath(nodes) {
+    const pts = [];
+    nodes.forEach((P, i) => {
+      const Q = nodes[(i + 1) % nodes.length], L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), dx = (Q[0] - P[0]) / L, dz = (Q[1] - P[1]) / L, rx = -dz, rz = dx;
+      pts.push([P[0] + rx * 1.5 + dx * 3.4, P[1] + rz * 1.5 + dz * 3.4], [Q[0] + rx * 1.5 - dx * 3.4, Q[1] + rz * 1.5 - dz * 3.4]);
+    });
+    const cum = [0]; for (let i = 1; i <= pts.length; i++) { const a = pts[i - 1], b = pts[i % pts.length]; cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    return { pts, cum, len: cum[cum.length - 1] };
+  },
+  pathAt(path, d) {
+    d = ((d % path.len) + path.len) % path.len; let i = 0; while (path.cum[i + 1] < d) i++;
+    const a = path.pts[i], b = path.pts[(i + 1) % path.pts.length], seg = path.cum[i + 1] - path.cum[i], t = seg ? (d - path.cum[i]) / seg : 0;
+    return { x: a[0] + (b[0] - a[0]) * t, z: a[1] + (b[1] - a[1]) * t, dx: (b[0] - a[0]) / (seg || 1), dz: (b[1] - a[1]) / (seg || 1) };
+  },
   spawnCars() {
-    const cols = ['#e5484d', '#2d7ff9', '#f5b700', '#23a55a', '#ffffff', '#7b4fd6'];
+    const X = 43, [s0, s1, s2, s3] = STREETS;
+    const loops = [
+      [[-X, s0], [X, s0], [X, s1], [-X, s1]],          // streets 1 & 2
+      [[X, s2], [-X, s2], [-X, s1], [X, s1]],          // streets 2 & 3
+      [[-X, s2], [X, s2], [X, s3], [-X, s3]],          // streets 3 & 4
+      [[-13, s0], [-13, s3], [13, s3], [13, s0]],      // up and down the avenues
+    ].map(n => this.lanePath(n));
+    const cols = ['#e5484d', '#2d7ff9', '#f5b700', '#23a55a', '#ffffff', '#7b4fd6', '#ff8a00', '#00a3a3'];
     cols.forEach((c, i) => {
       const car = this.assets['P_car'].clone(true);
       const m = new THREE.MeshToonMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), gradientMap: this.grad() });
       car.traverse(o => { if (o.isMesh && o.material.name === 'Paint') o.material = m; });
-      const row = i % 4, dir = i % 2 ? -1 : 1;
-      car.userData = { row, dir, x: -45 + Math.random() * 90, v: 7 + Math.random() * 3, cur: 0 };
-      car.position.set(car.userData.x, 0, STREETS[row] + (dir > 0 ? 1.5 : -1.5));
-      car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2; // model front is +Z: face the driving direction
+      const path = loops[i % loops.length];
+      car.userData = { path, d: (i < 4 ? 0 : .5) * path.len + i * 7, v: 7 + Math.random() * 2.5, cur: 0, wait: 0, ignore: 0, dx: 1, dz: 0 };
+      const p = this.pathAt(path, car.userData.d); car.position.set(p.x, 0, p.z); car.rotation.y = Math.atan2(p.dx, p.dz);
       this.scene.add(car); this.cars.push(car);
+    });
+  },
+  updateCars(dt) {
+    const pl = this.player.root.position;
+    this.cars.forEach(c => {
+      const u = c.userData, dx = u.dx, dz = u.dz;
+      const rel = (x, z) => { const rx = x - c.position.x, rz = z - c.position.z; return { a: rx * dx + rz * dz, lat: Math.abs(-rx * dz + rz * dx) }; };
+      const p = rel(pl.x, pl.z);
+      const forPeople = (p.a > 0 && p.a < 7.5 && p.lat < 2.2) || this.npcs.some(n => { const q = rel(n.root.position.x, n.root.position.z); return q.a > 0 && q.a < 6 && q.lat < 1.8; }) ||
+        (this.enemies || []).some(en => { if (en.dead || !en.g.visible) return false; const q = rel(en.g.position.x, en.g.position.z); return q.a > 0 && q.a < 6.5 && q.lat < 1.2 + en.radius; });
+      const forCars = u.ignore <= 0 && this.cars.some(o => { if (o === c) return false; const q = rel(o.position.x, o.position.z); return q.a > 0 && q.a < 6.5 && q.lat < 1.6; });
+      // two cars waiting for each other at a corner: let this one go after a moment
+      u.wait = !forPeople && forCars && u.cur < .2 ? u.wait + dt : 0; if (u.wait > 2.5) { u.ignore = 1.6; u.wait = 0; } u.ignore = Math.max(0, u.ignore - dt);
+      const want = forPeople || forCars ? 0 : u.v; u.cur += (want - u.cur) * Math.min(1, dt * (want ? 1.2 : 5));
+      u.d += u.cur * dt; const q = this.pathAt(u.path, u.d); c.position.x = q.x; c.position.z = q.z; u.dx = q.dx; u.dz = q.dz;
+      let da = Math.atan2(q.dx, q.dz) - c.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); c.rotation.y += da * Math.min(1, dt * 7); // model front is +Z
     });
   },
 
@@ -671,7 +712,7 @@ const World = {
   spawnItems() {
     const T = c => new THREE.MeshToonMaterial({ color: c, gradientMap: this.grad() });
     // Data gems to PICKUP
-    const spots = [[-12, 19], [12, 20.5], [-30, 7], [30, 7], [-38, -4.2], [38, -4.2], [-40, -31.8], [40, -40.2], [-13, -24], [13, -50], [-40, -67.8], [40, -76.2]];
+    const spots = [[-12, 19], [12, 20.5], [-30, 7], [30, 7], [-36, -4.2], [36, -4.2], [-36, -31.8], [36, -40.2], [-13, -24], [13, -50], [-36, -67.8], [36, -76.2]];
     const gcols = [0x3ee6ff, 0xff5dd2, 0x9dff6a, 0xffd23f];
     this.gems = spots.map(([x, z], id) => {
       const m = new THREE.Mesh(new THREE.OctahedronGeometry(.36, 0), new THREE.MeshToonMaterial({ color: gcols[id % 4], gradientMap: this.grad(), emissive: gcols[id % 4], emissiveIntensity: .35 }));
@@ -788,7 +829,7 @@ const World = {
   spawnEnemies() {
     this.enemies = [];
     // [x, z, kind]  mini = press a letter, big = type a short word (after Typing School), king = boss (after Cyber Safety HQ)
-    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12, 'big'], [18.5, -12], [40, -12, 'big'], [-18.5, -48], [18.5, -48, 'big'], [-40, -48],
+    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12, 'big'], [18.5, -12], [36, -12, 'big'], [-18.5, -48], [18.5, -48, 'big'], [-36, -48],
       [-18.5, -84, 'big'], [18.5, -84], [-24, -118, 'big'], [24, -118], [-35, 5.6], [35, 5.6, 'big'], [-6, -30.8], [6, -41.2], [-35, -41.2, 'big'], [35, -30.8],
       [-6, -66.8], [6, -77.2], [-35, -77.2, 'big'], [35, -66.8], [-40, -113], [40, -113, 'big'], [-13, -88], [13, -88], [-30, 16.5], [30, 17], [27, -123, 'king']];
     const cols = [0x9b5de5, 0xf15bb5, 0x00bbf9, 0xff6b35, 0x00c49a];
@@ -896,7 +937,7 @@ const World = {
       h = Math.max(h, r.h0 + (r.h1 - r.h0) * Math.max(0, Math.min(1, t)));
     }
     // sidewalks
-    if (!h) for (const s of STREETS) { if (Math.abs(z - (s - 4.2)) < 1.2 || Math.abs(z - (s + 4.2)) < 1.2) { if (!(Math.abs(Math.abs(x) - 13) < 3)) h = .16; } }
+    if (!h) for (const s of STREETS) { if (Math.abs(z - (s - 4.2)) < 1.2 || Math.abs(z - (s + 4.2)) < 1.2) { if (!onCrossRoad(x) && Math.abs(x) < 40) h = .16; } }
     return h;
   },
 
@@ -943,7 +984,7 @@ const World = {
   // Moving things that are solid too: cars, people, Glitches (rebuilt every frame)
   buildDynamic() {
     const d = this.dynamic = [];
-    this.cars.forEach(c => d.push({ ref: c, box: { x0: c.position.x - 2.15, x1: c.position.x + 2.15, z0: c.position.z - 1.05, z1: c.position.z + 1.05 } }));
+    this.cars.forEach(c => { const alongX = Math.abs(Math.sin(c.rotation.y)) > .7, hx = alongX ? 2.15 : 1.05, hz = alongX ? 1.05 : 2.15; d.push({ ref: c, box: { x0: c.position.x - hx, x1: c.position.x + hx, z0: c.position.z - hz, z1: c.position.z + hz } }); });
     this.npcs.forEach(n => d.push({ ref: n, x: n.root.position.x, z: n.root.position.z, r: .35 }));
     d.push({ ref: this.maya, x: this.maya.root.position.x, z: this.maya.root.position.z, r: .35 });
     d.push({ ref: this.player, x: this.player.root.position.x, z: this.player.root.position.z, r: .4 });
@@ -1008,17 +1049,7 @@ const World = {
       n.root.rotation.y = Math.atan2((b[0] - a[0]) * n.dir, (b[1] - a[1]) * n.dir);
       this.animatePerson(n, dt, !near);
     });
-    // Cars stop for the player
-    this.cars.forEach(c => {
-      const u = c.userData; const lane = c.position.z;
-      const ahead = (pl.position.x - c.position.x) * u.dir;
-      const blocked = (Math.abs(pl.position.z - lane) < 2.4 && ahead > 0 && ahead < 7.5) ||
-        (this.enemies || []).some(en => { if (en.dead || !en.g.visible) return false; const a = (en.g.position.x - c.position.x) * u.dir; return Math.abs(en.g.position.z - lane) < 1.2 + en.radius && a > 0 && a < 6.5; });
-      const others = this.cars.some(o => o !== c && o.userData.row === u.row && o.userData.dir === u.dir && ((o.position.x - c.position.x) * u.dir) > 0 && ((o.position.x - c.position.x) * u.dir) < 6.5);
-      const want = blocked || others ? 0 : u.v; u.cur += (want - u.cur) * Math.min(1, dt * (want ? 1.2 : 5));
-      c.position.x += u.cur * u.dir * dt; if (c.position.x > 55) c.position.x = -55; if (c.position.x < -55) c.position.x = 55;
-      c.traverse(o => { if (o.isMesh && o.geometry.parameters === undefined) { } });
-    });
+    this.updateCars(dt);
     this.clouds.forEach(c => { c.position.x += c.userData.v * dt; if (c.position.x > 170) c.position.x = -170; });
     this.waters.forEach(w => { w.offset.x += dt * .05; w.offset.y += dt * .03; });
 

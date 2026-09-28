@@ -11,15 +11,29 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   await p.waitForTimeout(800);
   let fails = 0; const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' · ' + extra : ''}`); if (!ok) fails++; };
 
-  // 1. Cars face the way they drive (model front = local +Z)
-  const cars = await p.evaluate(() => CQ.World.cars.map(c => ({ dir: c.userData.dir, fx: Math.sin(c.rotation.y) })));
-  check('cars face their driving direction', cars.every(c => Math.sign(c.fx) === c.dir), JSON.stringify(cars));
+  // 1. Cars drive loops through the connected roads, facing where they go, on the right-hand side
+  const drive = await p.evaluate(() => {
+    const W = CQ.World; const onRoad = (x, z) => STREETS.some(s => Math.abs(z - s) <= 3.05 && Math.abs(x) <= 46) || (CROSS_X.some(cx => Math.abs(x - cx) <= 3.05) && z <= STREETS[0] + 3 && z >= STREETS[STREETS.length - 1] - 3);
+    let facing = 0, off = 0, samples = 0; const start = W.cars.map(c => c.userData.d);
+    for (let k = 0; k < 600; k++) { W.buildDynamic(); W.updateCars(.05); W.cars.forEach(c => { samples++; const u = c.userData; if (Math.sin(c.rotation.y) * u.dx + Math.cos(c.rotation.y) * u.dz > .7) facing++; if (!onRoad(c.position.x, c.position.z)) off++; }); }
+    const moved = W.cars.map((c, i) => c.userData.d - start[i]);
+    // right-hand lane: the road center is on the car's left
+    const right = W.cars.every(c => { const u = c.userData, lx = -u.dz, lz = u.dx; const cx = CROSS_X.find(x => Math.abs(c.position.x - x) < 3.1), sz = STREETS.find(s => Math.abs(c.position.z - s) < 3.1);
+      if (Math.abs(u.dx) > .9 && sz !== undefined) return (c.position.z - sz) * lz > 0; if (Math.abs(u.dz) > .9 && cx !== undefined) return (c.position.x - cx) * lx > 0; return true; });
+    return { facing: facing / samples, off, moved: Math.min(...moved), right };
+  });
+  check('cars face their driving direction', drive.facing > .97, drive.facing.toFixed(3));
+  check('cars stay on the roads', drive.off === 0, drive.off + ' off-road samples');
+  check('cars keep driving (no teleport, no deadlock)', drive.moved > 40, 'min distance ' + drive.moved.toFixed(0));
+  check('cars keep to the right-hand lane', drive.right);
+  const joined = await p.evaluate(() => STREETS.every(s => [-43, 43].every(x => CROSS_X.includes(x))) && CQ.World.boxes.every(b => !(b.x0 < 46 && b.x1 > 40 && b.z0 < STREETS[0] && b.z1 > STREETS[STREETS.length - 1])));
+  check('edge roads join every street and are not blocked', joined);
 
   // 2. Solid: the player cannot walk into a car or through a townsperson
   const solid = await p.evaluate(() => {
     const W = CQ.World; W.buildDynamic(); const c = W.cars[0];
     const pos = { x: c.position.x, z: c.position.z }; W.collide(pos, .5, W.player);
-    const outCar = Math.abs(pos.x - c.position.x) > 2.1 || Math.abs(pos.z - c.position.z) > 1.0;
+    const outCar = Math.hypot(pos.x - c.position.x, pos.z - c.position.z) > 1.0;
     const n = W.npcs[0]; const q = { x: n.root.position.x + .1, z: n.root.position.z }; W.collide(q, .5, W.player);
     const outNpc = Math.hypot(q.x - n.root.position.x, q.z - n.root.position.z) >= .84;
     return { outCar, outNpc };
