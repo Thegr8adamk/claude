@@ -1,0 +1,84 @@
+/* ============ ADVENTURE STYLE (Zelda-inspired: dark panels, gold trim, typewriter text) ============ */
+.tw{opacity:0;animation:twIn .18s forwards}
+@keyframes twIn{to{opacity:1}}
+#dialog{background:linear-gradient(180deg,rgba(16,24,52,.95),rgba(10,16,38,.95));color:#fff;border:3px solid #d8b35a;
+  box-shadow:0 0 0 3px rgba(0,0,0,.35),0 12px 30px rgba(0,0,0,.45)}
+#dlgName{color:#ffd76a!important}
+#dlgText{text-shadow:0 2px 0 rgba(0,0,0,.4);font-size:1.05em}
+#dlgText b{color:#ffd76a}
+#dialog:after{content:'▼';position:absolute;right:18px;bottom:6px;color:#ffd76a;animation:blinkA 1s infinite;font-size:.75em}
+@keyframes blinkA{50%{opacity:0}}
+#dialog .portrait{box-shadow:0 0 0 3px #d8b35a}
+.titlecard{background:linear-gradient(180deg,rgba(16,24,52,.93),rgba(10,16,38,.93));color:#fff;border:3px solid #d8b35a}
+.logo{font-family:'Cinzel',Georgia,'Times New Roman',serif;font-weight:900;color:#f5c542;
+  background:linear-gradient(#fff6c8,#f5c542 45%,#c98a12);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 3px 0 #5a3a00) drop-shadow(0 0 14px rgba(255,200,60,.45));letter-spacing:1px}
+.logo span{color:inherit}
+.tag{color:#cfe0ff}
+.helper-note{background:rgba(255,255,255,.08);color:#dfe8ff}
+#playerCard,.hbtn{background:rgba(16,24,52,.9);color:#fff;border:2px solid #d8b35a}
+#pcLevel,#pcXp{color:#ffd76a!important}
+#xpbar{background:rgba(255,255,255,.18)}
+#xpfill{background:linear-gradient(90deg,#5ee07a,#ffd24a)}
+#objective{border:2px solid #d8b35a;background:rgba(16,24,52,.9)}
+#nearLabel{background:rgba(16,24,52,.92);color:#fff;border:2px solid #d8b35a}
+.mp{background:rgba(16,24,52,.78);color:#ffd76a;border:2px solid #d8b35a;box-shadow:0 5px 0 rgba(0,0,0,.4)}
+.mp.down-on,.mp:active{background:rgba(60,80,140,.95);box-shadow:0 1px 0 rgba(0,0,0,.4)}
+#lesson .ltop{border-bottom:3px solid #d8b35a}
+.arrowkeys{text-align:center;line-height:2.3;margin:.2em 0 .4em}
+.arrowkeys .key{font-size:1.3em;min-width:2.1em}
+.arrowkeys .key.hl{background:#ffd24a;animation:glowA 1s infinite}
+.arrowkeys .key.ok{background:#bdf0cf}
+
+/* typing battles */
+#battle{position:fixed;top:118px;left:50%;transform:translateX(-50%);z-index:25;display:none;background:linear-gradient(180deg,rgba(60,14,40,.95),rgba(30,8,24,.95));
+  color:#fff;border:3px solid #ff6fa8;border-radius:20px;padding:12px 18px;text-align:center;min-width:min(440px,92vw);max-width:94vw;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+#battle.on{display:block;animation:popIn .25s}
+@keyframes popIn{from{transform:translate(-50%,-14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.bt-title{font-weight:900;font-size:1.05em}
+.bt-row{display:flex;align-items:center;justify-content:center;gap:14px;font-weight:900;font-size:1.15em;margin:.3em 0}
+.bigkey{display:inline-grid;place-items:center;width:2.2em;height:2.2em;font-size:1.8em;background:#fff7d6;color:#1f2d3d;border:4px solid #d8a200;border-bottom-width:8px;border-radius:14px;animation:pulse 1s infinite}
+.bt-hp i{display:inline-block;width:1.2em;height:.6em;border-radius:4px;background:rgba(255,255,255,.2);margin:0 2px}
+.bt-hp i.on{background:#ff6fa8}
+.bt-msg{font-size:.9em;margin:.3em 0;color:#ffd6e6}
+.bt-msg b{color:#fff}
+.bt-taps{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:.4em}
+.bt-taps small{opacity:.8}
+.bt-taps .btn{padding:.3em .7em;font-size:.9em}
+
+/* item-get banner */
+#itemBanner{position:fixed;left:50%;bottom:20%;transform:translateX(-50%);z-index:26;display:flex;align-items:center;gap:14px;
+  background:linear-gradient(180deg,rgba(16,24,52,.96),rgba(10,16,38,.96));color:#fff;border:3px solid #d8b35a;border-radius:18px;padding:12px 22px;font-size:1.15em;
+  animation:popIn .4s;box-shadow:0 0 30px rgba(255,210,80,.55);max-width:92vw}
+#itemBanner b{color:#ffd76a}
+#itemBanner small{display:block;font-size:.75em;opacity:.85}
+.ib-icon{font-size:2.2em}
+@media (max-width:820px){ #battle{top:130px} }
+
+/* typed commands (ENTER / TALK / PICKUP / USE / THROW) */
+#cmdBox{position:fixed;top:118px;left:50%;transform:translateX(-50%);z-index:24;display:none;background:linear-gradient(180deg,rgba(16,24,52,.95),rgba(10,16,38,.95));
+  color:#fff;border:3px solid #d8b35a;border-radius:20px;padding:10px 18px;text-align:center;max-width:94vw;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+#cmdBox.on{display:block;animation:popIn .25s}
+.cb-title{font-weight:900;color:#ffd76a}
+.cb-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;font-weight:800;margin:.35em 0}
+.cb-word{display:inline-flex;gap:5px}
+.cb-k{width:1.9em;height:1.9em;font-size:1.25em;font-weight:900;border-radius:10px;border:3px solid #8e9bab;border-bottom-width:6px;background:#fff;color:#1f2d3d;padding:0}
+.cb-k.ok{background:#5ee07a;border-color:#23a55a;color:#fff}
+.cb-k.nx{background:#ffd24a;border-color:#d8a200;animation:glowA 1s infinite}
+.cb-hint{font-size:.9em;color:#dfe8ff}
+.cb-hint b{color:#ffd76a}
+.cb-foot{font-size:.72em;opacity:.7;margin-top:.3em}
+@media (max-width:820px){ #cmdBox{top:auto;bottom:calc(4.2em * 2 + 40px);padding:8px 10px} body.cmd-on #objective{display:none} .cb-foot{display:none} }
+
+/* mission tracker */
+#missionTracker{position:absolute;right:12px;top:70px;width:15.5em;background:rgba(16,24,52,.9);color:#fff;border:2px solid #d8b35a;border-radius:16px;padding:8px 12px;pointer-events:auto;cursor:pointer;font-size:.82em}
+#missionTracker:hover{border-color:#ffd76a}
+.mt-head{font-weight:900;color:#ffd76a;display:flex;justify-content:space-between;align-items:center}
+.mt-head small{color:#cfe0ff;font-weight:700}
+.mt-item{margin-top:6px;line-height:1.25}
+.mt-item small{opacity:.8}
+.mt-bar{height:.45em;background:rgba(255,255,255,.18);border-radius:9px;overflow:hidden;margin-top:3px}
+.mt-bar i{display:block;height:100%;background:linear-gradient(90deg,#5ee07a,#ffd24a)}
+.mbox .mt-bar{background:#e8e2d2}
+.mt-carry{margin-top:6px;padding-top:6px;border-top:1px dashed rgba(255,255,255,.3);font-weight:800;color:#9fe3ff}
+@media (max-width:1100px){ #missionTracker{display:none} }
