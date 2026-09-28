@@ -518,6 +518,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px soli
   body > *:not(#printArea){display:none!important}
   #printArea{display:block!important;position:static}
   .cert{box-shadow:none;width:100%;font-size:16px}
+  #printArea img{width:100%;height:auto}
 }
 
 /* ============ ADVENTURE STYLE (Zelda-inspired: dark panels, gold trim, typewriter text) ============ */
@@ -7983,21 +7984,26 @@ const Game = {
     $('#resetBtn').onclick = () => Modal.confirm('Erase all progress and start over?', 'Yes, erase everything', () => { const st2 = S.settings; S = freshState(st2); save(); location.reload(); });
   },
   printCertificate() {
-    $('#printArea').innerHTML = certHTML();
-    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">
-      <button class="btn gold big" id="doPrint">🖨️ Print certificate</button>
-      <button class="btn ghost" id="doPdf">📄 Save as PDF</button><button class="btn ghost" id="doPng">🖼️ Save as picture</button></div>
-      <p id="certMsg" style="text-align:center;min-height:1.4em"></p>`);
+    // The certificate is a real picture, so it can always be saved with right-click › Save image as…
+    const src = this.certCanvas().toDataURL('image/png');
+    const img = `<img src="${src}" alt="Certificate of Achievement for ${esc(S_name())}" style="width:100%;height:auto;display:block">`;
+    $('#printArea').innerHTML = img;
+    Modal.show(`<h2>📜 Your Certificate</h2><div style="border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.2)">${img.replace('<img ', '<img id="certImg" ')}</div>
+      <div class="cert-actions" style="margin-top:14px"><button class="btn gold big" id="doPrint">🖨️ Print certificate</button>
+      <button class="btn big" id="doPdf">📄 Download PDF</button><button class="btn big ghost" id="doPng">🖼️ Download picture</button></div>
+      <p id="certMsg" style="text-align:center;min-height:1.4em;font-weight:800"></p>
+      <p style="text-align:center;color:var(--muted);font-size:.9em">Tip: you can also <b>right-click the certificate</b> and choose <b>Save image as…</b> (on a phone or tablet: press and hold it).</p>`);
     const msg = t => { const m = $('#certMsg'); if (m) m.innerHTML = t; };
+    const RIGHT_CLICK = '💡 Your browser blocked the download here. Right-click the certificate above and choose <b>Save image as…</b> Then open the saved picture and print it.';
     $('#doPrint').onclick = async () => {
-      if (!window.CQ_ARTIFACT) { window.print(); return; }
-      // Hosted pages can't open the print dialog: hand over a PDF instead
-      msg('Making your certificate…'); const r = await this.saveCert('pdf');
-      msg(r === 'saved' ? '✅ Saved! Open the PDF file (it\'s in your Downloads) and click <b>Print</b>.' : r === 'declined' ? 'No problem. Click the button again any time.' : '⚠️ Saving isn\'t available here. Download the game file to print from your computer.');
+      if (!this.framed()) { window.print(); return; } // the game file, or the link opened on its own
+      msg('Making your certificate PDF…'); const r = await this.saveCert('pdf');
+      msg(r === 'saved' ? '✅ Downloaded! Open the PDF (in your Downloads folder) and click <b>Print</b>.' : r === 'declined' ? 'No problem. Click Print again any time.' : RIGHT_CLICK);
     };
-    $('#doPdf').onclick = async () => { msg('Making your PDF…'); const r = await this.saveCert('pdf'); msg(r === 'saved' ? '✅ PDF saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
-    $('#doPng').onclick = async () => { msg('Making your picture…'); const r = await this.saveCert('png'); msg(r === 'saved' ? '✅ Picture saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
+    $('#doPdf').onclick = async () => { msg('Making your PDF…'); const r = await this.saveCert('pdf'); msg(r === 'saved' ? '✅ PDF downloaded. Look in your Downloads folder.' : r === 'declined' ? '' : RIGHT_CLICK); };
+    $('#doPng').onclick = async () => { msg('Making your picture…'); const r = await this.saveCert('png'); msg(r === 'saved' ? '✅ Picture downloaded. Look in your Downloads folder.' : r === 'declined' ? '' : RIGHT_CLICK); };
   },
+  framed() { try { return window.self !== window.top; } catch (e) { return true; } },
   certCanvas() {
     const W = 1600, H = 1131, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
     const ink = '#3a2a0a', gold = '#c79a1e', serif = 'Georgia, "Times New Roman", serif';
@@ -8052,16 +8058,21 @@ const Game = {
     return this.saveFile(filename, blob);
   },
   async saveFile(filename, blob) {
-    if (window.CQ_ARTIFACT) {
+    // Inside the Claude viewer, pages must ask the viewer to save files (the downloads capability)
+    if (this.framed() && window.claude && window.claude.use) {
       try {
-        const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
-        if (!dl) return 'unavailable';
-        await dl.save({ filename, data: blob }); return 'saved';
-      } catch (e) { return e && e.code === 'declined' ? 'declined' : 'unavailable'; }
+        const dl = await window.claude.use('downloads');
+        if (dl) { await dl.save({ filename, data: blob }); return 'saved'; }
+      } catch (e) { if (e && e.code === 'declined') return 'declined'; if (e && e.code === 'rate_limited') return 'declined'; }
     }
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000); return 'saved';
+    if (this.framed() && window.CQ_ARTIFACT) return 'unavailable'; // plain downloads are blocked in the viewer frame
+    // The game file, or the link opened on its own: a normal browser download
+    try {
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000); return 'saved';
+    } catch (e) { return 'unavailable'; }
   }
+
 
 };
 window.addEventListener('DOMContentLoaded', () => Game.boot());

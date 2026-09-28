@@ -96,6 +96,14 @@ and ship as **one full HTML file**.
     at the town edge: they drive loops through the grid (`lanePath`, `updateCars`), turn at corners,
     keep right, and stop for people, Glitches and other cars.
 
+16. **"Still can't print from the certificate window. I want to download the certificate to save or print
+    it."** The certificate window now shows the certificate as a real picture, so right-click › *Save image
+    as…* (press and hold on phones) always works. **Download PDF** and **Download picture** use a normal
+    browser download in the game file or when the link is opened on its own, and the viewer's `downloads`
+    capability inside the Claude viewer. **Print** opens the print dialog whenever the page isn't framed.
+    If the viewer blocks downloads, the window says to right-click › Save image as… (no more "download
+    the game" message). `Game.framed()` decides which path to use.
+
 ## Chapters (one building each)
 
 | # | Building | Skill | Badge |

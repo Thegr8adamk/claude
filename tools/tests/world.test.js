@@ -2,7 +2,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+  const p = await b.newPage({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
   const errs = []; p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
   p.on('console', m => { if (m.type() === 'error' && !/ERR_CERT|Failed to load/.test(m.text())) errs.push(m.text()); });
   await p.goto('file://' + require('path').resolve(__dirname, '../../computer-quest.html'));
@@ -79,7 +79,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 
   // 6. Certificate PDF + PNG are real files
   const cert = await p.evaluate(async () => {
-    const G = CQ.Game; let got = null; G.saveFile = async (name, blob) => { got = { name, blob }; return 'saved'; };
+    const G = CQ.Game; let got = null; G._realSave = G.saveFile; G.saveFile = async (name, blob) => { got = { name, blob }; return 'saved'; };
     await G.saveCert('pdf'); const pdf = new Uint8Array(await got.blob.arrayBuffer()); const txt = new TextDecoder('latin1').decode(pdf);
     const sx = +txt.match(/startxref\n(\d+)/)[1]; const xrefOk = txt.slice(sx, sx + 4) === 'xref';
     const offs = [...txt.matchAll(/(\d{10}) 00000 n /g)].map(m => +m[1]); const objsOk = offs.every((o, i) => txt.slice(o, o + 8).startsWith(`${i + 1} 0 obj`));
@@ -89,7 +89,21 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
   });
   check('certificate PDF is valid', cert.head.startsWith('%PDF-1.4') && cert.xrefOk && cert.objsOk && cert.pdfSize > 20000, JSON.stringify(cert));
   check('certificate PNG is valid', cert.png);
-  await p.evaluate(() => CQ.Game.printCertificate()); await p.waitForTimeout(400);
+  await p.evaluate(() => { CQ.Game.saveFile = CQ.Game._realSave; }); // back to the real download code
+  await p.evaluate(() => CQ.Game.printCertificate()); await p.waitForTimeout(600);
+  const imgW = await p.evaluate(() => { const i = document.querySelector('#certImg'); return i && i.naturalWidth; });
+  check('certificate window shows the certificate as a picture (right-click › Save image)', imgW === 1600, 'width ' + imgW);
+  for (const [btn, ext] of [['#doPdf', 'pdf'], ['#doPng', 'png']]) {
+    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }).catch(() => null), p.click(btn)]);
+    const name = dl && dl.suggestedFilename(); const size = dl ? require('fs').statSync(await dl.path()).size : 0;
+    check(`${ext.toUpperCase()} button downloads the certificate`, !!dl && name.endsWith('.' + ext) && size > 20000, `${name} ${size} bytes`);
+  }
+  await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; }); await p.click('#doPrint'); await p.waitForTimeout(300);
+  check('Print opens the print dialog in the game file', await p.evaluate(() => window.__printed === 1));
+  // Inside a viewer that blocks downloads: explain the right-click fallback (no "download the game" message)
+  const blockedMsg = await p.evaluate(async () => { window.CQ_ARTIFACT = true; CQ.Game._realFramed = CQ.Game.framed; CQ.Game.framed = () => true; document.querySelector('#doPdf').click(); await new Promise(r => setTimeout(r, 1500)); const t = document.querySelector('#certMsg').textContent; window.CQ_ARTIFACT = false; CQ.Game.framed = CQ.Game._realFramed; return t; });
+  check('blocked viewer shows the right-click tip', /Save image as/.test(blockedMsg) && !/game file/i.test(blockedMsg), blockedMsg);
+
   check('certificate window has Print, PDF and picture buttons', await p.evaluate(() => !!(document.querySelector('#doPrint') && document.querySelector('#doPdf') && document.querySelector('#doPng'))));
   await p.screenshot({ path: require('os').tmpdir() + '/cq_cert_modal.png' });
 
