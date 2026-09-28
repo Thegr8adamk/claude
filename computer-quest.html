@@ -501,13 +501,25 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px soli
   #movepad{grid-template-columns:repeat(3,3.4em);grid-template-rows:repeat(2,3.4em)}
 }
 
+/* ============ EXTRA LESSON BITS ============ */
+#printArea{display:none}
+.tray{border:none;background:transparent;color:#fff;font-size:1em;padding:0 .25em;cursor:pointer}
+.tray-pop{position:absolute;right:2%;bottom:15%;background:#f3f5f8;color:#1f2d3d;border-radius:10px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:6px;font-size:.95em;z-index:4}
+.hovermenu{position:absolute;left:30%;top:15%;background:#fff;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.2);min-width:230px;font-weight:800;cursor:pointer}
+.hm-top{padding:.6em 1em;background:#2d7ff9;color:#fff;border-radius:12px}
+.hm-list{display:none}.hovermenu.open .hm-list{display:block}
+.hm-list div{padding:.55em 1em}.hm-list div:hover{background:#e8f1ff}
+.dot{position:absolute;border-radius:50%;border:4px solid #fff;background:radial-gradient(#ff8a8a,#e5484d);color:#fff;font-weight:900;box-shadow:0 0 0 3px #e5484d;transform:translate(-50%,-50%);cursor:pointer;padding:0}
+.callin{position:absolute;inset:0;background:linear-gradient(#2b3a55,#0e1626);color:#fff;display:flex;flex-direction:column;align-items:center;padding:30% 14px 20px;gap:8px;text-align:center}
 /* ============ PRINT (certificate) ============ */
 @media print{
-  body *{visibility:hidden}
-  #printArea,#printArea *{visibility:visible}
-  #printArea{position:fixed;left:0;top:0;width:100%}
-  .cert{box-shadow:none;width:100%}
+  @page{size:landscape;margin:10mm}
+  body{background:#fff!important}
+  body > *:not(#printArea){display:none!important}
+  #printArea{display:block!important;position:static}
+  .cert{box-shadow:none;width:100%;font-size:16px}
 }
+
 /* ============ ADVENTURE STYLE (Zelda-inspired: dark panels, gold trim, typewriter text) ============ */
 .tw{opacity:0;animation:twIn .18s forwards}
 @keyframes twIn{to{opacity:1}}
@@ -4695,7 +4707,7 @@ const L = {
       <div style="font-size:4.5em;line-height:1.1">${ch.badgeIcon}</div><h3>Chapter complete!</h3>
       <p>You earned the <b>${ch.badge}</b> badge for <b>${ch.skill.toLowerCase()}</b>.${first ? '<br>⭐ +100 bonus XP' : ''}</p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        ${isFinal ? `<button class="btn big gold" id="cCert">📜 ${window.CQ_ARTIFACT ? 'See' : 'Print'} my certificate</button>` : ''}
+        ${isFinal ? `<button class="btn big gold" id="cCert">🖨️ Print my certificate</button>` : ''}
         <button class="btn big green" id="cBack">Back to Town ▶</button>
         <button class="btn ghost" id="cAgain">↺ Practice this chapter again</button></div></div>`;
     $('#cBack').onclick = () => this.close(true);
@@ -5295,8 +5307,8 @@ const World = {
         const l2 = this.add('P_lamp', x + 6, s + 5.4, 0); this.circle(x + 6, s + 5.4, .25);
         void l; void l2;
       }
-      this.add('P_hydrant', -18.5, s + 4.6); this.circle(-18.5, s + 4.6, .3);
-      this.add('P_sign', 16.4, s + 4.8, 0); this.add('P_sign', -9.6, s - 4.8, Math.PI);
+      this.add('P_hydrant', -18.5, s + 5.6); this.circle(-18.5, s + 5.6, .3);
+      this.add('P_sign', 16.4, s + 5.7, 0); this.circle(16.4, s + 5.7, .15); this.add('P_sign', -9.6, s - 5.7, Math.PI); this.circle(-9.6, s - 5.7, .15);
       void ri;
     });
     this.hills(); this.makeClouds();
@@ -5414,7 +5426,7 @@ const World = {
 
   spawnNPCs() {
     const looks = NPCS.map(n => [n.shirt, n.hair, n.skin]);
-    const paths = [[[-40, 5.4], [40, 5.4]], [[40, -4.6], [-40, -4.6]], [[-40, -31.4], [40, -31.4]], [[40, -40.6], [-40, -40.6]], [[-40, -103.4], [40, -103.4]]];
+    const paths = [[[-40, 4.4], [40, 4.4]], [[40, -4.4], [-40, -4.4]], [[-40, -31.6], [40, -31.6]], [[40, -40.4], [-40, -40.4]], [[-40, -103.6], [40, -103.6]]];
     looks.forEach((l, i) => {
       const p = this.makePerson({ shirt: l[0], hair: l[1], skin: l[2], pants: '#3a3f4a', long: !!NPCS[i].long, bun: !!NPCS[i].bun });
       p.path = paths[i]; p.t = Math.random(); p.dir = 1; p.root.position.set(0, .16, 0); this.scene.add(p.root); this.npcs.push(p);
@@ -5429,7 +5441,7 @@ const World = {
       const row = i % 4, dir = i % 2 ? -1 : 1;
       car.userData = { row, dir, x: -45 + Math.random() * 90, v: 7 + Math.random() * 3, cur: 0 };
       car.position.set(car.userData.x, 0, STREETS[row] + (dir > 0 ? 1.5 : -1.5));
-      car.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2; // model front faces +Z
+      car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2; // model front is +Z: face the driving direction
       this.scene.add(car); this.cars.push(car);
     });
   },
@@ -5649,7 +5661,7 @@ const World = {
     pl.root.position.x = bench.x - Math.sin(bench.r) * .1; pl.root.position.z = bench.z - Math.cos(bench.r) * .1; pl.root.rotation.y = bench.r;
   },
   /* ---------------- Glitch enemies (typing battles) ---------------- */
-  makeEnemy(color) {
+  makeEnemy(color, kind = 'mini') {
     const g = new THREE.Group(); const T = c => new THREE.MeshToonMaterial({ color: c, gradientMap: this.grad() });
     const body = new THREE.Mesh(new THREE.IcosahedronGeometry(.6, 1), T(color)); body.scale.set(1, .82, 1); body.position.y = .55; body.castShadow = true;
     const white = T(0xffffff), black = new THREE.MeshBasicMaterial({ color: 0x151520 });
@@ -5661,9 +5673,19 @@ const World = {
     });
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(.3, .05, .04), black); mouth.position.set(0, .42, .55); g.add(mouth);
     [[-.3, .25], [.3, .25], [-.3, -.25], [.3, -.25]].forEach(([x, z]) => { const f = new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), T(0x2a2340)); f.position.set(x, .1, z); f.scale.y = .6; g.add(f); });
+    if (kind === 'big' || kind === 'king') { // spikes
+      for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(.12, .38, 5), T(0x2a2340)); sp.position.set(Math.cos(a) * .42, .78, Math.sin(a) * .42 - .05); sp.rotation.set(Math.sin(a) * .7, 0, -Math.cos(a) * .7); g.add(sp); }
+    }
+    if (kind === 'king') { // crown
+      const gold = new THREE.MeshToonMaterial({ color: 0xffc83d, gradientMap: this.grad(), emissive: 0x6a4a00, emissiveIntensity: .4 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(.34, .38, .18, 12, 1, true), gold); band.position.y = 1.14; band.material.side = THREE.DoubleSide; g.add(band);
+      for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; const pt = new THREE.Mesh(new THREE.ConeGeometry(.07, .22, 4), gold); pt.position.set(Math.cos(a) * .34, 1.33, Math.sin(a) * .34); g.add(pt); }
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.08), new THREE.MeshBasicMaterial({ color: 0x39c7ff })); gem.position.set(0, 1.16, .37); g.add(gem);
+    }
     g.add(body); this.outline(g, .03);
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false })); sp.scale.set(1.9, 1.9, 1); sp.position.set(0, 2.5, .4); sp.renderOrder = 11; sp.visible = false; g.add(sp);
-    g.userData = { body, sprite: sp }; return g;
+    const scale = { tiny: .75, mini: 1, big: 1.45, king: 2.3 }[kind]; g.scale.setScalar(scale); g.userData.scale = scale;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false })); const spriteY = { tiny: 2.9, mini: 2.4, big: 1.75, king: 1.65 }[kind]; sp.position.set(0, spriteY, .4); sp.renderOrder = 11; sp.visible = false; g.add(sp);
+    g.userData = { body, sprite: sp, scale, spriteY }; return g;
   },
   letterTex(ch) {
     this._lt = this._lt || {}; if (this._lt[ch]) return this._lt[ch];
@@ -5673,15 +5695,34 @@ const World = {
     c.fillStyle = '#1f2d3d'; c.font = '900 78px Nunito, Arial Black, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ch.toUpperCase(), 62, 64);
     const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return this._lt[ch] = t;
   },
+  wordTex(word) {
+    this._wt = this._wt || {}; if (this._wt[word]) return this._wt[word];
+    const W = 90 + word.length * 62, cv = document.createElement('canvas'); cv.width = W; cv.height = 128; const c = cv.getContext('2d');
+    const rr = (x, y, w, h) => { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, 20) : c.rect(x, y, w, h); };
+    c.fillStyle = 'rgba(0,0,0,.25)'; rr(14, 18, W - 24, 104); c.fill();
+    c.fillStyle = '#fff7d6'; c.strokeStyle = '#d8a200'; c.lineWidth = 8; rr(10, 8, W - 24, 104); c.fill(); c.stroke();
+    c.fillStyle = '#1f2d3d'; c.font = '900 72px Nunito, Arial Black, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(word.toUpperCase(), (W - 14) / 2, 64);
+    const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.userData = { aspect: W / 128 }; return this._wt[word] = t;
+  },
   spawnEnemies() {
     this.enemies = [];
-    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12], [18.5, -12], [40, -12], [-18.5, -48], [18.5, -48], [-40, -48], [-18.5, -84], [18.5, -84], [-24, -118], [24, -118]];
+    // [x, z, kind]  mini = press a letter, big = type a short word (after Typing School), king = boss (after Cyber Safety HQ)
+    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12, 'big'], [18.5, -12], [40, -12, 'big'], [-18.5, -48], [18.5, -48, 'big'], [-40, -48],
+      [-18.5, -84, 'big'], [18.5, -84], [-24, -118, 'big'], [24, -118], [-35, 5.6], [35, 5.6, 'big'], [-6, -30.8], [6, -41.2], [-35, -41.2, 'big'], [35, -30.8],
+      [-6, -66.8], [6, -77.2], [-35, -77.2, 'big'], [35, -66.8], [-40, -113], [40, -113, 'big'], [-13, -88], [13, -88], [-30, 16.5], [30, 17], [27, -123, 'king']];
     const cols = [0x9b5de5, 0xf15bb5, 0x00bbf9, 0xff6b35, 0x00c49a];
-    spots.forEach(([x, z], i) => {
-      const g = this.makeEnemy(cols[i % cols.length]); g.position.set(x, 0, z); this.scene.add(g);
-      this.enemies.push({ g, home: { x, z }, hp: 3, dead: false, respawn: 0, cool: 0, tx: x, tz: z, wt: 0, hit: 0, letter: null, id: i });
+    spots.forEach(([x, z, kind0], i) => {
+      const kind = kind0 || (i % 3 === 0 ? 'tiny' : 'mini');
+      const g = this.makeEnemy(kind === 'king' ? 0xd62246 : kind === 'big' ? [0x7b2ff7, 0xe5484d, 0x1f9d55][i % 3] : cols[i % cols.length], kind); g.position.set(x, 0, z); this.scene.add(g);
+      const maxHp = { tiny: 2, mini: 3, big: 5, king: 8 }[kind]; // bigger Glitch = more hits
+      this.enemies.push({ g, kind, maxHp, radius: { tiny: .45, mini: .55, big: .8, king: 1.3 }[kind], home: { x, z }, hp: maxHp, dead: false, respawn: 0, cool: 0, tx: x, tz: z, wt: 0, hit: 0, letter: null, word: null, typed: '', id: i });
     });
     this.battle = null;
+  },
+  wordMode(en) { return (en.kind === 'big' && S.done.includes('keys')) || en.kind === 'king'; },
+  pickWord(en, prev) {
+    const list = en.kind === 'king' ? ['virus', 'update', 'backup', 'spam', 'scam', 'lock', 'safe', 'shield', 'secure', 'report'] : ['cat', 'sun', 'dog', 'bug', 'key', 'fun', 'web', 'app', 'map', 'mail', 'click', 'mouse', 'type', 'home', 'wifi', 'save', 'send'];
+    let w; do { w = list[Math.floor(Math.random() * list.length)]; } while (w === prev); return w;
   },
   pickLetter(prev) { const L = 'abcdefghijklmnopqrstuvwxyz'; let c; do { c = L[Math.floor(Math.random() * 26)]; } while (c === prev); return c; },
   updateEnemies(dt) {
@@ -5690,53 +5731,69 @@ const World = {
       const g = en.g, u = g.userData;
       if (en.dead) {
         const s = Math.max(0.001, g.scale.x - dt * 3); g.scale.setScalar(s); if (s <= .001) g.visible = false;
-        en.respawn -= dt; if (en.respawn <= 0) { en.dead = false; en.hp = 3; g.visible = true; g.scale.setScalar(.01); g.position.set(en.home.x, 0, en.home.z); }
+        en.respawn -= dt; if (en.respawn <= 0) { en.dead = false; en.hp = en.maxHp; g.visible = true; g.scale.setScalar(.01); g.position.set(en.home.x, 0, en.home.z); }
         return;
       }
-      if (g.scale.x < 1) g.scale.setScalar(Math.min(1, g.scale.x + dt * 2));
+      if (en.kind === 'king' && !S.done.includes('security')) { g.visible = false; return; }
+      if (!g.visible) g.visible = true;
+      const full = u.scale || 1; if (g.scale.x < full) g.scale.setScalar(Math.min(full, g.scale.x + dt * 2 * full));
       en.cool = Math.max(0, en.cool - dt);
       const dist = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
       const inBattle = this.battle === en;
       if (inBattle) {
         // hop beside the player so the Glitch is never hidden behind them
         const side = en.side || (en.side = (g.position.x >= pl.x ? 1 : -1));
-        const tx = pl.x + side * 2.3, tz = pl.z - .4, ddx = tx - g.position.x, ddz = tz - g.position.z, dd = Math.hypot(ddx, ddz);
-        if (dd > .1 && en.hit <= 0) { const st = Math.min(dd, dt * 5); const pos = { x: g.position.x + ddx / dd * st, z: g.position.z + ddz / dd * st }; this.collide(pos, .4); g.position.x = pos.x; g.position.z = pos.z; }
+        const tx = pl.x + side * (1.7 + en.radius), tz = pl.z - .4, ddx = tx - g.position.x, ddz = tz - g.position.z, dd = Math.hypot(ddx, ddz);
+        if (dd > .1 && en.hit <= 0) { const st = Math.min(dd, dt * 5); const pos = { x: g.position.x + ddx / dd * st, z: g.position.z + ddz / dd * st }; this.collide(pos, en.radius, en); g.position.x = pos.x; g.position.z = pos.z; }
         g.rotation.y = Math.atan2(pl.x - g.position.x, pl.z - g.position.z);
         if (Math.hypot(pl.x - en.bx, pl.z - en.bz) > 7 || this.mode !== 'play') { this.endBattle('fled'); }
       } else {
         en.wt -= dt;
         if (en.wt <= 0) { en.wt = 2 + Math.random() * 3; en.tx = en.home.x + (Math.random() - .5) * 5; en.tz = en.home.z + (Math.random() - .5) * 5; }
         const dx = en.tx - g.position.x, dz = en.tz - g.position.z, d = Math.hypot(dx, dz);
-        if (d > .2) { const pos = { x: g.position.x + dx / d * dt * 1.4, z: g.position.z + dz / d * dt * 1.4 }; this.collide(pos, .6); g.position.x = pos.x; g.position.z = pos.z; g.rotation.y = Math.atan2(dx, dz); }
-        if (!this.battle && !this.paused && this.mode === 'play' && S.tutorial && en.cool <= 0 && dist < 4.2 && !Dialog.open) this.startBattle(en);
+        if (d > .2) { const pos = { x: g.position.x + dx / d * dt * 1.4, z: g.position.z + dz / d * dt * 1.4 }; this.collide(pos, en.radius, en); g.position.x = pos.x; g.position.z = pos.z; g.rotation.y = Math.atan2(dx, dz); }
+        if (!this.battle && !this.paused && this.mode === 'play' && S.tutorial && en.cool <= 0 && dist < 3.6 + en.radius && !Dialog.open) this.startBattle(en);
       }
       // hop & hit flash
       const hop = Math.abs(Math.sin(this.t * (inBattle ? 7 : 5) + en.id)) * .18;
-      u.body.position.y = .55 + hop; u.body.scale.set(1 + hop * .3, .82 - hop * .3, 1 + hop * .3);
-      if (en.hit > 0) { en.hit -= dt; const on = Math.sin(en.hit * 40) > 0; u.body.material.emissive = u.body.material.emissive || new THREE.Color(); u.body.material.emissive.setRGB(on ? .9 : 0, on ? .9 : 0, on ? .9 : 0); g.position.x += (g.position.x - pl.x) * dt * 1.5; g.position.z += (g.position.z - pl.z) * dt * 1.5; }
+      u.body.position.y = .55 + hop; u.sprite.position.y = u.spriteY + hop * .5; u.body.scale.set(1 + hop * .3, .82 - hop * .3, 1 + hop * .3);
+      if (en.hit > 0) { en.hit -= dt; const on = Math.sin(en.hit * 40) > 0; u.body.material.emissive = u.body.material.emissive || new THREE.Color(); u.body.material.emissive.setRGB(on ? .9 : 0, on ? .9 : 0, on ? .9 : 0); const kb = { x: g.position.x + (g.position.x - pl.x) * dt * 1.5, z: g.position.z + (g.position.z - pl.z) * dt * 1.5 }; this.collide(kb, en.radius, en); g.position.x = kb.x; g.position.z = kb.z; }
       else if (u.body.material.emissive) u.body.material.emissive.setRGB(0, 0, 0);
     });
     if (this.sparks) this.sparks = this.sparks.filter(s => { s.life -= dt; s.m.scale.multiplyScalar(1 + dt * 3); s.m.material.opacity = Math.max(0, s.life / .5); if (s.life <= 0) { this.scene.remove(s.m); return false; } return true; });
   },
   startBattle(en) {
-    this.battle = en; en.side = 0; en.bx = this.player.root.position.x; en.bz = this.player.root.position.z; en.letter = this.pickLetter(); en.g.userData.body.material = en.g.userData.body.material.clone();
+    this.battle = en; en.side = 0; en.bx = this.player.root.position.x; en.bz = this.player.root.position.z; en.typed = '';
+    if (this.wordMode(en)) { en.word = this.pickWord(en); en.letter = null; } else { en.word = null; en.letter = this.pickLetter(); }
+    en.g.userData.body.material = en.g.userData.body.material.clone();
     this.showLetter(en); this.onBattle && this.onBattle('start', en);
   },
-  showLetter(en) { const sp = en.g.userData.sprite; sp.material.map = this.letterTex(en.letter); sp.material.needsUpdate = true; sp.visible = true; sp.scale.set(.2, .2, 1); const grow = () => { if (sp.scale.x < 1.9) { sp.scale.x = sp.scale.y = Math.min(1.9, sp.scale.x + .2); requestAnimationFrame(grow); } }; grow(); },
+  showLetter(en) {
+    const sp = en.g.userData.sprite, sc = en.g.userData.scale || 1; const tex = en.word ? this.wordTex(en.word) : this.letterTex(en.letter);
+    sp.material.map = tex; sp.material.needsUpdate = true; sp.visible = true;
+    const h = 1.9 / sc, w = en.word ? h * tex.userData.aspect * .8 : h; let k = .1;
+    const grow = () => { k = Math.min(1, k + .12); sp.scale.set(w * k, (en.word ? h * .8 : h) * k, 1); if (k < 1) requestAnimationFrame(grow); }; grow();
+  },
   endBattle(why) {
     const en = this.battle; if (!en) return; this.battle = null; en.g.userData.sprite.visible = false; en.cool = why === 'fled' ? 6 : 0;
     this.onBattle && this.onBattle(why, en);
   },
   attack(letter) {
     const en = this.battle; if (!en) return null;
-    if (letter !== en.letter) return { ok: false, want: en.letter };
+    if (en.word) {
+      const want = en.word[en.typed.length];
+      if (letter !== want) return { ok: false, want, word: en.word, typed: en.typed };
+      en.typed += letter;
+      if (en.typed.length < en.word.length) return { ok: true, partial: true, word: en.word, typed: en.typed };
+      en.typed = '';
+    } else if (letter !== en.letter) return { ok: false, want: en.letter };
     const p = this.player; p.pose = 'attack'; setTimeout(() => { if (p.pose === 'attack') p.pose = null; }, 280);
     const pl = p.root.position; p.root.rotation.y = Math.atan2(en.g.position.x - pl.x, en.g.position.z - pl.z);
     en.hp--; en.hit = .35; this.spark(en.g.position);
-    if (en.hp <= 0) { en.dead = true; en.respawn = 40; this.spark(en.g.position, 2.2); this.endBattle('won'); return { ok: true, won: true }; }
-    en.letter = this.pickLetter(en.letter); this.showLetter(en);
-    return { ok: true, won: false, next: en.letter, hp: en.hp };
+    if (en.hp <= 0) { en.dead = true; en.respawn = { tiny: 20, mini: 25, big: 45, king: 120 }[en.kind]; this.spark(en.g.position, 2.2 * (en.g.userData.scale || 1)); this.endBattle('won'); return { ok: true, won: true, kind: en.kind }; }
+    if (en.word) en.word = this.pickWord(en, en.word); else en.letter = this.pickLetter(en.letter);
+    this.showLetter(en);
+    return { ok: true, won: false, next: en.letter, word: en.word, hp: en.hp };
   },
   spark(pos, size = 1) {
     const cv = this._sparkCv || (this._sparkCv = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d'); c.translate(32, 32); c.fillStyle = '#fff6a8';
@@ -5794,23 +5851,36 @@ const World = {
   held(d) { return this.keys[d] || this.pad[d]; },
 
   /* ---------------- simulation ---------------- */
-  collide(pos, r) {
+  pushBox(pos, r, b) {
+    const cx = Math.max(b.x0, Math.min(pos.x, b.x1)), cz = Math.max(b.z0, Math.min(pos.z, b.z1));
+    const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
+    if (d >= r) return;
+    if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; return; }
+    const opts = [[b.x0 - r - pos.x, 0], [b.x1 + r - pos.x, 0], [0, b.z0 - r - pos.z], [0, b.z1 + r - pos.z]];
+    opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1])); pos.x += opts[0][0]; pos.z += opts[0][1];
+  },
+  // Moving things that are solid too: cars, people, Glitches (rebuilt every frame)
+  buildDynamic() {
+    const d = this.dynamic = [];
+    this.cars.forEach(c => d.push({ ref: c, box: { x0: c.position.x - 2.15, x1: c.position.x + 2.15, z0: c.position.z - 1.05, z1: c.position.z + 1.05 } }));
+    this.npcs.forEach(n => d.push({ ref: n, x: n.root.position.x, z: n.root.position.z, r: .35 }));
+    d.push({ ref: this.maya, x: this.maya.root.position.x, z: this.maya.root.position.z, r: .35 });
+    d.push({ ref: this.player, x: this.player.root.position.x, z: this.player.root.position.z, r: .4 });
+    (this.enemies || []).forEach(en => { if (!en.dead && en.g.visible) d.push({ ref: en, x: en.g.position.x, z: en.g.position.z, r: en.radius }); });
+  },
+  collide(pos, r, self) {
     for (let it = 0; it < 3; it++) {
+      if (this.dynamic) for (const o of this.dynamic) {
+        if (o.ref === self) continue;
+        if (o.box) { this.pushBox(pos, r, o.box); continue; }
+        const dx = pos.x - o.x, dz = pos.z - o.z, dd = Math.hypot(dx, dz), m = o.r + r;
+        if (dd < m && dd > 1e-4) { pos.x = o.x + dx / dd * m; pos.z = o.z + dz / dd * m; }
+      }
       for (const c of this.colliders) {
         const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), m = c.r + r;
         if (d < m && d > 1e-4) { pos.x = c.x + dx / d * m; pos.z = c.z + dz / d * m; }
       }
-      for (const b of this.boxes) {
-        const cx = Math.max(b.x0, Math.min(pos.x, b.x1)), cz = Math.max(b.z0, Math.min(pos.z, b.z1));
-        const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
-        if (d < r) {
-          if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; }
-          else { // inside: push out along smallest axis
-            const opts = [[b.x0 - r - pos.x, 0], [b.x1 + r - pos.x, 0], [0, b.z0 - r - pos.z], [0, b.z1 + r - pos.z]];
-            opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1])); pos.x += opts[0][0]; pos.z += opts[0][1];
-          }
-        }
-      }
+      for (const b of this.boxes) this.pushBox(pos, r, b);
     }
     pos.x = Math.max(-46, Math.min(46, pos.x)); pos.z = Math.max(-135, Math.min(25, pos.z));
   },
@@ -5818,6 +5888,7 @@ const World = {
   update(dt) {
     this.t += dt;
     const pl = this.player.root;
+    this.buildDynamic();
     let mx = 0, mz = 0;
     if (!this.paused && this.mode === 'play') {
       if (this.held('up')) mz -= 1; if (this.held('down')) mz += 1; if (this.held('left')) mx -= 1; if (this.held('right')) mx += 1;
@@ -5826,7 +5897,7 @@ const World = {
     if (moving) {
       const l = Math.hypot(mx, mz); mx /= l; mz /= l;
       const sp = 7.2 * dt; const pos = { x: pl.position.x + mx * sp, z: pl.position.z + mz * sp };
-      this.collide(pos, .5); pl.position.x = pos.x; pl.position.z = pos.z;
+      this.collide(pos, .5, this.player); pl.position.x = pos.x; pl.position.z = pos.z;
       const target = Math.atan2(mx, mz); let da = target - pl.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       pl.rotation.y += da * Math.min(1, dt * 12);
       this.saveT = (this.saveT || 0) + dt; if (this.saveT > 2) { this.saveT = 0; S.pos = { x: +pl.position.x.toFixed(2), z: +pl.position.z.toFixed(2) }; save(); }
@@ -5848,7 +5919,8 @@ const World = {
     // NPCs
     this.npcs.forEach(n => {
       const [a, b] = n.path; const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      const near = Math.hypot(pl.position.x - n.root.position.x, pl.position.z - n.root.position.z) < 2.6 || n.talking;
+      const near = Math.hypot(pl.position.x - n.root.position.x, pl.position.z - n.root.position.z) < 2.6 || n.talking ||
+        (this.enemies || []).some(en => !en.dead && en.g.visible && Math.hypot(en.g.position.x - n.root.position.x, en.g.position.z - n.root.position.z) < en.radius + .9);
       if (!near) n.t += dt * 1.6 / len * n.dir;
       if (n.t > 1) { n.t = 1; n.dir = -1; } if (n.t < 0) { n.t = 0; n.dir = 1; }
       n.root.position.x = a[0] + (b[0] - a[0]) * n.t; n.root.position.z = a[1] + (b[1] - a[1]) * n.t;
@@ -5859,7 +5931,8 @@ const World = {
     this.cars.forEach(c => {
       const u = c.userData; const lane = c.position.z;
       const ahead = (pl.position.x - c.position.x) * u.dir;
-      const blocked = Math.abs(pl.position.z - lane) < 2.4 && ahead > 0 && ahead < 7.5;
+      const blocked = (Math.abs(pl.position.z - lane) < 2.4 && ahead > 0 && ahead < 7.5) ||
+        (this.enemies || []).some(en => { if (en.dead || !en.g.visible) return false; const a = (en.g.position.x - c.position.x) * u.dir; return Math.abs(en.g.position.z - lane) < 1.2 + en.radius && a > 0 && a < 6.5; });
       const others = this.cars.some(o => o !== c && o.userData.row === u.row && o.userData.dir === u.dir && ((o.position.x - c.position.x) * u.dir) > 0 && ((o.position.x - c.position.x) * u.dir) < 6.5);
       const want = blocked || others ? 0 : u.v; u.cur += (want - u.cur) * Math.min(1, dt * (want ? 1.2 : 5));
       c.position.x += u.cur * u.dir * dt; if (c.position.x > 55) c.position.x = -55; if (c.position.x < -55) c.position.x = 55;
@@ -5963,7 +6036,7 @@ function pcPart(sel, name, lx, ly) {
   return (S, api) => { ensurePC(S); const el = $(sel); api.target(el); api.listen(el, 'click', e => { e.stopPropagation(); plabel(name, lx, ly); api.done(); }); };
 }
 const MINI_DESK = `<div class="mini-desk"><div class="mi" style="left:4%;top:5%"><span>🗑️</span>Recycle Bin</div><div class="mi" style="left:4%;top:32%"><span>🌐</span>Browser</div>
-  <div class="mi" style="left:4%;top:59%"><span>📁</span>Documents</div><div class="mini-task"><button class="startb" id="pcStart">⊞</button><span style="margin-left:auto;font-size:.8em;padding-right:6px">${clockStr()}</span></div></div>`;
+  <div class="mi" style="left:4%;top:59%"><span>📁</span>Documents</div><div class="mini-task"><button class="startb" id="pcStart">⊞</button><button class="tray" id="pcWifi" style="margin-left:auto" aria-label="Wi-Fi">📶</button><button class="tray" id="pcVol" aria-label="Volume">🔊</button><span style="font-size:.8em;padding-right:6px">${clockStr()}</span></div></div>`;
 
 LESSONS.home = {
   steps: [
@@ -6300,7 +6373,7 @@ const WEB_PAGES = {
   notfound: (u) => ({ url: u, title: 'Not found', secure: true, html: `<div class="page"><h1>🤔 Hmm, can't find that site</h1><p>“${esc(u)}” doesn't exist in Tech Town. Check the spelling in the address bar and try again.</p></div>` }),
 };
 function makeBrowser(ctx) {
-  const w = openWin(ctx.dsk, { id: 'br', title: '🌐 Web Browser', cls: 'browser max', tool: `<div class="tabs" id="tabs"></div><div class="btool"><button class="navb" id="bBack" title="Back">←</button><button class="navb" id="bFwd" title="Forward">→</button><button class="navb" id="bReload" title="Reload">⟳</button><div class="addr"><button class="lock" id="bLock" title="View site information">🔒</button><input id="bAddr" autocomplete="off" spellcheck="false" placeholder="Search or type a web address"></div><button class="navb" title="Bookmark">☆</button></div>`, body: '<div class="loadbar" id="bLoad"></div><div id="bPage" style="height:100%;position:relative"></div>' });
+  const w = openWin(ctx.dsk, { id: 'br', title: '🌐 Web Browser', cls: 'browser max', tool: `<div class="tabs" id="tabs"></div><div class="btool"><button class="navb" id="bBack" title="Back">←</button><button class="navb" id="bFwd" title="Forward">→</button><button class="navb" id="bReload" title="Reload">⟳</button><div class="addr"><button class="lock" id="bLock" title="View site information">🔒</button><input id="bAddr" autocomplete="off" spellcheck="false" placeholder="Search or type a web address"></div><button class="navb" id="bStar" title="Bookmark this page">☆</button><button class="navb" id="bMenu" title="Menu">⋮</button></div>`, body: '<div class="loadbar" id="bLoad"></div><div id="bPage" style="height:100%;position:relative"></div>' });
   const B = ctx.B = { tabs: [], cur: 0, w };
   const hook = (ev, d) => ctx.hook && ctx.hook(ev, d);
   B.tab = () => B.tabs[B.cur];
@@ -6327,6 +6400,15 @@ function makeBrowser(ctx) {
   B.closeTab = (i) => { const k = B.tabs[i].key; B.tabs.splice(i, 1); if (i < B.cur) B.cur--; if (!B.tabs.length) B.tabs.push({ page: WEB_PAGES.start(), hist: [], key: 'start' }); B.cur = Math.max(0, Math.min(B.cur, B.tabs.length - 1)); B.render(); hook('closetab', k); };
   $('#bBack').onclick = () => { const t = B.tab(); if (!t.hist.length) return hook('backnone'); const h = t.hist.pop(); t.page = h.page; t.key = h.key; B.render(); hook('back'); };
   $('#bLock').onclick = () => { const p = B.tab().page; const pop = document.createElement('div'); pop.className = 'pop'; pop.innerHTML = p.secure ? '🔒 <b>Connection is secure</b><br><small>Information you send to this site is private.</small>' : '⚠️ <b>Not secure</b><br><small>Don\'t type passwords or card numbers here.</small>'; $('#bPage').appendChild(pop); setTimeout(() => pop.remove(), 4000); hook('lock'); };
+  B.zoom = 100;
+  $('#bStar').onclick = () => { $('#bStar').textContent = '★'; $('#bStar').style.color = '#f5b700'; const pop = document.createElement('div'); pop.className = 'pop'; pop.style.left = 'auto'; pop.style.right = '14px'; pop.innerHTML = '★ <b>Bookmark added</b><br><small>' + esc(B.tab().page.title) + '</small>'; $('#bPage').appendChild(pop); setTimeout(() => pop.remove(), 3000); hook('bookmark'); };
+  $('#bMenu').onclick = () => {
+    if ($('#bDrop')) { $('#bDrop').remove(); return; }
+    w.insertAdjacentHTML('beforeend', `<div class="ctxmenu" id="bDrop" style="right:10px;top:84px;z-index:40"><div>🆕 New tab</div><div style="display:flex;align-items:center;gap:8px">🔍 Zoom <button class="navb" id="zOut" title="Zoom out">−</button><b id="zLvl">${B.zoom}%</b><button class="navb" id="zIn" title="Zoom in">+</button></div><div>🕘 History</div><div>★ Bookmarks</div></div>`);
+    const setZ = z => { B.zoom = Math.max(50, Math.min(200, z)); $('#zLvl').textContent = B.zoom + '%'; $('#bPage').style.fontSize = B.zoom + '%'; hook('zoom', B.zoom); };
+    $('#zIn').onclick = e => { e.stopPropagation(); setZ(B.zoom + 25); }; $('#zOut').onclick = e => { e.stopPropagation(); setZ(B.zoom - 25); };
+    hook('menu');
+  };
   const addr = $('#bAddr');
   addr.addEventListener('focus', () => { addr.select(); hook('addrFocus'); });
   addr.addEventListener('keydown', e => {
@@ -6420,6 +6502,7 @@ LESSONS.web = {
 };
 
 /* ---------------- CHAPTER 6: POST OFFICE — email ---------------- */
+const d2t = h => { const d = document.createElement('div'); d.innerHTML = h.replace(/<br>/g, '\n'); return d.textContent; };
 function mailSim(S, ctx) {
   ctx.dsk = desktopSim(S, []);
   ctx.emails = [
@@ -6429,19 +6512,23 @@ function mailSim(S, ctx) {
     { id: 'news', from: 'Town Newsletter', addr: 'news@techtown.gov', subj: 'Weekly Town Newsletter', body: 'This week: the park fountain has been cleaned! (Old news.)', unread: false, folder: 'inbox', time: 'Mon' },
   ];
   ctx.folder = 'inbox'; ctx.sel = null; ctx.attachment = null;
-  const w = openWin(ctx.dsk, { id: 'mail', title: '✉️ TownMail', cls: 'max', body: `<div class="mail"><div class="mside"><button class="compose" id="mCompose">✏️ Compose</button><button data-f="inbox" class="on">📥 Inbox</button><button data-f="sent">📤 Sent</button><button data-f="spam">🚫 Spam</button><button data-f="trash">🗑️ Trash</button></div><div class="mlist" id="mList"></div><div class="mread" id="mRead"><div style="color:#8a94a0;margin-top:30%;text-align:center">Click an email to read it</div></div></div>` });
+  const w = openWin(ctx.dsk, { id: 'mail', title: '✉️ TownMail', cls: 'max', body: `<div class="mail"><div class="mside"><button class="compose" id="mCompose">✏️ Compose</button><button data-f="inbox" class="on">📥 Inbox</button><button data-f="sent">📤 Sent</button><button data-f="spam">🚫 Spam</button><button data-f="trash">🗑️ Trash</button></div><div class="mlist"><div style="padding:6px"><input id="mSearch" placeholder="🔍 Search mail" autocomplete="off" style="width:100%;border:2px solid #d3d9e0;border-radius:99px;padding:.3em .8em;font-size:.95em"></div><div id="mList"></div></div><div class="mread" id="mRead"><div style="color:#8a94a0;margin-top:30%;text-align:center">Click an email to read it</div></div></div>` });
   const hook = (ev, d) => ctx.hook && ctx.hook(ev, d);
   ctx.renderSide = () => { const n = ctx.emails.filter(e => e.folder === 'inbox' && e.unread).length; $$('.mside [data-f]', w).forEach(b => { b.classList.toggle('on', b.dataset.f === ctx.folder); if (b.dataset.f === 'inbox') b.textContent = '📥 Inbox' + (n ? ` (${n})` : ''); }); };
   ctx.renderList = () => {
-    const list = ctx.emails.filter(e => e.folder === ctx.folder);
+    const q = (ctx.query || '').toLowerCase();
+    const list = ctx.emails.filter(e => e.folder === ctx.folder && (!q || (e.subj + ' ' + e.from + ' ' + (e.body || '')).toLowerCase().includes(q)));
     $('#mList').innerHTML = list.length ? list.map(e => `<div class="mitem ${e.unread ? 'unread' : ''} ${ctx.sel === e.id ? 'sel' : ''}" data-id="${e.id}"><div class="mf">${esc(ctx.folder === 'sent' ? 'To: ' + e.to : e.from)} <span style="float:right;font-weight:400;font-size:.8em">${e.time}</span></div><div class="ms">${esc(e.subj)}</div></div>`).join('') : '<div style="padding:1em;color:#8a94a0">Nothing here.</div>';
     $$('.mitem', w).forEach(el => el.onclick = () => ctx.openMail(el.dataset.id));
     ctx.renderSide();
   };
   ctx.openMail = id => {
     const e = ctx.emails.find(x => x.id === id); if (!e) return; e.unread = false; ctx.sel = id; ctx.renderList();
-    $('#mRead').innerHTML = `<div class="mact"><button id="mReply">↩️ Reply</button><button>➡️ Forward</button><button id="mDel">🗑️ Delete</button><button id="mSpam">🚫 Report spam</button></div><h3>${esc(e.subj)}</h3><div class="mmeta">From: <b>${esc(e.from)}</b> &lt;${esc(e.addr)}&gt; · ${e.time}</div><div>${e.body}</div>${e.attach ? `<div class="attach" id="mAtt">🖼️ ${e.attach}</div>` : ''}`;
+    $('#mRead').innerHTML = `<div class="mact"><button id="mReply">↩️ Reply</button><button id="mFwd">➡️ Forward</button><button id="mStar">${e.star ? '⭐ Starred' : '☆ Star'}</button><button id="mDel">🗑️ Delete</button><button id="mSpam">🚫 Report spam</button></div><h3>${esc(e.subj)}</h3><div class="mmeta">From: <b>${esc(e.from)}</b> &lt;${esc(e.addr)}&gt; · ${e.time}</div><div>${e.body}</div>${e.attach ? `<div class="attach" id="mAtt">🖼️ ${e.attach}</div>` : ''}`;
     $('#mReply').onclick = () => { ctx.compose({ to: e.addr, subj: 'Re: ' + e.subj }); hook('reply', id); };
+    $('#mFwd').onclick = () => { ctx.compose({ to: '', subj: 'Fwd: ' + e.subj }); const b = $('#cBody'); if (b) b.value = '\n\n---------- Forwarded message ----------\nFrom: ' + e.from + '\n' + d2t(e.body); hook('forward', id); };
+    $('#mStar').onclick = () => { e.star = !e.star; $('#mStar').textContent = e.star ? '⭐ Starred' : '☆ Star'; hook('star', id); };
+    const un = $('#unsubLink'); if (un) un.onclick = () => hook('unsub', id);
     $('#mDel').onclick = () => { e.folder = 'trash'; ctx.sel = null; ctx.renderList(); $('#mRead').innerHTML = '<div style="color:#8a94a0;margin-top:30%;text-align:center">Moved to Trash</div>'; hook('delete', id); };
     $('#mSpam').onclick = () => { e.folder = 'spam'; ctx.sel = null; ctx.renderList(); $('#mRead').innerHTML = '<div style="color:#8a94a0;margin-top:30%;text-align:center">🚫 Reported as spam and moved to the Spam folder</div>'; hook('spam', id); };
     const att = $('#mAtt'); if (att) att.onclick = () => { $('#mRead').insertAdjacentHTML('beforeend', '<div class="dlg" id="imgView"><h4>beach.jpg</h4><div style="font-size:110px;text-align:center;background:linear-gradient(#8fd3ff 0 55%,#f4d58d 55%);border-radius:10px">🏖️</div><div class="row"><button onclick="this.closest(\'.dlg\').remove()">Close</button></div></div>'); hook('attach', id); };
@@ -6467,6 +6554,7 @@ function mailSim(S, ctx) {
     $('#mRead').innerHTML = '<div style="color:#23a55a;margin-top:30%;text-align:center;font-weight:900;font-size:1.2em">✅ Message sent!</div>'; ctx.renderList();
   };
   $('#mCompose').onclick = () => { ctx.compose(); hook('compose'); };
+  const ms = $('#mSearch'); ms.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { e2.preventDefault(); ctx.query = ms.value.trim(); ctx.renderList(); hook('search', ctx.query); } }); ms.addEventListener('input', () => { if (!ms.value) { ctx.query = ''; ctx.renderList(); } });
   $$('.mside [data-f]', w).forEach(b => b.onclick = () => { ctx.folder = b.dataset.f; ctx.sel = null; ctx.renderList(); hook('folder', ctx.folder); });
   ctx.renderList();
 }
@@ -6637,6 +6725,45 @@ function storeInstall(P, btnSel) {
   };
 }
 
+/* ---- extra phone apps (both phones) ---- */
+function clockScreen(P) {
+  P.alarms = P.alarms || { a630: false, a700: false, a815: true };
+  const row = (id, t, lbl) => `<div class="prow" style="cursor:default"><div class="pmain"><b style="font-size:1.6em;font-weight:400">${t}</b><small>${lbl}</small></div><button class="toggle ${P.alarms[id] ? 'on' : ''}" data-al="${id}" aria-label="Alarm ${t}"></button></div>`;
+  P.set(`<div class="papp"><div class="phead">⏰ Alarms</div><div class="plist">${row('a630', '6:30 AM', 'Weekdays')}${row('a700', '7:00 AM', 'Every day · Wake up')}${row('a815', '8:15 AM', 'Sat, Sun')}</div></div>`);
+  $$('[data-al]', P.view).forEach(b => b.onclick = () => { const id = b.dataset.al; P.alarms[id] = !P.alarms[id]; b.classList.toggle('on', P.alarms[id]); P.hook('alarm', { id, on: P.alarms[id] }); });
+}
+function displayScreen(P, back) {
+  P.font = P.font || 1;
+  const names = ['Small', 'Default', 'Large', 'Largest'];
+  P.set(`<div class="papp"><div class="phead"><button id="dB">${back}</button><span class="sp">Display</span></div><div style="padding:14px"><b>Text size</b>
+    <div style="display:flex;align-items:center;gap:10px;margin:10px 0"><button class="pbtn" id="fMinus" style="background:#c7ccd3;color:#111">A−</button><b id="fName" style="flex:1;text-align:center">${names[P.font]}</b><button class="pbtn" id="fPlus">A+</button></div>
+    <div id="fPrev" style="background:#f2f4f7;border-radius:12px;padding:10px;font-size:${.8 + P.font * .25}em">Hi! This is how text will look on your phone.</div>
+    <div style="margin-top:14px"><b>Brightness</b> ☀️<input type="range" min="0" max="100" value="60" style="width:100%"></div></div></div>`);
+  $('#dB').onclick = P.back;
+  const upd = d => { P.font = Math.max(0, Math.min(3, P.font + d)); $('#fName').textContent = names[P.font]; $('#fPrev').style.fontSize = (.8 + P.font * .25) + 'em'; P.hook('font', P.font); };
+  $('#fMinus').onclick = () => upd(-1); $('#fPlus').onclick = () => upd(1);
+}
+function mapsScreen(P) {
+  P.set(`<div class="papp" style="padding-top:30px"><div style="position:relative;flex:1;background:linear-gradient(90deg,transparent 48%,#fff 48%,#fff 52%,transparent 52%),linear-gradient(0deg,transparent 58%,#fff 58%,#fff 62%,transparent 62%),#dfeee0">
+    <input id="mapIn" placeholder="🔍 Search here" autocomplete="off" inputmode="none" style="position:absolute;left:10px;right:10px;top:10px;border:none;border-radius:99px;padding:.6em 1em;font-size:1em;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+    <div style="position:absolute;left:46%;top:56%;font-size:1.6em">🔵</div><div id="mapRes"></div></div><div id="kbSlot"></div></div>`);
+  const inp = $('#mapIn'); inp.addEventListener('focus', () => P.hook('mapFocus'));
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return; e.preventDefault(); inp.blur(); P.hook('mapSearch', inp.value.trim());
+    if (!/library/i.test(inp.value)) return;
+    $('#mapRes').innerHTML = `<div style="position:absolute;left:20%;top:22%;font-size:1.8em">📍</div><div class="sheet" id="mapSheet"><b>📚 Tech Town Library</b><div style="font-size:.85em;color:#6b7785">0.4 mi · Open until 8 PM</div><div style="display:flex;gap:8px;margin-top:8px"><button class="pbtn green" id="mapDir">↱ Directions</button><button class="pbtn" style="background:#c7ccd3;color:#111">📞 Call</button></div></div>`;
+    $('#mapDir').onclick = () => { $('#mapSheet').innerHTML = '<b>🚶 8 min (0.4 mi)</b><div style="font-size:.85em;color:#6b7785">Walk along Main Street</div><button class="pbtn green" id="mapGo" style="margin-top:8px;width:100%">▶ Start</button>'; P.hook('mapDir'); $('#mapGo').onclick = () => { $('#mapSheet').innerHTML = '<b>🧭 Head north on Main Street</b><div style="font-size:.85em">Then turn left in 300 ft</div>'; P.hook('mapStart'); }; };
+  });
+}
+function notesScreen(P) {
+  P.set(`<div class="papp" style="background:#fffdf0"><div class="phead"><span class="sp">📝 Notes</span><button id="nNew" aria-label="New note">✏️</button></div><div class="plist" id="nList"><div class="prow"><div class="pmain"><b>Recipe ideas</b><small>Pancakes, soup…</small></div></div></div><div id="kbSlot"></div></div>`);
+  $('#nNew').onclick = () => {
+    $('#nList').innerHTML = '<div style="padding:10px"><input id="nText" placeholder="Start typing…" autocomplete="off" inputmode="none" style="width:100%;border:none;background:transparent;font-size:1.2em;outline:none;border-bottom:2px solid #f5b700"></div><div style="padding:0 10px"><button class="pbtn" id="nDone">Done</button></div>';
+    P.hook('noteNew');
+    $('#nDone').onclick = () => { const t = $('#nText').value.trim(); P.hook('noteDone', t); if (t) $('#nList').innerHTML = `<div class="prow"><div class="pmain"><b>${esc(t)}</b><small>Just now</small></div></div><div class="prow"><div class="pmain"><b>Recipe ideas</b><small>Pancakes, soup…</small></div></div>`; };
+  };
+}
+
 /* ---------------- ANDROID ---------------- */
 function androidScreens(P) {
   const BG = 'pbg-and';
@@ -6675,7 +6802,7 @@ function androidScreens(P) {
     },
     Settings: () => {
       P.set(`<div class="papp"><div class="phead">Settings</div><div class="plist">${[['net', '📶', 'Network & internet', 'Wi-Fi, mobile data'], ['dev', '🔗', 'Connected devices', 'Bluetooth'], ['apps', '🧩', 'Apps', 'Recent apps'], ['bat', '🔋', 'Battery', '80%'], ['disp', '☀️', 'Display', 'Brightness, text size'], ['snd', '🔊', 'Sound', 'Volume, ringtone']].map(r => `<div class="prow" data-s="${r[0]}"><div class="pav">${r[1]}</div><div class="pmain"><b>${r[2]}</b><small>${r[3]}</small></div></div>`).join('')}</div></div>`);
-      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'net') P.go('wifi'); });
+      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'net') P.go('wifi'); if (r.dataset.s === 'disp') P.go('display'); });
     },
     wifi: () => {
       P.set(`<div class="papp"><div class="phead"><button id="wB">←</button><span class="sp">Internet</span></div><div class="prow" style="cursor:default"><div class="pmain"><b>Wi-Fi</b><small>${P.wifi ? 'On' : 'Off'}</small></div><button class="toggle ${P.wifi ? 'on' : ''}" id="wTog" aria-label="Wi-Fi switch"></button></div><div class="plist" id="nets">${wifiNetworks(P, P.wifi, P.wifiConn)}</div></div>`);
@@ -6683,6 +6810,9 @@ function androidScreens(P) {
       $('#wTog').onclick = () => { P.wifi = !P.wifi; sc.wifi(); P.hook('wifi', P.wifi); };
       $$('[data-net]', P.view).forEach(r => r.onclick = () => { P.hook('net', r.dataset.net); if (r.dataset.net === 'TownHome-WiFi') wifiSheet(P, sc.wifi, 'Connect', '←'); });
     },
+    Clock: () => clockScreen(P),
+    display: () => displayScreen(P, '←'),
+    Maps: () => mapsScreen(P),
     'Play Store': () => {
       P.set(`<div class="papp"><div class="phead">Play Store</div><div style="padding:0 12px"><input id="psIn" placeholder="🔍 Search apps & games" autocomplete="off" inputmode="none" style="width:100%;border:none;background:#eef1f4;border-radius:99px;padding:.6em 1em;font-size:1em"></div><div class="plist" id="psRes"><div style="padding:14px;color:#6b7785">Top charts · Games · Kids</div></div><div id="kbSlot"></div></div>`);
       const inp = $('#psIn'); inp.addEventListener('focus', () => P.hook('storeFocus'));
@@ -6730,13 +6860,16 @@ function iphoneScreens(P) {
     photoView: () => { P.set(`<div class="papp dark"><div class="phead"><button id="pvB">‹ Back</button></div><div style="flex:1;display:grid;place-items:center"><div style="width:90%;aspect-ratio:3/4;background:linear-gradient(#8fd3ff 0 45%,#6cc070 45%);display:grid;place-items:center;font-size:5em;border-radius:6px">🌻</div></div></div>`); $('#pvB').onclick = P.back; P.hook('photoView'); },
     Settings: () => {
       P.set(`<div class="papp" style="background:#f2f2f7"><div class="phead">Settings</div><div class="plist" style="background:#fff;margin:0 10px;border-radius:12px">${[['air', '✈️', 'Airplane Mode'], ['wifi', '📶', 'Wi-Fi'], ['bt', '🔵', 'Bluetooth'], ['notif', '🔔', 'Notifications'], ['snd', '🔊', 'Sounds & Haptics'], ['disp', '☀️', 'Display & Brightness']].map(r => `<div class="prow" data-s="${r[0]}"><div class="pav">${r[1]}</div><div class="pmain"><b>${r[2]}</b></div><span style="color:#c7c7cc">›</span></div>`).join('')}</div></div>`);
-      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'wifi') P.go('wifi'); });
+      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'wifi') P.go('wifi'); if (r.dataset.s === 'disp') P.go('display'); });
     },
     wifi: () => {
       P.set(`<div class="papp" style="background:#f2f2f7"><div class="phead"><button id="wB">‹ Settings</button></div><div style="padding:0 14px;font-weight:900;font-size:1.3em">Wi-Fi</div><div class="prow" style="background:#fff;margin:8px 10px;border-radius:12px;cursor:default"><div class="pmain"><b>Wi-Fi</b></div><button class="toggle ${P.wifi ? 'on' : ''}" id="wTog" aria-label="Wi-Fi switch"></button></div><div class="plist" style="background:#fff;margin:0 10px;border-radius:12px;flex:none">${wifiNetworks(P, P.wifi, P.wifiConn)}</div></div>`);
       $('#wB').onclick = P.back; $('#wTog').onclick = () => { P.wifi = !P.wifi; sc.wifi(); P.hook('wifi', P.wifi); };
       $$('[data-net]', P.view).forEach(r => r.onclick = () => { P.hook('net', r.dataset.net); if (r.dataset.net === 'TownHome-WiFi') wifiSheet(P, sc.wifi, 'Join', '‹'); });
     },
+    Clock: () => clockScreen(P),
+    display: () => displayScreen(P, '‹ Settings'),
+    Notes: () => notesScreen(P),
     'App Store': (tab) => {
       const search = tab === 'search';
       P.set(`<div class="papp"><div class="phead">${search ? 'Search' : 'Today'}</div>${search ? `<div style="padding:0 12px"><input id="asIn" placeholder="🔍 Games, Apps and more" autocomplete="off" inputmode="none" style="width:100%;border:none;background:#eef1f4;border-radius:12px;padding:.6em 1em;font-size:1em"></div><div class="plist" id="asRes"></div><div id="kbSlot"></div>` : '<div class="plist"><div style="margin:10px;height:60%;border-radius:18px;background:linear-gradient(135deg,#7c4dff,#ff9ec7);display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.4em">App of the Day</div></div>'}<div class="ptabbar"><button class="${search ? '' : 'on'}" id="tToday">📰<span>Today</span></button><button>🎮<span>Games</span></button><button>📦<span>Apps</span></button><button class="${search ? 'on' : ''}" id="tSearch">🔍<span>Search</span></button></div></div>`);
@@ -7108,6 +7241,373 @@ LESSONS.security = {
 };
 
 /* =====================================================================
+   MORE LESSON STEPS — inserted into each chapter (see addSteps calls).
+   ===================================================================== */
+function addSteps(id, where, steps) {
+  const arr = LESSONS[id].steps;
+  const at = typeof where === 'number' ? arr.length - where : arr.findIndex(s => (typeof s.say === 'string' ? s.say : '').includes(where)) + 1;
+  arr.splice(at, 0, ...steps);
+}
+function ctxMenu(parent, e, id, items) {
+  const r = parent.getBoundingClientRect(); const m = document.createElement('div'); m.className = 'ctxmenu'; m.id = id; m.style.zIndex = 50;
+  m.style.left = Math.max(4, Math.min(r.width - 200, e.clientX - r.left)) + 'px'; m.style.top = Math.max(4, Math.min(r.height - 170, e.clientY - r.top)) + 'px';
+  m.innerHTML = items.map(([a, l]) => `<div data-a="${a}">${l}</div>`).join(''); parent.appendChild(m); return m;
+}
+const QUIZ = (q, emoji, opts, correct, why = {}) => ({ say: 'Quick question!', build: (S, api) => quiz(S, api, { q, emoji, opts, correct, why }) });
+
+/* ---------- Chapter 1: Home — volume, Wi-Fi on a computer, frozen screen, charging ---------- */
+addSteps('home', 'This is the <b>desktop</b>', [
+  {
+    say: 'Let\'s make the computer louder. Click the <b>speaker 🔊</b> at the bottom-right of the screen, next to the clock.', hint: 'The speaker is the little 🔊 next to the time, in the bottom-right corner of the screen.',
+    build: (S, api) => {
+      ensurePC(S); if (!$('#pcStart')) $('#pcScr').innerHTML = MINI_DESK; const v = $('#pcVol'); api.target(v);
+      api.listen(v, 'click', e => {
+        e.stopPropagation(); if ($('#volPop')) return;
+        $('.mini-desk').insertAdjacentHTML('beforeend', '<div class="tray-pop" id="volPop" style="flex-direction:row;align-items:center">🔈 <input type="range" id="volR" min="0" max="100" value="20" aria-label="Volume"> 🔊</div>');
+        const r = $('#volR'); api.say('Now <b>drag the slider</b> to the right: press on the round knob, hold, and slide it right.'); api.setTargets(r);
+        api.listen(r, 'input', () => { if (+r.value >= 70) api.done('Louder! Many keyboards also have volume keys: 🔉 and 🔊.'); });
+      });
+    }
+  },
+  {
+    say: 'Now connect the computer to the internet with <b>Wi-Fi</b>. Click the <b>Wi-Fi icon 📶</b> at the bottom-right, then click <b>TownHome-WiFi</b>.', hint: 'The Wi-Fi icon looks like little bars, next to the speaker.',
+    build: (S, api) => {
+      ensurePC(S); if (!$('#pcStart')) $('#pcScr').innerHTML = MINI_DESK; const vp = $('#volPop'); if (vp) vp.remove(); const w = $('#pcWifi'); api.target(w);
+      api.listen(w, 'click', e => {
+        e.stopPropagation(); if ($('#wifiPop')) return;
+        $('.mini-desk').insertAdjacentHTML('beforeend', `<div class="tray-pop" id="wifiPop" style="min-width:55%"><b>Wi-Fi networks</b>${['TownHome-WiFi', 'Library-Guest', 'Cafe-Free'].map(n => `<div class="smi btnish" data-n="${n}">📶 ${n}</div>`).join('')}</div>`);
+        const t = $('#wifiPop [data-n="TownHome-WiFi"]'); api.say('Click <b>TownHome-WiFi</b>. That\'s your home network.'); api.setTargets(t);
+        $$('#wifiPop [data-n]').forEach(d => d.onclick = ev => { ev.stopPropagation(); if (d === t) api.done('quiet'); else api.wrong('That\'s a different network. Choose TownHome-WiFi, your home network.'); });
+      });
+    }
+  },
+  {
+    say: 'Type the Wi-Fi password <b>town2026</b>, then press <b>Enter</b>. (Your real password is usually on a sticker on your internet box.)', hint: 'Type town2026: the letters, then the numbers from the top row. Then press Enter.',
+    build: (S, api) => {
+      const p = $('#wifiPop'); p.innerHTML = '<b>TownHome-WiFi</b><div>Network password:</div><input id="wpw" autocomplete="off" style="width:100%;font-size:1em;padding:.2em">';
+      const inp = $('#wpw'); const kb = makeKeyboard(api, { input: inp, zones: true }); $('#pcBelow').innerHTML = ''; $('#pcBelow').appendChild(kb.el);
+      typeCheck(api, inp, 'town2026', { enter: true, kb, onOk: () => { $('#pcBelow').innerHTML = ''; p.innerHTML = '✅ <b>Connected</b> to TownHome-WiFi'; setTimeout(() => p.remove(), 1500); api.done('Connected! Now this computer can use the internet.'); } });
+    }
+  },
+]);
+addSteps('home', 1, [
+  QUIZ('The screen is <b>frozen</b> and nothing moves. What should you try first?', '🥶', ['Hit the side of the screen', 'Wait a minute, then restart the computer', 'Unplug everything and never use it again', 'Click everything as fast as you can'], 1,
+    { 0: 'Please don\'t hit it! Give it a minute. If it stays frozen, restart it.', 2: 'No need for that! Wait a minute, then restart.', 3: 'Lots of clicking can make it slower. Wait a minute, then restart.', right: 'Right! Waiting a minute, then restarting, fixes most frozen computers. If it won\'t respond at all, hold the power button for 10 seconds.' }),
+  QUIZ('Which picture means a laptop is <b>charging</b>?', '🔌', ['🔋⚡ A battery with a lightning bolt', '📶 Bars', '🔇 A speaker with a line', '⏻ A circle with a line'], 0,
+    { 1: 'Bars mean Wi-Fi signal.', 2: 'That means the sound is muted.', 3: 'That\'s the power button symbol.', right: 'Yes! The lightning bolt means it\'s plugged in and charging.' }),
+]);
+
+/* ---------- Chapter 2: Mouse — hover menus, highlighting, precise clicks ---------- */
+addSteps('mouse', 1, [
+  {
+    say: 'Some menus open when you <b>hover</b>: rest the pointer on them without clicking. Point at <b>☰ Menu</b> to open it, then click <b>⚙️ Settings</b>.', hint: 'Move the pointer onto the word Menu and keep it there. Then move down and click Settings.',
+    build: (S, api) => {
+      S.innerHTML = '<div class="stage-inner"><div class="playfield" id="pf"><div class="hovermenu" id="hm"><div class="hm-top">☰ Menu</div><div class="hm-list"><div>🏠 Home</div><div id="hmSet">⚙️ Settings</div><div>❓ Help</div></div></div></div></div>';
+      const hm = $('#hm'); api.target(hm);
+      api.listen(hm, 'pointerenter', () => hm.classList.add('open')); api.listen(hm, 'pointerleave', () => hm.classList.remove('open')); api.listen(hm, 'click', () => hm.classList.add('open'));
+      api.listen($('#hmSet'), 'click', e => { e.stopPropagation(); api.done('You used a hover menu! Many websites have menus like this.'); });
+      $$('.hm-list div', hm).forEach(d => { if (d.id !== 'hmSet') api.listen(d, 'click', e => { e.stopPropagation(); api.soft('That\'s a different item. Click ⚙️ Settings.'); }); });
+    }
+  },
+  {
+    say: 'You can <b>highlight words</b> by dragging across them. Press and hold the button just before a word, slide to the end, then let go. Highlight the words <b>good morning</b>.', hint: 'Put the pointer just before the word "good", hold the button down, slide to the end of "morning", then let go.',
+    build: (S, api) => {
+      S.innerHTML = '<div class="stage-inner"><div class="icard neutral" id="selTxt" style="max-width:680px;user-select:text;-webkit-user-select:text;font-size:1.45em;line-height:1.7;cursor:text">Maya says <span id="gm">good morning</span> to everyone in Tech Town.</div></div>';
+      api.hintOnly($('#gm'));
+      const chk = () => { const t = (getSelection().toString() || '').replace(/\s+/g, ' ').trim().toLowerCase(); if (t.includes('good morning')) api.done('Highlighted! Now you could copy it or make it bold. Tip: double-click a single word to highlight just that word.'); else if (t) api.soft(`You highlighted “${esc(t)}”. Try to cover the words good morning.`); };
+      api.listen(document, 'mouseup', () => setTimeout(chk, 30)); api.listen(document, 'touchend', () => setTimeout(chk, 30));
+    }
+  },
+  {
+    say: 'Let\'s make your clicks more exact. Click each <b>dot</b> as it appears. Each one gets a little smaller! Take your time. There\'s no rush.', hint: 'Move slowly until the pointer is right on the dot, then click.',
+    build: (S, api) => {
+      S.innerHTML = '<div class="stage-inner"><div class="playfield" id="pf"></div></div>'; const pf = $('#pf');
+      const sizes = [90, 74, 60, 50, 42, 36], spots = [[20, 30], [72, 22], [46, 64], [16, 72], [82, 72], [52, 32]]; let k = 0;
+      const next = () => {
+        const d = document.createElement('button'); d.className = 'dot'; d.style.cssText = `width:${sizes[k]}px;height:${sizes[k]}px;left:${spots[k][0]}%;top:${spots[k][1]}%`; d.textContent = k + 1; pf.appendChild(d); api.setTargets(d);
+        d.onclick = () => { d.remove(); Sfx.play('click'); k++; if (k >= sizes.length) api.done('Bullseye! Your mouse skills are sharp.'); else next(); };
+      };
+      next();
+    }
+  },
+]);
+
+/* ---------- Chapter 3: Typing — punctuation, numbers, a sentence, copy & paste ---------- */
+addSteps('keys', 1, [
+  typeStep({ say: 'Questions end with a <b>question mark</b>. Hold <b>Shift</b> and press the <b>/</b> key (bottom-right) to make <b>?</b>. Type: <b>How are you?</b>', hint: 'Type the words with spaces between them. For ?, hold Shift and press the / key, next to the right Shift key.', target: 'How are you?', mismatch: 'Something doesn\'t match. Remember: ? is Shift and the / key. Press ⌫ Backspace to fix it.', after: 'Great question!' }),
+  typeStep({ say: 'Numbers are on the <b>top row</b>. The dash <b>-</b> is next to the 0. Type this phone number: <b>555-0123</b>', hint: 'Use the number keys on the top row. The - key is just to the right of 0.', target: '555-0123', after: 'Perfect phone number!' }),
+  typeStep({ say: 'Now a whole sentence! Start with a <b>capital I</b> and end with a period (<b>.</b>). Type: <b>I love my family.</b>', hint: 'Hold Shift for the capital I. Spaces between words. The period key is near the bottom-right.', target: 'I love my family.', cs: true, mismatch: 'Not quite. Use a capital I (hold Shift), small letters after, and a period at the end. ⌫ Backspace fixes mistakes.', after: 'What a lovely sentence!' }),
+  {
+    say: '<b>Copy and paste</b> saves typing. In the top box, press <b>Ctrl + A</b> to select all the words, then <b>Ctrl + C</b> to copy. Click the bottom box and press <b>Ctrl + V</b> to paste. (On a Mac, use <b>⌘ Command</b> instead of Ctrl.)', hint: 'Hold Ctrl (bottom-left corner of the keyboard) and tap A, then hold Ctrl and tap C. Click the lower box, hold Ctrl and tap V. You can also use the Copy and Paste buttons.',
+    build: (S, api) => {
+      S.innerHTML = `<div class="stage-inner typebox"><div class="icard neutral" style="width:min(640px,94vw)"><label for="cpA"><b>Copy from here:</b></label><input class="typein" id="cpA" value="Tech Town is fun!" style="width:100%">
+        <div style="display:flex;gap:8px;margin:.5em 0"><button class="btn ghost" id="cpBtn">📋 Copy</button><button class="btn ghost" id="psBtn">📥 Paste</button></div>
+        <label for="cpB"><b>Paste here:</b></label><input class="typein" id="cpB" style="width:100%" placeholder="Click here, then press Ctrl + V"></div><div id="kbSlot"></div></div>`;
+      const kb = makeKeyboard(api, { zones: true }); $('#kbSlot').appendChild(kb.el); kb.highlight(['Control', 'a']);
+      const A = $('#cpA'), B = $('#cpB'); let clip = ''; A.focus();
+      const check = () => { if (B.value.trim() === 'Tech Town is fun!') api.done('Copied and pasted! This works almost everywhere: emails, documents and websites.'); };
+      api.listen(A, 'keydown', e => {
+        const m = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+        if (m && k === 'a') setTimeout(() => { kb.highlight(['Control', 'c']); api.soft('All selected! Now press <b>Ctrl + C</b> to copy.', false); }, 10);
+        if (m && k === 'c') { clip = A.value.substring(A.selectionStart, A.selectionEnd) || A.value; kb.highlight(['Control', 'v']); api.soft('Copied! Now click the bottom box and press <b>Ctrl + V</b>.', false); }
+      });
+      api.listen(B, 'keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && clip) { e.preventDefault(); B.value = clip; check(); } });
+      api.listen(B, 'paste', () => setTimeout(check, 30)); api.listen(B, 'input', check);
+      api.listen($('#cpBtn'), 'click', () => { A.select(); clip = A.value; api.soft('Copied! Now click 📥 Paste (or click the bottom box and press Ctrl + V).', false); });
+      api.listen($('#psBtn'), 'click', () => { if (!clip) return api.soft('Copy first: press Ctrl + A then Ctrl + C in the top box, or click 📋 Copy.'); B.value = clip; check(); });
+    }
+  },
+]);
+
+/* ---------- Chapter 4: Office — Recycle Bin restore, rename, new folder, search ---------- */
+addSteps('office', 1, [
+  {
+    say: 'Oops, you need “old list” back! Deleted files wait in the <b>Recycle Bin</b>. <b>Double-click the Recycle Bin 🗑️</b> to open it.', hint: DBL_HINT,
+    build: (S, api, ctx) => {
+      const bin = $('#ic-bin'); api.target(bin);
+      dbl(api, bin, () => { ctx.bw = openWin(ctx.dsk, { id: 'bin', title: '🗑️ Recycle Bin', body: '<div class="files"><div class="file" id="binOld"><span class="ico">📄</span>old list</div></div>' }); Object.assign(ctx.bw.style, { left: '42%', top: '18%', width: '44%', height: '52%', zIndex: 12 }); api.done('quiet'); }, () => api.soft(DBL_HINT));
+    }
+  },
+  {
+    say: '<b>Right-click</b> “old list”, then click <b>↩️ Restore</b> to put it back.', hint: 'Point at old list and press the RIGHT mouse button. Then click Restore in the menu.',
+    build: (S, api, ctx) => {
+      const f = $('#binOld'); api.target(f);
+      api.listen(f, 'click', () => api.soft('That was a left click. Use the RIGHT button to open the menu.'));
+      api.listen(f, 'contextmenu', e => {
+        e.preventDefault(); if ($('#binMenu')) return;
+        ctxMenu(ctx.dsk, e, 'binMenu', [['restore', '↩️ Restore'], ['del', '❌ Delete forever']]);
+        api.say('Now click <b>↩️ Restore</b>.'); const r = $('#binMenu [data-a="restore"]'); api.setTargets(r);
+        r.onclick = ev => { ev.stopPropagation(); $('#binMenu').remove(); ctx.bw.remove(); const files = $('#win-docs .files'); if (files) files.insertAdjacentHTML('beforeend', '<div class="file"><span class="ico">📄</span>old list</div>'); api.done('Restored! It\'s back in Documents. Once you empty the Recycle Bin, files are gone for good.'); };
+        $('#binMenu [data-a="del"]').onclick = ev => { ev.stopPropagation(); api.wrong('Careful! That deletes it forever. Choose Restore.'); };
+      });
+    }
+  },
+  {
+    say: 'You can <b>rename</b> a file. In the Documents window, <b>right-click “shopping”</b> and choose <b>✏️ Rename</b>.', hint: 'Right-click the file called shopping in the Documents window.',
+    build: (S, api, ctx) => {
+      const f = $('#fShop'); api.target(f);
+      api.listen(f, 'click', () => api.soft('Use the RIGHT mouse button to open the menu.'));
+      api.listen(f, 'contextmenu', e => {
+        e.preventDefault(); if ($('#renMenu')) return;
+        ctxMenu(ctx.dsk, e, 'renMenu', [['open', '📂 Open'], ['ren', '✏️ Rename'], ['del', '🗑️ Delete']]);
+        api.say('Click <b>✏️ Rename</b>.'); api.setTargets($('#renMenu [data-a="ren"]'));
+        $$('#renMenu div').forEach(d => d.onclick = ev => { ev.stopPropagation(); if (d.dataset.a !== 'ren') return api.soft('Choose Rename this time.'); $('#renMenu').remove(); api.done('quiet'); });
+      });
+    }
+  },
+  {
+    say: 'Type the new name <b>groceries</b> and press <b>Enter</b>.', hint: 'The old name is highlighted, so just start typing: groceries. Then press Enter.',
+    build: (S, api) => {
+      const f = $('#fShop'); f.innerHTML = '<span class="ico">📄</span><input id="renIn" value="shopping" style="width:6.5em;font-size:.9em">';
+      const inp = $('#renIn'); inp.focus(); inp.select();
+      typeCheck(api, inp, 'groceries', { enter: true, autoFocus: false, onOk: () => { f.innerHTML = '<span class="ico">📄</span>groceries'; api.done('Renamed!'); } });
+    }
+  },
+  {
+    say: 'Let\'s make a <b>new folder</b> for photos. <b>Right-click an empty spot on the desktop</b> (the blue sky), then choose <b>📁 New folder</b>.', hint: 'Point at an empty part of the desktop background, press the RIGHT button, then click New folder.',
+    build: (S, api, ctx) => {
+      $$('.win', ctx.dsk).forEach(w => w.classList.add('min')); api.target(ctx.dsk);
+      api.listen(ctx.dsk, 'contextmenu', e => {
+        e.preventDefault(); if (e.target.closest('.dicon,.win,.taskbar,.ctxmenu') || $('#nfMenu')) return;
+        ctxMenu(ctx.dsk, e, 'nfMenu', [['nf', '📁 New folder'], ['view', '👁️ View'], ['sort', '↕️ Sort by']]);
+        api.say('Click <b>📁 New folder</b>.'); api.setTargets($('#nfMenu [data-a="nf"]'));
+        $$('#nfMenu div').forEach(d => d.onclick = ev => { ev.stopPropagation(); if (d.dataset.a !== 'nf') return api.soft('Choose New folder.'); $('#nfMenu').remove(); ctx.dsk.insertAdjacentHTML('beforeend', '<div class="dicon" id="ic-new" style="left:2%;top:72%"><span class="ico">📁</span><input id="nfIn" value="New folder" style="width:6em;font-size:.85em"></div>'); api.done('quiet'); });
+      });
+      api.listen(ctx.dsk, 'click', e => { if (!e.target.closest('.ctxmenu')) api.soft('Use the RIGHT mouse button on an empty part of the desktop.'); });
+    }
+  },
+  {
+    say: 'Name the folder: type <b>Family Photos</b> and press <b>Enter</b>.', hint: 'Just start typing: Family Photos. Then press Enter.',
+    build: (S, api) => { const inp = $('#nfIn'); inp.focus(); inp.select(); typeCheck(api, inp, 'Family Photos', { enter: true, autoFocus: false, onOk: () => { $('#ic-new').innerHTML = '<span class="ico">📁</span>Family Photos'; api.done('Your new folder is ready! You can drag photos into it.'); } }); }
+  },
+  {
+    say: 'Can\'t find something? <b>Search</b> for it! Click the <b>Start button ⊞</b>, type <b>notes</b>, then click the <b>📝 Notes</b> app in the results.', hint: 'Start is the blue button in the bottom-left corner. Then type the word notes.',
+    build: (S, api, ctx) => {
+      const st = $('.taskbar .startb', ctx.dsk); api.target(st);
+      api.listen(st, 'click', () => {
+        if ($('#smenu2')) return;
+        ctx.dsk.insertAdjacentHTML('beforeend', '<div class="startmenu" id="smenu2" style="z-index:30;bottom:52px;width:50%"><input id="sSearch" placeholder="🔍 Type here to search" autocomplete="off" style="width:100%;font-size:1em;padding:.3em;border-radius:8px;border:2px solid #9fb3c8"><div id="sRes" style="margin-top:6px"></div></div>');
+        const inp = $('#sSearch'); inp.focus(); api.say('Now type <b>notes</b>.'); api.setTargets(inp);
+        api.listen(inp, 'input', () => {
+          const v = inp.value.trim().toLowerCase();
+          $('#sRes').innerHTML = v && 'notes'.startsWith(v) ? '<div class="smi btnish" id="sNotes">📝 Notes <small>App</small></div>' : (v ? '<div class="smi">No results. Check the spelling.</div>' : '');
+          const n = $('#sNotes');
+          if (n) { if (v === 'notes') { api.say('Click <b>📝 Notes</b> in the results.'); api.setTargets(n); } n.onclick = ev => { ev.stopPropagation(); $('#smenu2').remove(); openWin(ctx.dsk, { id: 'notes2', title: 'Notes · Untitled', body: '<textarea class="notepad"></textarea>' }); api.done('Found it and opened it! Search finds files too.'); }; }
+        });
+      });
+    }
+  },
+]);
+
+/* ---------- Chapter 5: Web — bookmarks, zoom, cookie banners, online forms ---------- */
+WEB_PAGES.news = () => ({ url: 'https://www.techtownnews.com', title: 'Tech Town News', secure: true, html: `<div class="page"><h1>📰 Tech Town News</h1><p><b>Park fountain gets a makeover!</b> The town's favorite fountain is sparkling again…</p><p><b>Library adds free computer classes</b> every Tuesday at 10am.</p></div>
+  <div class="dlg" id="cookieBar" style="top:auto;bottom:10px;transform:translateX(-50%);max-width:92%"><h4>🍪 This site uses cookies</h4><p style="margin:.2em 0 .6em">Cookies are small files that remember things about your visit. Some are needed, others track you for ads.</p><div class="row"><button id="ckSet">Settings</button><button id="ckRej">Reject all</button><button class="pri" id="ckAcc">Accept all</button></div></div>` });
+WEB_PAGES.card = () => ({ url: 'https://www.townlibrary.org/library-card', title: 'Get a Library Card', secure: true, html: `<div class="page"><h1>📚 Get a Free Library Card</h1><form id="cardForm" style="display:flex;flex-direction:column;gap:.5em;max-width:420px">
+  <label for="fName"><b>Your name</b></label><input id="fName" autocomplete="off" style="font-size:1.05em;padding:.3em;border:2px solid #9fb3c8;border-radius:8px">
+  <label for="fEmail"><b>Email address</b></label><input id="fEmail" autocomplete="off" style="font-size:1.05em;padding:.3em;border:2px solid #9fb3c8;border-radius:8px">
+  <label style="display:flex;gap:.5em;align-items:center"><input type="checkbox" id="fAgree" style="width:1.3em;height:1.3em"> I agree to the library rules</label>
+  <button class="btn" id="fSubmit" type="submit" style="align-self:flex-start">Submit</button><div id="fMsg" style="font-weight:800"></div></form></div>` });
+addSteps('web', 1, [
+  hookStep('Like a website? <b>Bookmark</b> it to find it again easily. Click the <b>☆ star</b> at the right end of the address bar.', 'The star is just right of the address bar, near the top right.', () => [$('#bStar')], (api, ctx, ev) => { if (ev === 'bookmark') api.done('Bookmarked! Your saved sites are in the ⋮ menu under Bookmarks.'); }),
+  {
+    say: 'Text too small? <b>Zoom in!</b> Click the <b>⋮</b> menu (top right), then click the <b>+</b> next to Zoom to make the page bigger.', hint: 'The ⋮ is the three dots at the far top-right of the browser.',
+    build: (S, api, ctx) => {
+      api.target($('#bMenu'));
+      ctx.hook = (ev, d) => { if (ev === 'menu' && $('#zIn')) { api.say('Now click <b>+</b> to zoom in.'); api.setTargets($('#zIn')); } if (ev === 'zoom') { if (d > 100) { const dd = $('#bDrop'); if (dd) dd.remove(); api.done('Bigger text! You can also hold Ctrl and press + (on a Mac: ⌘ and +).'); } else api.soft('That made it smaller. Click + to make it bigger.'); } };
+      api.cleanup(() => ctx.hook = null);
+    }
+  },
+  {
+    say: 'Many websites show a <b>cookie</b> message. Cookies remember things about your visit, and some track you for ads. It\'s okay to choose <b>Reject all</b>: the site still works. <b>Click “Reject all”.</b>', hint: 'The cookie box is at the bottom of the page. Click Reject all.',
+    build: (S, api, ctx) => {
+      const d = $('#bDrop'); if (d) d.remove(); ctx.B.go('news'); api.target($('#ckRej'));
+      api.listen($('#ckRej'), 'click', () => { $('#cookieBar').remove(); api.done('Done! Rejecting cookies shares less of your information with advertisers.'); });
+      api.listen($('#ckAcc'), 'click', () => { $('#cookieBar').remove(); api.done('That works too! Accepting is fine on sites you trust. Reject all shares less with advertisers.'); });
+      api.listen($('#ckSet'), 'click', () => api.soft('Settings lets you choose each type. For now, click Reject all.'));
+    }
+  },
+  {
+    say: 'Websites often have <b>forms</b> to fill in. Let\'s get a library card! Type your <b>name</b>, type the practice email <b>sam@mail.com</b>, tick the <b>checkbox</b>, then click <b>Submit</b>.', hint: 'Click in each white box to type. Click the small square to tick it. Then click Submit.',
+    build: (S, api, ctx) => {
+      ctx.B.go('card'); api.target($('#cardForm'));
+      const form = $('#cardForm'); $('#fName').focus();
+      api.listen(form, 'submit', e => {
+        e.preventDefault(); const n = $('#fName').value.trim(), m = $('#fEmail').value.trim();
+        if (!n) return api.soft('Type your name in the first box.'); if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(m)) return api.soft('Check the email: it needs an @ and a dot, like sam@mail.com.');
+        if (!$('#fAgree').checked) return api.soft('Tick the small square next to “I agree”. Click it once.');
+        $('#fMsg').textContent = '✅ Thank you! Your library card is on its way.'; api.done('Form sent! Only fill in forms on websites you trust, with a 🔒 padlock.');
+      });
+    }
+  },
+]);
+
+/* ---------- Chapter 6: Email — forward, search, star, unsubscribe ---------- */
+addSteps('mail', 1, [
+  hookStep('You can <b>forward</b> an email to someone else. Open <b>“Your book is ready”</b> from the Library, then click <b>➡️ Forward</b>.', 'Click the Library email in the list first. Then click Forward above the message.', () => [$('.mitem[data-id="lib"]')], (api, ctx, ev, d) => {
+    if (ev === 'open' && d === 'lib') { api.say('Now click <b>➡️ Forward</b>.'); api.setTargets($('#mFwd')); }
+    if (ev === 'forward') api.done('quiet');
+  }),
+  fieldStep('Type who to send it to. In the <b>To</b> box, type <b>sam@townmail.com</b>', 'Click the To box. Remember: @ is Shift + 2.', '#cTo', 'sam@townmail.com'),
+  hookStep('The original message is already included. Click <b>Send ➤</b>.', 'Send is the blue button at the bottom.', () => [$('#cSend')], (api, ctx, ev) => { if (ev === 'send') { ctx.send(); api.done('Forwarded! Sam can now see the library message too.'); } }),
+  {
+    say: 'Lots of emails? <b>Search</b> for one! Click the <b>🔍 Search mail</b> box above the list, type <b>library</b>, and press <b>Enter</b>.', hint: 'The search box is at the top of the email list.',
+    build: (S, api, ctx) => {
+      const ms = $('#mSearch'); api.target(ms); ms.focus();
+      ctx.hook = (ev, d) => { if (ev === 'search') { if (/library/i.test(d)) api.done('Found it! Search looks through every email for your words.'); else api.soft('Try searching for: library'); } };
+      api.cleanup(() => { ctx.hook = null; ctx.query = ''; const s = $('#mSearch'); if (s) s.value = ''; ctx.renderList(); });
+    }
+  },
+  hookStep('<b>Star</b> important emails so they\'re easy to find. Open <b>Sam\'s “Beach day!”</b> email and click <b>☆ Star</b>.', 'Click Sam Lee\'s email in the list, then click the Star button above the message.', () => [$('.mitem[data-id="sam"]')], (api, ctx, ev, d) => {
+    if (ev === 'open' && d === 'sam') { api.say('Now click <b>☆ Star</b>.'); api.setTargets($('#mStar')); }
+    if (ev === 'star') api.done('Starred! ⭐ Important emails are now easy to spot.');
+  }),
+  {
+    say: 'A store keeps sending you ads. If you know the company, you can <b>unsubscribe</b>. Open <b>“Shoe Barn: Weekly deals”</b> and click <b>Unsubscribe</b> at the bottom of the email.', hint: 'Open the Shoe Barn email. Scroll to the bottom of the message and click the small Unsubscribe link.',
+    build: (S, api, ctx) => {
+      if (!ctx.emails.find(e => e.id === 'shoes')) ctx.emails.unshift({ id: 'shoes', from: 'Shoe Barn', addr: 'deals@shoebarn.com', subj: 'Shoe Barn: Weekly deals 👟', body: 'This week: 20% off walking shoes!<br><br><small>You get this email because you shopped at Shoe Barn. <span class="link" id="unsubLink">Unsubscribe</span></small>', unread: true, folder: 'inbox', time: clockStr() });
+      ctx.folder = 'inbox'; ctx.renderList(); api.target($('.mitem[data-id="shoes"]'));
+      ctx.hook = (ev, d) => {
+        if (ev === 'open' && d === 'shoes') { api.say('Now click the small <b>Unsubscribe</b> link at the bottom of the email.'); api.setTargets($('#unsubLink')); }
+        if (ev === 'unsub') { $('#mRead').innerHTML = '<div style="color:#23a55a;margin-top:30%;text-align:center;font-weight:900">✅ You won\'t get these emails anymore.</div>'; api.done('Unsubscribed! Only do this for companies you know. For scam emails, use Report spam instead.'); }
+      };
+      api.cleanup(() => ctx.hook = null);
+    }
+  },
+]);
+
+/* ---------- Chapters 7 & 8: phones — alarms, bigger text, Maps / Notes ---------- */
+const andToApp = (app, then) => (api, ctx, ev, d) => {
+  if (ev === 'home' || (ev === 'back' && ctx.P.scr === 'home')) { api.say(`Now tap <b>${app}</b>.`); api.setTargets(byApp(app)()); return; }
+  if (ev === 'app') { if (d !== app) api.soft(`That opened ${d}. Tap Home ● and then ${app}.`); else then.enter && then.enter(api, ctx); return; }
+  then(api, ctx, ev, d);
+};
+const iosToApp = (app, then) => (api, ctx, ev, d) => {
+  if ((ev === 'swipe' && d.dir === 'up' && d.fy > .7) || (ev === 'homebarTap' && L.wrongs >= 1)) { ctx.P.home(); api.say(`Now tap <b>${app}</b>.`); api.setTargets(byApp(app)()); return; }
+  if (ev === 'homebarTap') { api.wrong('Hold down on the line and SLIDE up.'); return; }
+  if (ev === 'app') { if (d !== app) api.soft(`That opened ${d}. Swipe up to go Home, then tap ${app}.`); else then.enter && then.enter(api, ctx); return; }
+  then(api, ctx, ev, d);
+};
+const startAt = (home, app) => ctx => ctx.P.scr === 'home' ? byApp(app)() : [$(home)];
+function alarmStep(os) {
+  const h = (api, ctx, ev, d) => { if (ev === 'alarm') { if (d.id === 'a700' && d.on) api.done('Alarm set! ⏰ The phone will ring at 7:00 AM.'); else if (d.id !== 'a700') api.soft('That\'s a different alarm. Turn on the 7:00 AM one.'); } };
+  h.enter = (api) => { api.say('Tap the switch next to <b>7:00 AM</b> to turn that alarm on.'); api.setTargets($('[data-al="a700"]')); };
+  return pStep(os === 'and' ? 'Let\'s set an <b>alarm</b>. Tap <b>Home ●</b>, then tap the <b>Clock ⏰</b> app, and turn on the <b>7:00 AM</b> alarm.' : 'Let\'s set an <b>alarm</b>. <b>Swipe up</b> from the bottom to go Home, tap the <b>Clock ⏰</b> app, and turn on the <b>7:00 AM</b> alarm.',
+    'Go to the Home screen first, then look for the Clock app with the ⏰.', startAt(os === 'and' ? '#nHome' : '#hbar', 'Clock'), os === 'and' ? andToApp('Clock', h) : iosToApp('Clock', h));
+}
+function fontStep(os) {
+  const h = (api, ctx, ev, d) => {
+    if (ev === 'setting') { if (d === 'disp') { api.say('Tap <b>A+</b> until the text size says <b>Large</b>.'); } else api.soft('Tap the Display line this time.'); }
+    if (ev === 'screen' && d === 'display') api.setTargets($('#fPlus'));
+    if (ev === 'font') { if (d >= 2) api.done('Bigger text is easier to read! This changes the text in almost every app.'); }
+  };
+  h.enter = (api) => { api.say(`Now tap <b>${os === 'and' ? 'Display' : 'Display & Brightness'}</b>.`); api.setTargets($('[data-s="disp"]')); };
+  return pStep(`Make the phone's words <b>bigger</b>. Go Home, open <b>Settings ⚙️</b>, tap <b>${os === 'and' ? 'Display' : 'Display & Brightness'}</b>, then tap <b>A+</b> until it says <b>Large</b>.`,
+    'Home screen first, then the gray Settings gear.', startAt(os === 'and' ? '#nHome' : '#hbar', 'Settings'), os === 'and' ? andToApp('Settings', h) : iosToApp('Settings', h));
+}
+{
+  const maps = (api, ctx, ev, d) => {
+    if (ev === 'mapSearch') { if (/library/i.test(d)) { api.say('Found it! Tap <b>↱ Directions</b>.'); api.setTargets($('#mapDir')); } else api.soft('Search for: library'); }
+    if (ev === 'mapDir') { api.say('Tap <b>▶ Start</b> to begin step-by-step directions.'); api.setTargets($('#mapGo')); }
+    if (ev === 'mapStart') api.done('Let\'s go! 🧭 The phone will tell you each turn out loud. Great for finding new places.');
+  };
+  maps.enter = (api, ctx) => { api.say('Tap the <b>search box</b>, type <b>library</b>, and press <b>⏎</b>.'); const inp = $('#mapIn'); api.setTargets(inp); phoneKb(api, ctx, '#mapIn'); };
+  addSteps('android', 1, [
+    alarmStep('and'), fontStep('and'),
+    pStep('Find your way with <b>Maps</b>! Go Home ●, tap <b>Maps 🗺️</b>, search for <b>library</b>, and get <b>Directions</b>.', 'Home screen first, then the Maps app.', startAt('#nHome', 'Maps'), andToApp('Maps', maps)),
+  ]);
+  const notes = (api, ctx, ev, d) => {
+    if (ev === 'noteNew') { api.say('Type <b>Buy milk</b>, then tap <b>Done</b>.'); const t = $('#nText'); api.setTargets(t, $('#nDone')); phoneKb(api, ctx, '#nText'); }
+    if (ev === 'noteDone') { if (/buy milk/i.test(d)) api.done('Note saved! 📝 The Notes app is great for shopping lists.'); else api.soft('Type Buy milk, then tap Done.'); }
+  };
+  notes.enter = (api) => { api.say('Tap the <b>✏️</b> at the top right to start a new note.'); api.setTargets($('#nNew')); };
+  addSteps('iphone', 1, [
+    alarmStep('ios'), fontStep('ios'),
+    pStep('Write a quick <b>note</b>. Swipe up to go Home, open <b>Notes 📝</b>, tap <b>✏️</b>, type <b>Buy milk</b>, and tap <b>Done</b>.', 'Swipe up from the bottom first, then tap the yellow Notes app.', startAt('#hbar', 'Notes'), iosToApp('Notes', notes)),
+  ]);
+}
+
+/* ---------- Chapter 9: Cyber Safety — scam calls, app permissions, gift cards, locking, backups ---------- */
+addSteps('security', 1, [
+  {
+    say: 'Your phone rings. The caller says they are from <b>“Windows Support”</b> and your computer has a virus. They want to connect to it. <b>What do you do?</b>', hint: 'Real tech companies never call you out of the blue. Hang up.',
+    build: (S, api) => {
+      S.innerHTML = `<div class="stage-inner"><div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap;justify-content:center">
+        <div style="width:230px;height:420px;background:#15171a;border-radius:32px;padding:10px"><div style="position:relative;height:100%;border-radius:24px;overflow:hidden"><div class="callin"><div style="font-size:3em">🖥️</div><b>“Windows Support”</b><small>+1 (888) 555-0100</small><div style="background:rgba(255,255,255,.12);border-radius:12px;padding:8px;font-size:.85em">“Hello, your computer is sending us virus alerts. Please let us connect to fix it right now.”</div></div></div></div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:260px"><button class="qopt" id="tsLet">🖱️ Let them connect to my computer</button><button class="qopt" id="tsCard">💳 Pay them to fix it</button><button class="qopt" id="tsHang">📞 Hang up</button></div></div></div>`;
+      api.target($('#tsHang'));
+      api.listen($('#tsLet'), 'click', () => api.wrong('Never let a stranger connect to your computer. They could steal your files and passwords. Hang up!'));
+      api.listen($('#tsCard'), 'click', () => api.wrong('Never pay a surprise caller. This is a well-known scam. Hang up!'));
+      api.listen($('#tsHang'), 'click', () => { $('#tsHang').classList.add('right'); api.done('Exactly! Microsoft, Apple and banks never call you out of the blue about viruses. If worried, call the company using a number from its real website.'); });
+    }
+  },
+  {
+    say: 'You installed a <b>flashlight app</b>. It asks to see your <b>contacts</b> and your <b>location</b>. A flashlight doesn\'t need those! <b>Tap “Don\'t allow”.</b>', hint: 'Only allow what an app really needs. Tap Don\'t allow.',
+    build: (S, api) => {
+      S.innerHTML = `<div class="stage-inner"><div style="width:250px;height:440px;background:#15171a;border-radius:32px;padding:10px"><div style="position:relative;height:100%;border-radius:24px;overflow:hidden;background:linear-gradient(#333,#111);display:grid;place-items:center">
+        <div style="background:#fff;border-radius:16px;padding:14px;width:88%;text-align:center;color:#111"><div style="font-size:2em">🔦</div><b>“Super Flashlight” wants to access your Contacts and Location</b>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px"><button class="pbtn" id="pmAllow">Allow</button><button class="pbtn" id="pmDeny" style="background:#e9ecef;color:#111">Don't allow</button></div></div></div></div></div>`;
+      api.target($('#pmDeny'));
+      api.listen($('#pmAllow'), 'click', () => api.wrong('A flashlight doesn\'t need your contacts or location. Apps that ask for too much may be collecting your information. Tap Don\'t allow.'));
+      api.listen($('#pmDeny'), 'click', () => api.done('Smart! You can check what every app is allowed to see in Settings, under Privacy or Permissions.'));
+    }
+  },
+  QUIZ('Someone asks you to pay a bill with <b>gift cards</b> and read them the numbers. It\'s…', '🎁', ['A normal way to pay bills', 'Always a scam', 'Fine if they sound nice', 'Fine if it\'s a small amount'], 1,
+    { right: 'Right! Real companies and government offices never ask for payment in gift cards. Hang up and tell someone you trust.', 0: 'No real business or government office asks you to pay with gift cards.', 2: 'Scammers are often very friendly. Gift cards = scam, every time.', 3: 'Even small amounts: gift card payment requests are always scams.' }),
+  QUIZ('You\'re using a computer at the <b>library</b> and step away for a minute. What should you do?', '🔒', ['Leave it open, it\'s only a minute', 'Lock the screen (Windows key + L) or sign out', 'Turn off the monitor only', 'Ask a stranger to watch it'], 1,
+    { right: 'Yes! Windows key + L locks a PC (on a Mac: Control + Command + Q). And always sign out of public computers when you\'re done.', 0: 'A minute is enough for someone to read your email. Lock it!', 2: 'The computer is still unlocked. Lock it instead.', 3: 'Better to lock it or sign out.' }),
+  QUIZ('What protects your photos if your computer breaks or gets <b>ransomware</b>?', '💾', ['A backup copy on a USB drive or cloud storage', 'A bigger monitor', 'A new mouse', 'Deleting your photos'], 0,
+    { right: 'Right! With a backup, you can get everything back. Many phones back up photos automatically to the cloud.', 1: 'A monitor doesn\'t save files. A backup does!', 2: 'A mouse doesn\'t save files. A backup does!', 3: 'Oh no! A backup keeps them safe instead.' }),
+]);
+
+/* ---------- Final review — questions about the new skills ---------- */
+const FINAL_QS_EXTRA = [
+  { q: 'Which keys <b>copy</b> and then <b>paste</b>?', emoji: '📋', opts: ['Ctrl + C, then Ctrl + V', 'Shift + A, then Shift + B', 'Enter, then Space', 'Alt + F4'], correct: 0 },
+  { q: 'You deleted a file by mistake. Where can you find it?', emoji: '🗑️', opts: ['The Recycle Bin', 'The printer', 'The address bar', 'It\'s gone forever'], correct: 0 },
+  { q: 'Someone asks you to pay with <b>gift cards</b>. That\'s…', emoji: '🎁', opts: ['Normal', 'A scam', 'A good deal', 'Required by law'], correct: 1 },
+  { q: 'A caller says they\'re from “tech support” and wants to <b>connect to your computer</b>. You…', emoji: '📞', opts: ['Let them connect', 'Hang up', 'Give them your password', 'Pay them'], correct: 1 },
+];
+
+/* =====================================================================
    CHAPTER 9: CITY HALL — final review & certificate
    ===================================================================== */
 const FINAL_QS = [
@@ -7124,7 +7624,7 @@ const FINAL_QS = [
   { q: 'Which makes a <b>strong password</b>?', emoji: '🔑', opts: ['Your pet\'s name', '123456', 'Three random words plus a number and a symbol', 'Your birthday'], correct: 2 },
   { q: 'A website pop-up says your video player is <b>out of date</b>. You should…', emoji: '🦠', opts: ['Click “Update now”', 'Close it: real updates come from your computer\'s Settings', 'Call the phone number shown', 'Type your password'], correct: 1 },
   { q: 'A stranger emails you <b>invoice.pdf.exe</b>. It is…', emoji: '📎', opts: ['A safe PDF document', 'Probably malware: don\'t open it', 'A photo', 'A song'], correct: 1 },
-];
+].concat(FINAL_QS_EXTRA);
 function certHTML() {
   const lv = levelOf(S.xp);
   return `<div class="cert" id="certCard"><div class="cseal">🏆</div><div style="letter-spacing:3px;font-weight:700">CERTIFICATE OF ACHIEVEMENT</div><h1>Computer Quest: Tech Town</h1><div>This certifies that</div><div class="cname">${esc(S_name())}</div>
@@ -7136,7 +7636,7 @@ LESSONS.final = {
   steps: [
     { say: `Welcome to City Hall, {name}! This is your <b>final review</b>: ${FINAL_QS.length} questions about everything you learned. There's no rush and no failing. If you pick a wrong answer, just try another one!`, next: 'Start the review ▶', build: S => infoCard(S, `<div style="text-align:center"><div style="font-size:4em">🏛️</div><h3>Final Review</h3><p>${FINAL_QS.length} questions · unlimited tries · a certificate at the end!</p></div>`) },
     ...FINAL_QS.map((f, i) => ({ say: `Question ${i + 1} of ${FINAL_QS.length}`, build: (S, api) => quiz(S, api, f) })),
-    { say: 'You did it, {name}! Here is your certificate. Click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">📜 ${window.CQ_ARTIFACT ? 'Show' : 'Print'} certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
+    { say: 'You did it, {name}! Here is your certificate. Click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">🖨️ Print or save certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
   ]
 };
 
@@ -7369,22 +7869,32 @@ const Game = {
   battleEvent(ev, en) {
     let p = $('#battle');
     if (!p) { p = document.createElement('div'); p.id = 'battle'; document.body.appendChild(p); }
+    const NAME = { tiny: 'Tiny Glitch', mini: 'Glitch', big: 'Big Glitch', king: 'Virus King' };
     if (ev === 'start') {
       Sfx.play('bad');
       if (!S.metGlitch) { S.metGlitch = true; save(); }
-      this.renderBattle(en, `⚔️ A <b>Glitch</b> appeared! Press the letter to attack!`);
-      Voice.speak(`A Glitch! Press the letter ${en.letter.toUpperCase()} to attack.`);
+      const how = en.word ? 'Type the word to attack!' : 'Press the letter to attack!';
+      this.renderBattle(en, `${en.kind === 'king' ? '👑' : '⚔️'} A <b>${NAME[en.kind]}</b> appeared! ${how}`);
+      Voice.speak(en.word ? `A ${NAME[en.kind]}! Type the word ${en.word.split('').join(' ')} to attack.` : `A ${NAME[en.kind]}! Press the letter ${en.letter.toUpperCase()} to attack.`);
     } else if (ev === 'won') {
-      S.bugs = (S.bugs || 0) + 1; addXP(3); Sfx.play('level'); Missions.check();
-      p.innerHTML = `<div class="bt-title">✨ Glitch squashed! ✨</div><div class="bt-msg">+3 XP · Glitches squashed: ${S.bugs}</div>`; p.classList.add('on');
-      Voice.speak('Glitch squashed! Great typing!'); clearTimeout(this.bt); this.bt = setTimeout(() => p.classList.remove('on'), 2200);
+      const xp = { tiny: 2, mini: 3, big: 8, king: 30 }[en.kind];
+      S.bugs = (S.bugs || 0) + 1; if (en.kind === 'big') S.bigBugs = (S.bigBugs || 0) + 1; if (en.kind === 'king') S.kings = (S.kings || 0) + 1;
+      addXP(xp); Sfx.play(en.kind === 'king' ? 'done' : 'level'); if (en.kind !== 'mini' && en.kind !== 'tiny') confetti(en.kind === 'king' ? 120 : 50);
+      Missions.check();
+      p.innerHTML = `<div class="bt-title">✨ ${NAME[en.kind]} squashed! ✨</div><div class="bt-msg">+${xp} XP · Glitches squashed: ${S.bugs}${S.bigBugs ? ` · Big: ${S.bigBugs}` : ''}${S.kings ? ` · Kings: ${S.kings}` : ''}</div>`; p.classList.add('on');
+      Voice.speak(en.kind === 'king' ? 'You defeated the Virus King! Tech Town is safe!' : 'Glitch squashed! Great typing!'); clearTimeout(this.bt); this.bt = setTimeout(() => p.classList.remove('on'), en.kind === 'king' ? 4000 : 2200);
     } else if (ev === 'fled') { p.classList.remove('on'); }
   },
   renderBattle(en, title, msg = '') {
-    const p = $('#battle'); const c = en.letter; const L2 = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(x => x !== c).sort(() => Math.random() - .5).slice(0, 2);
+    const p = $('#battle');
+    const c = en.word ? en.word[en.typed.length] : en.letter;
+    const L2 = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(x => x !== c).sort(() => Math.random() - .5).slice(0, 2);
     const opts = [c, ...L2].sort(() => Math.random() - .5);
-    p.innerHTML = `<div class="bt-title">${title}</div><div class="bt-row"><span>Press</span><span class="bigkey">${c.toUpperCase()}</span><span>to attack!</span></div>
-      <div class="bt-hp">Glitch energy: ${'<i class="on"></i>'.repeat(en.hp)}${'<i></i>'.repeat(3 - en.hp)}</div>
+    const target = en.word
+      ? `<span>Type</span><span class="cb-word">${[...en.word].map((ch, i) => `<span class="cb-k ${i < en.typed.length ? 'ok' : i === en.typed.length ? 'nx' : ''}" style="display:inline-grid;place-items:center">${ch.toUpperCase()}</span>`).join('')}</span>`
+      : `<span>Press</span><span class="bigkey">${c.toUpperCase()}</span><span>to attack!</span>`;
+    p.innerHTML = `<div class="bt-title">${title}</div><div class="bt-row">${target}</div>
+      <div class="bt-hp">${en.kind === 'king' ? 'King' : 'Glitch'} energy: ${'<i class="on"></i>'.repeat(en.hp)}${'<i></i>'.repeat(Math.max(0, en.maxHp - en.hp))}</div>
       <div class="bt-msg">${msg || `Hint: ${c.toUpperCase()} is in the <b>${rowOf(c)}</b>.`}</div>
       <div class="bt-taps"><small>No keyboard? Tap:</small>${opts.map(o => `<button class="btn ghost" data-l="${o}">${o.toUpperCase()}</button>`).join('')}<button class="btn ghost" id="btRun">🏃 Walk away</button></div>`;
     p.classList.add('on');
@@ -7394,8 +7904,16 @@ const Game = {
   letter(k) {
     const r = World.attack(k); if (!r) return;
     const en = World.battle;
-    if (r.ok) { Sfx.play('good'); if (!r.won && en) { this.renderBattle(en, `💥 Hit! Keep going!`); Voice.speak(`Hit! Now press ${en.letter.toUpperCase()}.`); } }
-    else if (en) { Sfx.play('bad'); this.renderBattle(en, '⚔️ Almost!', `That was <b>${esc(k.toUpperCase())}</b>. Find <b>${r.want.toUpperCase()}</b>, in the <b>${rowOf(r.want)}</b>.`); Voice.speak(`That was ${k.toUpperCase()}. Find the letter ${r.want.toUpperCase()}.`); }
+    if (r.ok) {
+      Sfx.play(r.partial ? 'click' : 'good');
+      if (!r.won && en) {
+        if (r.partial) this.renderBattle(en, 'Keep typing!');
+        else { this.renderBattle(en, `💥 Hit! Keep going!`); Voice.speak(en.word ? `Hit! Now type ${en.word.split('').join(' ')}.` : `Hit! Now press ${en.letter.toUpperCase()}.`); }
+      }
+    } else if (en) {
+      Sfx.play('bad'); this.renderBattle(en, '⚔️ Almost!', `That was <b>${esc(k.toUpperCase())}</b>. Find <b>${r.want.toUpperCase()}</b>, in the <b>${rowOf(r.want)}</b>.`);
+      Voice.speak(`That was ${k.toUpperCase()}. Find the letter ${r.want.toUpperCase()}.`);
+    }
   },
 
   /* ---- modals ---- */
@@ -7435,10 +7953,85 @@ const Game = {
   },
   printCertificate() {
     $('#printArea').innerHTML = certHTML();
-    const canPrint = !window.CQ_ARTIFACT;
-    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">${canPrint ? '<button class="btn gold big" id="doPrint">🖨️ Print</button>' : '<p>📸 To keep it, take a screenshot or a photo of your certificate.</p>'}</div>`);
-    if (canPrint) $('#doPrint').onclick = () => window.print();
+    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">
+      <button class="btn gold big" id="doPrint">🖨️ Print certificate</button>
+      <button class="btn ghost" id="doPdf">📄 Save as PDF</button><button class="btn ghost" id="doPng">🖼️ Save as picture</button></div>
+      <p id="certMsg" style="text-align:center;min-height:1.4em"></p>`);
+    const msg = t => { const m = $('#certMsg'); if (m) m.innerHTML = t; };
+    $('#doPrint').onclick = async () => {
+      if (!window.CQ_ARTIFACT) { window.print(); return; }
+      // Hosted pages can't open the print dialog: hand over a PDF instead
+      msg('Making your certificate…'); const r = await this.saveCert('pdf');
+      msg(r === 'saved' ? '✅ Saved! Open the PDF file (it\'s in your Downloads) and click <b>Print</b>.' : r === 'declined' ? 'No problem. Click the button again any time.' : '⚠️ Saving isn\'t available here. Download the game file to print from your computer.');
+    };
+    $('#doPdf').onclick = async () => { msg('Making your PDF…'); const r = await this.saveCert('pdf'); msg(r === 'saved' ? '✅ PDF saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
+    $('#doPng').onclick = async () => { msg('Making your picture…'); const r = await this.saveCert('png'); msg(r === 'saved' ? '✅ Picture saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
+  },
+  certCanvas() {
+    const W = 1600, H = 1131, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    const ink = '#3a2a0a', gold = '#c79a1e', serif = 'Georgia, "Times New Roman", serif';
+    g.fillStyle = '#fffdf3'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = gold; g.lineWidth = 16; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 4; g.strokeRect(74, 74, W - 148, H - 148);
+    [[74, 74], [W - 74, 74], [74, H - 74], [W - 74, H - 74]].forEach(([x, y]) => { g.fillStyle = gold; g.beginPath(); g.arc(x, y, 18, 0, 7); g.fill(); });
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = ink;
+    g.font = `100px ${serif}`; g.fillText('🏆', W / 2, 205);
+    g.font = `bold 34px ${serif}`; g.fillText('C E R T I F I C A T E   O F   A C H I E V E M E N T', W / 2, 275);
+    g.font = `bold 66px ${serif}`; g.fillText('Computer Quest: Tech Town', W / 2, 365);
+    g.font = `32px ${serif}`; g.fillText('This certifies that', W / 2, 440);
+    let fs = 100; const name = S_name(); do { g.font = `italic bold ${fs}px ${serif}`; fs -= 4; } while (g.measureText(name).width > 1100 && fs > 40);
+    g.fillText(name, W / 2, 555); g.strokeStyle = gold; g.lineWidth = 3; g.beginPath(); g.moveTo(W / 2 - 480, 585); g.lineTo(W / 2 + 480, 585); g.stroke();
+    const lv = levelOf(S.xp);
+    g.font = `30px ${serif}`;
+    g.fillText('has learned to use a computer, the internet, email, Android phones and iPhones,', W / 2, 650);
+    g.fillText(`and to stay safe online, earning the title of ${LEVELS[lv][1]} (Level ${lv + 1}, ${S.xp} XP).`, W / 2, 695);
+    g.font = `52px ${serif}`; g.fillText(CHAPTERS.filter((ch, i) => isDone(i) || ch.id === 'final').map(ch => ch.badgeIcon).join('  '), W / 2, 790);
+    g.font = `26px ${serif}`; g.fillText(`Glitches squashed: ${S.bugs || 0}   ·   Data Gems found: ${(S.gems || []).length} of 12   ·   Missions: ${(S.missions || []).length}`, W / 2, 850);
+    g.textAlign = 'left'; g.font = `28px ${serif}`; g.fillText(`Date: ${new Date().toLocaleDateString()}`, 170, 990);
+    g.textAlign = 'right'; g.font = `italic 40px ${serif}`; g.fillText('Maya', W - 230, 975); g.font = `26px ${serif}`; g.fillText('Maya, Tech Guide', W - 170, 1015);
+    g.beginPath(); g.moveTo(W - 520, 988); g.lineTo(W - 170, 988); g.lineWidth = 2; g.stroke();
+    g.fillStyle = gold; g.beginPath(); g.arc(W / 2, 985, 72, 0, 7); g.fill(); g.fillStyle = '#fff7d6'; g.beginPath(); g.arc(W / 2, 985, 58, 0, 7); g.fill();
+    g.fillStyle = ink; g.textAlign = 'center'; g.font = `bold 22px ${serif}`; g.fillText('TECH', W / 2, 978); g.fillText('HERO', W / 2, 1006);
+    return c;
+  },
+  // A one-page PDF around a JPEG image (A4 landscape). No library needed.
+  jpegPdf(jpeg, iw, ih) {
+    const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
+    const push = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); len += b.length; };
+    const obj = (n, ...body) => { offs[n] = len; push(`${n} 0 obj\n`); body.forEach(push); push('\nendobj\n'); };
+    const pw = 842, ph = 595, cs = `q ${pw} 0 0 ${ph} 0 0 cm /Im1 Do Q`;
+    push('%PDF-1.4\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>`);
+    obj(4, `<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+    obj(5, `<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`, jpeg, '\nendstream');
+    const xref = len;
+    push('xref\n0 6\n0000000000 65535 f \n'); for (let i = 1; i <= 5; i++) push(String(offs[i]).padStart(10, '0') + ' 00000 n \n');
+    push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    return new Blob(parts, { type: 'application/pdf' });
+  },
+  async saveCert(kind) {
+    const c = this.certCanvas();
+    const blobOf = type => new Promise(r => c.toBlob(r, type, .92));
+    let blob;
+    if (kind === 'png') blob = await blobOf('image/png');
+    else { const j = new Uint8Array(await (await blobOf('image/jpeg')).arrayBuffer()); blob = this.jpegPdf(j, c.width, c.height); }
+    const filename = `Tech-Town-Certificate-${S_name().replace(/[^\w-]+/g, '-')}.${kind}`;
+    this.lastCert = blob;
+    return this.saveFile(filename, blob);
+  },
+  async saveFile(filename, blob) {
+    if (window.CQ_ARTIFACT) {
+      try {
+        const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+        if (!dl) return 'unavailable';
+        await dl.save({ filename, data: blob }); return 'saved';
+      } catch (e) { return e && e.code === 'declined' ? 'declined' : 'unavailable'; }
+    }
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000); return 'saved';
   }
+
 };
 window.addEventListener('DOMContentLoaded', () => Game.boot());
 window.CQ = { S: () => S, L, World, Game, LESSONS, CHAPTERS };
@@ -7473,6 +8066,9 @@ const MISSIONS = [
   chapterMission(7, 'iPhone Adventure', 'ch7'),
   { id: 'gems12', icon: '👑', title: 'Treasure Hunter', after: 'gems3', desc: 'Find all 12 Data Gems hidden in Tech Town.', progress: () => [(S.gems || []).length, 12], reward: 30 },
   chapterMission(8, 'Cyber Guardian', 'ch8'),
+  { id: 'big3', icon: '👾', title: 'Big Game Hunter', after: 'ch3', desc: 'Squash 3 <b>Big Glitches</b>. They need 5 hits each, and you type a short word for every hit!', progress: () => [S.bigBugs || 0, 3], reward: 25 },
+  { id: 'bugs25', icon: '🏅', title: 'Glitch Legend', after: 'bugs10', desc: 'Squash 25 Glitches in total.', progress: () => [S.bugs || 0, 25], reward: 35 },
+  { id: 'king', icon: '👑', title: 'Defeat the Virus King', story: true, after: 'ch9', desc: 'The <b>Virus King</b> appeared in the City Hall garden! He needs 8 hits: type a safety word for each one.', progress: () => [Math.min(1, S.kings || 0), 1], reward: 50 },
   { id: 'scout', icon: '🦠', title: 'Virus Patrol', after: 'ch3', desc: 'Squash 5 Glitches. Glitches are like computer viruses: stay alert!', progress: () => [S.bugs || 0, 5], reward: 15 },
   chapterMission(9, 'Tech Hero', 'ch9'),
 ];

@@ -388,8 +388,8 @@ const World = {
         const l2 = this.add('P_lamp', x + 6, s + 5.4, 0); this.circle(x + 6, s + 5.4, .25);
         void l; void l2;
       }
-      this.add('P_hydrant', -18.5, s + 4.6); this.circle(-18.5, s + 4.6, .3);
-      this.add('P_sign', 16.4, s + 4.8, 0); this.add('P_sign', -9.6, s - 4.8, Math.PI);
+      this.add('P_hydrant', -18.5, s + 5.6); this.circle(-18.5, s + 5.6, .3);
+      this.add('P_sign', 16.4, s + 5.7, 0); this.circle(16.4, s + 5.7, .15); this.add('P_sign', -9.6, s - 5.7, Math.PI); this.circle(-9.6, s - 5.7, .15);
       void ri;
     });
     this.hills(); this.makeClouds();
@@ -507,7 +507,7 @@ const World = {
 
   spawnNPCs() {
     const looks = NPCS.map(n => [n.shirt, n.hair, n.skin]);
-    const paths = [[[-40, 5.4], [40, 5.4]], [[40, -4.6], [-40, -4.6]], [[-40, -31.4], [40, -31.4]], [[40, -40.6], [-40, -40.6]], [[-40, -103.4], [40, -103.4]]];
+    const paths = [[[-40, 4.4], [40, 4.4]], [[40, -4.4], [-40, -4.4]], [[-40, -31.6], [40, -31.6]], [[40, -40.4], [-40, -40.4]], [[-40, -103.6], [40, -103.6]]];
     looks.forEach((l, i) => {
       const p = this.makePerson({ shirt: l[0], hair: l[1], skin: l[2], pants: '#3a3f4a', long: !!NPCS[i].long, bun: !!NPCS[i].bun });
       p.path = paths[i]; p.t = Math.random(); p.dir = 1; p.root.position.set(0, .16, 0); this.scene.add(p.root); this.npcs.push(p);
@@ -522,7 +522,7 @@ const World = {
       const row = i % 4, dir = i % 2 ? -1 : 1;
       car.userData = { row, dir, x: -45 + Math.random() * 90, v: 7 + Math.random() * 3, cur: 0 };
       car.position.set(car.userData.x, 0, STREETS[row] + (dir > 0 ? 1.5 : -1.5));
-      car.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2; // model front faces +Z
+      car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2; // model front is +Z: face the driving direction
       this.scene.add(car); this.cars.push(car);
     });
   },
@@ -742,7 +742,7 @@ const World = {
     pl.root.position.x = bench.x - Math.sin(bench.r) * .1; pl.root.position.z = bench.z - Math.cos(bench.r) * .1; pl.root.rotation.y = bench.r;
   },
   /* ---------------- Glitch enemies (typing battles) ---------------- */
-  makeEnemy(color) {
+  makeEnemy(color, kind = 'mini') {
     const g = new THREE.Group(); const T = c => new THREE.MeshToonMaterial({ color: c, gradientMap: this.grad() });
     const body = new THREE.Mesh(new THREE.IcosahedronGeometry(.6, 1), T(color)); body.scale.set(1, .82, 1); body.position.y = .55; body.castShadow = true;
     const white = T(0xffffff), black = new THREE.MeshBasicMaterial({ color: 0x151520 });
@@ -754,9 +754,19 @@ const World = {
     });
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(.3, .05, .04), black); mouth.position.set(0, .42, .55); g.add(mouth);
     [[-.3, .25], [.3, .25], [-.3, -.25], [.3, -.25]].forEach(([x, z]) => { const f = new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), T(0x2a2340)); f.position.set(x, .1, z); f.scale.y = .6; g.add(f); });
+    if (kind === 'big' || kind === 'king') { // spikes
+      for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(.12, .38, 5), T(0x2a2340)); sp.position.set(Math.cos(a) * .42, .78, Math.sin(a) * .42 - .05); sp.rotation.set(Math.sin(a) * .7, 0, -Math.cos(a) * .7); g.add(sp); }
+    }
+    if (kind === 'king') { // crown
+      const gold = new THREE.MeshToonMaterial({ color: 0xffc83d, gradientMap: this.grad(), emissive: 0x6a4a00, emissiveIntensity: .4 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(.34, .38, .18, 12, 1, true), gold); band.position.y = 1.14; band.material.side = THREE.DoubleSide; g.add(band);
+      for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; const pt = new THREE.Mesh(new THREE.ConeGeometry(.07, .22, 4), gold); pt.position.set(Math.cos(a) * .34, 1.33, Math.sin(a) * .34); g.add(pt); }
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.08), new THREE.MeshBasicMaterial({ color: 0x39c7ff })); gem.position.set(0, 1.16, .37); g.add(gem);
+    }
     g.add(body); this.outline(g, .03);
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false })); sp.scale.set(1.9, 1.9, 1); sp.position.set(0, 2.5, .4); sp.renderOrder = 11; sp.visible = false; g.add(sp);
-    g.userData = { body, sprite: sp }; return g;
+    const scale = { tiny: .75, mini: 1, big: 1.45, king: 2.3 }[kind]; g.scale.setScalar(scale); g.userData.scale = scale;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false })); const spriteY = { tiny: 2.9, mini: 2.4, big: 1.75, king: 1.65 }[kind]; sp.position.set(0, spriteY, .4); sp.renderOrder = 11; sp.visible = false; g.add(sp);
+    g.userData = { body, sprite: sp, scale, spriteY }; return g;
   },
   letterTex(ch) {
     this._lt = this._lt || {}; if (this._lt[ch]) return this._lt[ch];
@@ -766,15 +776,34 @@ const World = {
     c.fillStyle = '#1f2d3d'; c.font = '900 78px Nunito, Arial Black, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ch.toUpperCase(), 62, 64);
     const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return this._lt[ch] = t;
   },
+  wordTex(word) {
+    this._wt = this._wt || {}; if (this._wt[word]) return this._wt[word];
+    const W = 90 + word.length * 62, cv = document.createElement('canvas'); cv.width = W; cv.height = 128; const c = cv.getContext('2d');
+    const rr = (x, y, w, h) => { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, 20) : c.rect(x, y, w, h); };
+    c.fillStyle = 'rgba(0,0,0,.25)'; rr(14, 18, W - 24, 104); c.fill();
+    c.fillStyle = '#fff7d6'; c.strokeStyle = '#d8a200'; c.lineWidth = 8; rr(10, 8, W - 24, 104); c.fill(); c.stroke();
+    c.fillStyle = '#1f2d3d'; c.font = '900 72px Nunito, Arial Black, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(word.toUpperCase(), (W - 14) / 2, 64);
+    const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.userData = { aspect: W / 128 }; return this._wt[word] = t;
+  },
   spawnEnemies() {
     this.enemies = [];
-    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12], [18.5, -12], [40, -12], [-18.5, -48], [18.5, -48], [-40, -48], [-18.5, -84], [18.5, -84], [-24, -118], [24, -118]];
+    // [x, z, kind]  mini = press a letter, big = type a short word (after Typing School), king = boss (after Cyber Safety HQ)
+    const spots = [[-20, 18], [20, 18], [-38, 10], [38, 10], [-18.5, -12, 'big'], [18.5, -12], [40, -12, 'big'], [-18.5, -48], [18.5, -48, 'big'], [-40, -48],
+      [-18.5, -84, 'big'], [18.5, -84], [-24, -118, 'big'], [24, -118], [-35, 5.6], [35, 5.6, 'big'], [-6, -30.8], [6, -41.2], [-35, -41.2, 'big'], [35, -30.8],
+      [-6, -66.8], [6, -77.2], [-35, -77.2, 'big'], [35, -66.8], [-40, -113], [40, -113, 'big'], [-13, -88], [13, -88], [-30, 16.5], [30, 17], [27, -123, 'king']];
     const cols = [0x9b5de5, 0xf15bb5, 0x00bbf9, 0xff6b35, 0x00c49a];
-    spots.forEach(([x, z], i) => {
-      const g = this.makeEnemy(cols[i % cols.length]); g.position.set(x, 0, z); this.scene.add(g);
-      this.enemies.push({ g, home: { x, z }, hp: 3, dead: false, respawn: 0, cool: 0, tx: x, tz: z, wt: 0, hit: 0, letter: null, id: i });
+    spots.forEach(([x, z, kind0], i) => {
+      const kind = kind0 || (i % 3 === 0 ? 'tiny' : 'mini');
+      const g = this.makeEnemy(kind === 'king' ? 0xd62246 : kind === 'big' ? [0x7b2ff7, 0xe5484d, 0x1f9d55][i % 3] : cols[i % cols.length], kind); g.position.set(x, 0, z); this.scene.add(g);
+      const maxHp = { tiny: 2, mini: 3, big: 5, king: 8 }[kind]; // bigger Glitch = more hits
+      this.enemies.push({ g, kind, maxHp, radius: { tiny: .45, mini: .55, big: .8, king: 1.3 }[kind], home: { x, z }, hp: maxHp, dead: false, respawn: 0, cool: 0, tx: x, tz: z, wt: 0, hit: 0, letter: null, word: null, typed: '', id: i });
     });
     this.battle = null;
+  },
+  wordMode(en) { return (en.kind === 'big' && S.done.includes('keys')) || en.kind === 'king'; },
+  pickWord(en, prev) {
+    const list = en.kind === 'king' ? ['virus', 'update', 'backup', 'spam', 'scam', 'lock', 'safe', 'shield', 'secure', 'report'] : ['cat', 'sun', 'dog', 'bug', 'key', 'fun', 'web', 'app', 'map', 'mail', 'click', 'mouse', 'type', 'home', 'wifi', 'save', 'send'];
+    let w; do { w = list[Math.floor(Math.random() * list.length)]; } while (w === prev); return w;
   },
   pickLetter(prev) { const L = 'abcdefghijklmnopqrstuvwxyz'; let c; do { c = L[Math.floor(Math.random() * 26)]; } while (c === prev); return c; },
   updateEnemies(dt) {
@@ -783,53 +812,69 @@ const World = {
       const g = en.g, u = g.userData;
       if (en.dead) {
         const s = Math.max(0.001, g.scale.x - dt * 3); g.scale.setScalar(s); if (s <= .001) g.visible = false;
-        en.respawn -= dt; if (en.respawn <= 0) { en.dead = false; en.hp = 3; g.visible = true; g.scale.setScalar(.01); g.position.set(en.home.x, 0, en.home.z); }
+        en.respawn -= dt; if (en.respawn <= 0) { en.dead = false; en.hp = en.maxHp; g.visible = true; g.scale.setScalar(.01); g.position.set(en.home.x, 0, en.home.z); }
         return;
       }
-      if (g.scale.x < 1) g.scale.setScalar(Math.min(1, g.scale.x + dt * 2));
+      if (en.kind === 'king' && !S.done.includes('security')) { g.visible = false; return; }
+      if (!g.visible) g.visible = true;
+      const full = u.scale || 1; if (g.scale.x < full) g.scale.setScalar(Math.min(full, g.scale.x + dt * 2 * full));
       en.cool = Math.max(0, en.cool - dt);
       const dist = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
       const inBattle = this.battle === en;
       if (inBattle) {
         // hop beside the player so the Glitch is never hidden behind them
         const side = en.side || (en.side = (g.position.x >= pl.x ? 1 : -1));
-        const tx = pl.x + side * 2.3, tz = pl.z - .4, ddx = tx - g.position.x, ddz = tz - g.position.z, dd = Math.hypot(ddx, ddz);
-        if (dd > .1 && en.hit <= 0) { const st = Math.min(dd, dt * 5); const pos = { x: g.position.x + ddx / dd * st, z: g.position.z + ddz / dd * st }; this.collide(pos, .4); g.position.x = pos.x; g.position.z = pos.z; }
+        const tx = pl.x + side * (1.7 + en.radius), tz = pl.z - .4, ddx = tx - g.position.x, ddz = tz - g.position.z, dd = Math.hypot(ddx, ddz);
+        if (dd > .1 && en.hit <= 0) { const st = Math.min(dd, dt * 5); const pos = { x: g.position.x + ddx / dd * st, z: g.position.z + ddz / dd * st }; this.collide(pos, en.radius, en); g.position.x = pos.x; g.position.z = pos.z; }
         g.rotation.y = Math.atan2(pl.x - g.position.x, pl.z - g.position.z);
         if (Math.hypot(pl.x - en.bx, pl.z - en.bz) > 7 || this.mode !== 'play') { this.endBattle('fled'); }
       } else {
         en.wt -= dt;
         if (en.wt <= 0) { en.wt = 2 + Math.random() * 3; en.tx = en.home.x + (Math.random() - .5) * 5; en.tz = en.home.z + (Math.random() - .5) * 5; }
         const dx = en.tx - g.position.x, dz = en.tz - g.position.z, d = Math.hypot(dx, dz);
-        if (d > .2) { const pos = { x: g.position.x + dx / d * dt * 1.4, z: g.position.z + dz / d * dt * 1.4 }; this.collide(pos, .6); g.position.x = pos.x; g.position.z = pos.z; g.rotation.y = Math.atan2(dx, dz); }
-        if (!this.battle && !this.paused && this.mode === 'play' && S.tutorial && en.cool <= 0 && dist < 4.2 && !Dialog.open) this.startBattle(en);
+        if (d > .2) { const pos = { x: g.position.x + dx / d * dt * 1.4, z: g.position.z + dz / d * dt * 1.4 }; this.collide(pos, en.radius, en); g.position.x = pos.x; g.position.z = pos.z; g.rotation.y = Math.atan2(dx, dz); }
+        if (!this.battle && !this.paused && this.mode === 'play' && S.tutorial && en.cool <= 0 && dist < 3.6 + en.radius && !Dialog.open) this.startBattle(en);
       }
       // hop & hit flash
       const hop = Math.abs(Math.sin(this.t * (inBattle ? 7 : 5) + en.id)) * .18;
-      u.body.position.y = .55 + hop; u.body.scale.set(1 + hop * .3, .82 - hop * .3, 1 + hop * .3);
-      if (en.hit > 0) { en.hit -= dt; const on = Math.sin(en.hit * 40) > 0; u.body.material.emissive = u.body.material.emissive || new THREE.Color(); u.body.material.emissive.setRGB(on ? .9 : 0, on ? .9 : 0, on ? .9 : 0); g.position.x += (g.position.x - pl.x) * dt * 1.5; g.position.z += (g.position.z - pl.z) * dt * 1.5; }
+      u.body.position.y = .55 + hop; u.sprite.position.y = u.spriteY + hop * .5; u.body.scale.set(1 + hop * .3, .82 - hop * .3, 1 + hop * .3);
+      if (en.hit > 0) { en.hit -= dt; const on = Math.sin(en.hit * 40) > 0; u.body.material.emissive = u.body.material.emissive || new THREE.Color(); u.body.material.emissive.setRGB(on ? .9 : 0, on ? .9 : 0, on ? .9 : 0); const kb = { x: g.position.x + (g.position.x - pl.x) * dt * 1.5, z: g.position.z + (g.position.z - pl.z) * dt * 1.5 }; this.collide(kb, en.radius, en); g.position.x = kb.x; g.position.z = kb.z; }
       else if (u.body.material.emissive) u.body.material.emissive.setRGB(0, 0, 0);
     });
     if (this.sparks) this.sparks = this.sparks.filter(s => { s.life -= dt; s.m.scale.multiplyScalar(1 + dt * 3); s.m.material.opacity = Math.max(0, s.life / .5); if (s.life <= 0) { this.scene.remove(s.m); return false; } return true; });
   },
   startBattle(en) {
-    this.battle = en; en.side = 0; en.bx = this.player.root.position.x; en.bz = this.player.root.position.z; en.letter = this.pickLetter(); en.g.userData.body.material = en.g.userData.body.material.clone();
+    this.battle = en; en.side = 0; en.bx = this.player.root.position.x; en.bz = this.player.root.position.z; en.typed = '';
+    if (this.wordMode(en)) { en.word = this.pickWord(en); en.letter = null; } else { en.word = null; en.letter = this.pickLetter(); }
+    en.g.userData.body.material = en.g.userData.body.material.clone();
     this.showLetter(en); this.onBattle && this.onBattle('start', en);
   },
-  showLetter(en) { const sp = en.g.userData.sprite; sp.material.map = this.letterTex(en.letter); sp.material.needsUpdate = true; sp.visible = true; sp.scale.set(.2, .2, 1); const grow = () => { if (sp.scale.x < 1.9) { sp.scale.x = sp.scale.y = Math.min(1.9, sp.scale.x + .2); requestAnimationFrame(grow); } }; grow(); },
+  showLetter(en) {
+    const sp = en.g.userData.sprite, sc = en.g.userData.scale || 1; const tex = en.word ? this.wordTex(en.word) : this.letterTex(en.letter);
+    sp.material.map = tex; sp.material.needsUpdate = true; sp.visible = true;
+    const h = 1.9 / sc, w = en.word ? h * tex.userData.aspect * .8 : h; let k = .1;
+    const grow = () => { k = Math.min(1, k + .12); sp.scale.set(w * k, (en.word ? h * .8 : h) * k, 1); if (k < 1) requestAnimationFrame(grow); }; grow();
+  },
   endBattle(why) {
     const en = this.battle; if (!en) return; this.battle = null; en.g.userData.sprite.visible = false; en.cool = why === 'fled' ? 6 : 0;
     this.onBattle && this.onBattle(why, en);
   },
   attack(letter) {
     const en = this.battle; if (!en) return null;
-    if (letter !== en.letter) return { ok: false, want: en.letter };
+    if (en.word) {
+      const want = en.word[en.typed.length];
+      if (letter !== want) return { ok: false, want, word: en.word, typed: en.typed };
+      en.typed += letter;
+      if (en.typed.length < en.word.length) return { ok: true, partial: true, word: en.word, typed: en.typed };
+      en.typed = '';
+    } else if (letter !== en.letter) return { ok: false, want: en.letter };
     const p = this.player; p.pose = 'attack'; setTimeout(() => { if (p.pose === 'attack') p.pose = null; }, 280);
     const pl = p.root.position; p.root.rotation.y = Math.atan2(en.g.position.x - pl.x, en.g.position.z - pl.z);
     en.hp--; en.hit = .35; this.spark(en.g.position);
-    if (en.hp <= 0) { en.dead = true; en.respawn = 40; this.spark(en.g.position, 2.2); this.endBattle('won'); return { ok: true, won: true }; }
-    en.letter = this.pickLetter(en.letter); this.showLetter(en);
-    return { ok: true, won: false, next: en.letter, hp: en.hp };
+    if (en.hp <= 0) { en.dead = true; en.respawn = { tiny: 20, mini: 25, big: 45, king: 120 }[en.kind]; this.spark(en.g.position, 2.2 * (en.g.userData.scale || 1)); this.endBattle('won'); return { ok: true, won: true, kind: en.kind }; }
+    if (en.word) en.word = this.pickWord(en, en.word); else en.letter = this.pickLetter(en.letter);
+    this.showLetter(en);
+    return { ok: true, won: false, next: en.letter, word: en.word, hp: en.hp };
   },
   spark(pos, size = 1) {
     const cv = this._sparkCv || (this._sparkCv = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d'); c.translate(32, 32); c.fillStyle = '#fff6a8';
@@ -887,23 +932,36 @@ const World = {
   held(d) { return this.keys[d] || this.pad[d]; },
 
   /* ---------------- simulation ---------------- */
-  collide(pos, r) {
+  pushBox(pos, r, b) {
+    const cx = Math.max(b.x0, Math.min(pos.x, b.x1)), cz = Math.max(b.z0, Math.min(pos.z, b.z1));
+    const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
+    if (d >= r) return;
+    if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; return; }
+    const opts = [[b.x0 - r - pos.x, 0], [b.x1 + r - pos.x, 0], [0, b.z0 - r - pos.z], [0, b.z1 + r - pos.z]];
+    opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1])); pos.x += opts[0][0]; pos.z += opts[0][1];
+  },
+  // Moving things that are solid too: cars, people, Glitches (rebuilt every frame)
+  buildDynamic() {
+    const d = this.dynamic = [];
+    this.cars.forEach(c => d.push({ ref: c, box: { x0: c.position.x - 2.15, x1: c.position.x + 2.15, z0: c.position.z - 1.05, z1: c.position.z + 1.05 } }));
+    this.npcs.forEach(n => d.push({ ref: n, x: n.root.position.x, z: n.root.position.z, r: .35 }));
+    d.push({ ref: this.maya, x: this.maya.root.position.x, z: this.maya.root.position.z, r: .35 });
+    d.push({ ref: this.player, x: this.player.root.position.x, z: this.player.root.position.z, r: .4 });
+    (this.enemies || []).forEach(en => { if (!en.dead && en.g.visible) d.push({ ref: en, x: en.g.position.x, z: en.g.position.z, r: en.radius }); });
+  },
+  collide(pos, r, self) {
     for (let it = 0; it < 3; it++) {
+      if (this.dynamic) for (const o of this.dynamic) {
+        if (o.ref === self) continue;
+        if (o.box) { this.pushBox(pos, r, o.box); continue; }
+        const dx = pos.x - o.x, dz = pos.z - o.z, dd = Math.hypot(dx, dz), m = o.r + r;
+        if (dd < m && dd > 1e-4) { pos.x = o.x + dx / dd * m; pos.z = o.z + dz / dd * m; }
+      }
       for (const c of this.colliders) {
         const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), m = c.r + r;
         if (d < m && d > 1e-4) { pos.x = c.x + dx / d * m; pos.z = c.z + dz / d * m; }
       }
-      for (const b of this.boxes) {
-        const cx = Math.max(b.x0, Math.min(pos.x, b.x1)), cz = Math.max(b.z0, Math.min(pos.z, b.z1));
-        const dx = pos.x - cx, dz = pos.z - cz, d = Math.hypot(dx, dz);
-        if (d < r) {
-          if (d > 1e-4) { pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; }
-          else { // inside: push out along smallest axis
-            const opts = [[b.x0 - r - pos.x, 0], [b.x1 + r - pos.x, 0], [0, b.z0 - r - pos.z], [0, b.z1 + r - pos.z]];
-            opts.sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1])); pos.x += opts[0][0]; pos.z += opts[0][1];
-          }
-        }
-      }
+      for (const b of this.boxes) this.pushBox(pos, r, b);
     }
     pos.x = Math.max(-46, Math.min(46, pos.x)); pos.z = Math.max(-135, Math.min(25, pos.z));
   },
@@ -911,6 +969,7 @@ const World = {
   update(dt) {
     this.t += dt;
     const pl = this.player.root;
+    this.buildDynamic();
     let mx = 0, mz = 0;
     if (!this.paused && this.mode === 'play') {
       if (this.held('up')) mz -= 1; if (this.held('down')) mz += 1; if (this.held('left')) mx -= 1; if (this.held('right')) mx += 1;
@@ -919,7 +978,7 @@ const World = {
     if (moving) {
       const l = Math.hypot(mx, mz); mx /= l; mz /= l;
       const sp = 7.2 * dt; const pos = { x: pl.position.x + mx * sp, z: pl.position.z + mz * sp };
-      this.collide(pos, .5); pl.position.x = pos.x; pl.position.z = pos.z;
+      this.collide(pos, .5, this.player); pl.position.x = pos.x; pl.position.z = pos.z;
       const target = Math.atan2(mx, mz); let da = target - pl.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       pl.rotation.y += da * Math.min(1, dt * 12);
       this.saveT = (this.saveT || 0) + dt; if (this.saveT > 2) { this.saveT = 0; S.pos = { x: +pl.position.x.toFixed(2), z: +pl.position.z.toFixed(2) }; save(); }
@@ -941,7 +1000,8 @@ const World = {
     // NPCs
     this.npcs.forEach(n => {
       const [a, b] = n.path; const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      const near = Math.hypot(pl.position.x - n.root.position.x, pl.position.z - n.root.position.z) < 2.6 || n.talking;
+      const near = Math.hypot(pl.position.x - n.root.position.x, pl.position.z - n.root.position.z) < 2.6 || n.talking ||
+        (this.enemies || []).some(en => !en.dead && en.g.visible && Math.hypot(en.g.position.x - n.root.position.x, en.g.position.z - n.root.position.z) < en.radius + .9);
       if (!near) n.t += dt * 1.6 / len * n.dir;
       if (n.t > 1) { n.t = 1; n.dir = -1; } if (n.t < 0) { n.t = 0; n.dir = 1; }
       n.root.position.x = a[0] + (b[0] - a[0]) * n.t; n.root.position.z = a[1] + (b[1] - a[1]) * n.t;
@@ -952,7 +1012,8 @@ const World = {
     this.cars.forEach(c => {
       const u = c.userData; const lane = c.position.z;
       const ahead = (pl.position.x - c.position.x) * u.dir;
-      const blocked = Math.abs(pl.position.z - lane) < 2.4 && ahead > 0 && ahead < 7.5;
+      const blocked = (Math.abs(pl.position.z - lane) < 2.4 && ahead > 0 && ahead < 7.5) ||
+        (this.enemies || []).some(en => { if (en.dead || !en.g.visible) return false; const a = (en.g.position.x - c.position.x) * u.dir; return Math.abs(en.g.position.z - lane) < 1.2 + en.radius && a > 0 && a < 6.5; });
       const others = this.cars.some(o => o !== c && o.userData.row === u.row && o.userData.dir === u.dir && ((o.position.x - c.position.x) * u.dir) > 0 && ((o.position.x - c.position.x) * u.dir) < 6.5);
       const want = blocked || others ? 0 : u.v; u.cur += (want - u.cur) * Math.min(1, dt * (want ? 1.2 : 5));
       c.position.x += u.cur * u.dir * dt; if (c.position.x > 55) c.position.x = -55; if (c.position.x < -55) c.position.x = 55;

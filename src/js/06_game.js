@@ -15,7 +15,7 @@ const FINAL_QS = [
   { q: 'Which makes a <b>strong password</b>?', emoji: '🔑', opts: ['Your pet\'s name', '123456', 'Three random words plus a number and a symbol', 'Your birthday'], correct: 2 },
   { q: 'A website pop-up says your video player is <b>out of date</b>. You should…', emoji: '🦠', opts: ['Click “Update now”', 'Close it: real updates come from your computer\'s Settings', 'Call the phone number shown', 'Type your password'], correct: 1 },
   { q: 'A stranger emails you <b>invoice.pdf.exe</b>. It is…', emoji: '📎', opts: ['A safe PDF document', 'Probably malware: don\'t open it', 'A photo', 'A song'], correct: 1 },
-];
+].concat(FINAL_QS_EXTRA);
 function certHTML() {
   const lv = levelOf(S.xp);
   return `<div class="cert" id="certCard"><div class="cseal">🏆</div><div style="letter-spacing:3px;font-weight:700">CERTIFICATE OF ACHIEVEMENT</div><h1>Computer Quest: Tech Town</h1><div>This certifies that</div><div class="cname">${esc(S_name())}</div>
@@ -27,7 +27,7 @@ LESSONS.final = {
   steps: [
     { say: `Welcome to City Hall, {name}! This is your <b>final review</b>: ${FINAL_QS.length} questions about everything you learned. There's no rush and no failing. If you pick a wrong answer, just try another one!`, next: 'Start the review ▶', build: S => infoCard(S, `<div style="text-align:center"><div style="font-size:4em">🏛️</div><h3>Final Review</h3><p>${FINAL_QS.length} questions · unlimited tries · a certificate at the end!</p></div>`) },
     ...FINAL_QS.map((f, i) => ({ say: `Question ${i + 1} of ${FINAL_QS.length}`, build: (S, api) => quiz(S, api, f) })),
-    { say: 'You did it, {name}! Here is your certificate. Click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">📜 ${window.CQ_ARTIFACT ? 'Show' : 'Print'} certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
+    { say: 'You did it, {name}! Here is your certificate. Click <b>Finish</b> to become a Tech Hero!', next: 'Finish ▶', build: S => { S.innerHTML = `<div class="stage-inner">${certHTML()}<div class="cert-actions"><button class="btn gold" id="certPrint">🖨️ Print or save certificate</button></div></div>`; $('#certPrint').onclick = () => Game.printCertificate(); } },
   ]
 };
 
@@ -260,22 +260,32 @@ const Game = {
   battleEvent(ev, en) {
     let p = $('#battle');
     if (!p) { p = document.createElement('div'); p.id = 'battle'; document.body.appendChild(p); }
+    const NAME = { tiny: 'Tiny Glitch', mini: 'Glitch', big: 'Big Glitch', king: 'Virus King' };
     if (ev === 'start') {
       Sfx.play('bad');
       if (!S.metGlitch) { S.metGlitch = true; save(); }
-      this.renderBattle(en, `⚔️ A <b>Glitch</b> appeared! Press the letter to attack!`);
-      Voice.speak(`A Glitch! Press the letter ${en.letter.toUpperCase()} to attack.`);
+      const how = en.word ? 'Type the word to attack!' : 'Press the letter to attack!';
+      this.renderBattle(en, `${en.kind === 'king' ? '👑' : '⚔️'} A <b>${NAME[en.kind]}</b> appeared! ${how}`);
+      Voice.speak(en.word ? `A ${NAME[en.kind]}! Type the word ${en.word.split('').join(' ')} to attack.` : `A ${NAME[en.kind]}! Press the letter ${en.letter.toUpperCase()} to attack.`);
     } else if (ev === 'won') {
-      S.bugs = (S.bugs || 0) + 1; addXP(3); Sfx.play('level'); Missions.check();
-      p.innerHTML = `<div class="bt-title">✨ Glitch squashed! ✨</div><div class="bt-msg">+3 XP · Glitches squashed: ${S.bugs}</div>`; p.classList.add('on');
-      Voice.speak('Glitch squashed! Great typing!'); clearTimeout(this.bt); this.bt = setTimeout(() => p.classList.remove('on'), 2200);
+      const xp = { tiny: 2, mini: 3, big: 8, king: 30 }[en.kind];
+      S.bugs = (S.bugs || 0) + 1; if (en.kind === 'big') S.bigBugs = (S.bigBugs || 0) + 1; if (en.kind === 'king') S.kings = (S.kings || 0) + 1;
+      addXP(xp); Sfx.play(en.kind === 'king' ? 'done' : 'level'); if (en.kind !== 'mini' && en.kind !== 'tiny') confetti(en.kind === 'king' ? 120 : 50);
+      Missions.check();
+      p.innerHTML = `<div class="bt-title">✨ ${NAME[en.kind]} squashed! ✨</div><div class="bt-msg">+${xp} XP · Glitches squashed: ${S.bugs}${S.bigBugs ? ` · Big: ${S.bigBugs}` : ''}${S.kings ? ` · Kings: ${S.kings}` : ''}</div>`; p.classList.add('on');
+      Voice.speak(en.kind === 'king' ? 'You defeated the Virus King! Tech Town is safe!' : 'Glitch squashed! Great typing!'); clearTimeout(this.bt); this.bt = setTimeout(() => p.classList.remove('on'), en.kind === 'king' ? 4000 : 2200);
     } else if (ev === 'fled') { p.classList.remove('on'); }
   },
   renderBattle(en, title, msg = '') {
-    const p = $('#battle'); const c = en.letter; const L2 = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(x => x !== c).sort(() => Math.random() - .5).slice(0, 2);
+    const p = $('#battle');
+    const c = en.word ? en.word[en.typed.length] : en.letter;
+    const L2 = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(x => x !== c).sort(() => Math.random() - .5).slice(0, 2);
     const opts = [c, ...L2].sort(() => Math.random() - .5);
-    p.innerHTML = `<div class="bt-title">${title}</div><div class="bt-row"><span>Press</span><span class="bigkey">${c.toUpperCase()}</span><span>to attack!</span></div>
-      <div class="bt-hp">Glitch energy: ${'<i class="on"></i>'.repeat(en.hp)}${'<i></i>'.repeat(3 - en.hp)}</div>
+    const target = en.word
+      ? `<span>Type</span><span class="cb-word">${[...en.word].map((ch, i) => `<span class="cb-k ${i < en.typed.length ? 'ok' : i === en.typed.length ? 'nx' : ''}" style="display:inline-grid;place-items:center">${ch.toUpperCase()}</span>`).join('')}</span>`
+      : `<span>Press</span><span class="bigkey">${c.toUpperCase()}</span><span>to attack!</span>`;
+    p.innerHTML = `<div class="bt-title">${title}</div><div class="bt-row">${target}</div>
+      <div class="bt-hp">${en.kind === 'king' ? 'King' : 'Glitch'} energy: ${'<i class="on"></i>'.repeat(en.hp)}${'<i></i>'.repeat(Math.max(0, en.maxHp - en.hp))}</div>
       <div class="bt-msg">${msg || `Hint: ${c.toUpperCase()} is in the <b>${rowOf(c)}</b>.`}</div>
       <div class="bt-taps"><small>No keyboard? Tap:</small>${opts.map(o => `<button class="btn ghost" data-l="${o}">${o.toUpperCase()}</button>`).join('')}<button class="btn ghost" id="btRun">🏃 Walk away</button></div>`;
     p.classList.add('on');
@@ -285,8 +295,16 @@ const Game = {
   letter(k) {
     const r = World.attack(k); if (!r) return;
     const en = World.battle;
-    if (r.ok) { Sfx.play('good'); if (!r.won && en) { this.renderBattle(en, `💥 Hit! Keep going!`); Voice.speak(`Hit! Now press ${en.letter.toUpperCase()}.`); } }
-    else if (en) { Sfx.play('bad'); this.renderBattle(en, '⚔️ Almost!', `That was <b>${esc(k.toUpperCase())}</b>. Find <b>${r.want.toUpperCase()}</b>, in the <b>${rowOf(r.want)}</b>.`); Voice.speak(`That was ${k.toUpperCase()}. Find the letter ${r.want.toUpperCase()}.`); }
+    if (r.ok) {
+      Sfx.play(r.partial ? 'click' : 'good');
+      if (!r.won && en) {
+        if (r.partial) this.renderBattle(en, 'Keep typing!');
+        else { this.renderBattle(en, `💥 Hit! Keep going!`); Voice.speak(en.word ? `Hit! Now type ${en.word.split('').join(' ')}.` : `Hit! Now press ${en.letter.toUpperCase()}.`); }
+      }
+    } else if (en) {
+      Sfx.play('bad'); this.renderBattle(en, '⚔️ Almost!', `That was <b>${esc(k.toUpperCase())}</b>. Find <b>${r.want.toUpperCase()}</b>, in the <b>${rowOf(r.want)}</b>.`);
+      Voice.speak(`That was ${k.toUpperCase()}. Find the letter ${r.want.toUpperCase()}.`);
+    }
   },
 
   /* ---- modals ---- */
@@ -326,10 +344,85 @@ const Game = {
   },
   printCertificate() {
     $('#printArea').innerHTML = certHTML();
-    const canPrint = !window.CQ_ARTIFACT;
-    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">${canPrint ? '<button class="btn gold big" id="doPrint">🖨️ Print</button>' : '<p>📸 To keep it, take a screenshot or a photo of your certificate.</p>'}</div>`);
-    if (canPrint) $('#doPrint').onclick = () => window.print();
+    Modal.show(`<h2>📜 Your Certificate</h2>${certHTML()}<div class="cert-actions" style="margin-top:14px">
+      <button class="btn gold big" id="doPrint">🖨️ Print certificate</button>
+      <button class="btn ghost" id="doPdf">📄 Save as PDF</button><button class="btn ghost" id="doPng">🖼️ Save as picture</button></div>
+      <p id="certMsg" style="text-align:center;min-height:1.4em"></p>`);
+    const msg = t => { const m = $('#certMsg'); if (m) m.innerHTML = t; };
+    $('#doPrint').onclick = async () => {
+      if (!window.CQ_ARTIFACT) { window.print(); return; }
+      // Hosted pages can't open the print dialog: hand over a PDF instead
+      msg('Making your certificate…'); const r = await this.saveCert('pdf');
+      msg(r === 'saved' ? '✅ Saved! Open the PDF file (it\'s in your Downloads) and click <b>Print</b>.' : r === 'declined' ? 'No problem. Click the button again any time.' : '⚠️ Saving isn\'t available here. Download the game file to print from your computer.');
+    };
+    $('#doPdf').onclick = async () => { msg('Making your PDF…'); const r = await this.saveCert('pdf'); msg(r === 'saved' ? '✅ PDF saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
+    $('#doPng').onclick = async () => { msg('Making your picture…'); const r = await this.saveCert('png'); msg(r === 'saved' ? '✅ Picture saved to your Downloads.' : r === 'declined' ? '' : '⚠️ Saving isn\'t available here.'); };
+  },
+  certCanvas() {
+    const W = 1600, H = 1131, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    const ink = '#3a2a0a', gold = '#c79a1e', serif = 'Georgia, "Times New Roman", serif';
+    g.fillStyle = '#fffdf3'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = gold; g.lineWidth = 16; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 4; g.strokeRect(74, 74, W - 148, H - 148);
+    [[74, 74], [W - 74, 74], [74, H - 74], [W - 74, H - 74]].forEach(([x, y]) => { g.fillStyle = gold; g.beginPath(); g.arc(x, y, 18, 0, 7); g.fill(); });
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = ink;
+    g.font = `100px ${serif}`; g.fillText('🏆', W / 2, 205);
+    g.font = `bold 34px ${serif}`; g.fillText('C E R T I F I C A T E   O F   A C H I E V E M E N T', W / 2, 275);
+    g.font = `bold 66px ${serif}`; g.fillText('Computer Quest: Tech Town', W / 2, 365);
+    g.font = `32px ${serif}`; g.fillText('This certifies that', W / 2, 440);
+    let fs = 100; const name = S_name(); do { g.font = `italic bold ${fs}px ${serif}`; fs -= 4; } while (g.measureText(name).width > 1100 && fs > 40);
+    g.fillText(name, W / 2, 555); g.strokeStyle = gold; g.lineWidth = 3; g.beginPath(); g.moveTo(W / 2 - 480, 585); g.lineTo(W / 2 + 480, 585); g.stroke();
+    const lv = levelOf(S.xp);
+    g.font = `30px ${serif}`;
+    g.fillText('has learned to use a computer, the internet, email, Android phones and iPhones,', W / 2, 650);
+    g.fillText(`and to stay safe online, earning the title of ${LEVELS[lv][1]} (Level ${lv + 1}, ${S.xp} XP).`, W / 2, 695);
+    g.font = `52px ${serif}`; g.fillText(CHAPTERS.filter((ch, i) => isDone(i) || ch.id === 'final').map(ch => ch.badgeIcon).join('  '), W / 2, 790);
+    g.font = `26px ${serif}`; g.fillText(`Glitches squashed: ${S.bugs || 0}   ·   Data Gems found: ${(S.gems || []).length} of 12   ·   Missions: ${(S.missions || []).length}`, W / 2, 850);
+    g.textAlign = 'left'; g.font = `28px ${serif}`; g.fillText(`Date: ${new Date().toLocaleDateString()}`, 170, 990);
+    g.textAlign = 'right'; g.font = `italic 40px ${serif}`; g.fillText('Maya', W - 230, 975); g.font = `26px ${serif}`; g.fillText('Maya, Tech Guide', W - 170, 1015);
+    g.beginPath(); g.moveTo(W - 520, 988); g.lineTo(W - 170, 988); g.lineWidth = 2; g.stroke();
+    g.fillStyle = gold; g.beginPath(); g.arc(W / 2, 985, 72, 0, 7); g.fill(); g.fillStyle = '#fff7d6'; g.beginPath(); g.arc(W / 2, 985, 58, 0, 7); g.fill();
+    g.fillStyle = ink; g.textAlign = 'center'; g.font = `bold 22px ${serif}`; g.fillText('TECH', W / 2, 978); g.fillText('HERO', W / 2, 1006);
+    return c;
+  },
+  // A one-page PDF around a JPEG image (A4 landscape). No library needed.
+  jpegPdf(jpeg, iw, ih) {
+    const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
+    const push = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); len += b.length; };
+    const obj = (n, ...body) => { offs[n] = len; push(`${n} 0 obj\n`); body.forEach(push); push('\nendobj\n'); };
+    const pw = 842, ph = 595, cs = `q ${pw} 0 0 ${ph} 0 0 cm /Im1 Do Q`;
+    push('%PDF-1.4\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>`);
+    obj(4, `<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+    obj(5, `<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`, jpeg, '\nendstream');
+    const xref = len;
+    push('xref\n0 6\n0000000000 65535 f \n'); for (let i = 1; i <= 5; i++) push(String(offs[i]).padStart(10, '0') + ' 00000 n \n');
+    push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    return new Blob(parts, { type: 'application/pdf' });
+  },
+  async saveCert(kind) {
+    const c = this.certCanvas();
+    const blobOf = type => new Promise(r => c.toBlob(r, type, .92));
+    let blob;
+    if (kind === 'png') blob = await blobOf('image/png');
+    else { const j = new Uint8Array(await (await blobOf('image/jpeg')).arrayBuffer()); blob = this.jpegPdf(j, c.width, c.height); }
+    const filename = `Tech-Town-Certificate-${S_name().replace(/[^\w-]+/g, '-')}.${kind}`;
+    this.lastCert = blob;
+    return this.saveFile(filename, blob);
+  },
+  async saveFile(filename, blob) {
+    if (window.CQ_ARTIFACT) {
+      try {
+        const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+        if (!dl) return 'unavailable';
+        await dl.save({ filename, data: blob }); return 'saved';
+      } catch (e) { return e && e.code === 'declined' ? 'declined' : 'unavailable'; }
+    }
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000); return 'saved';
   }
+
 };
 window.addEventListener('DOMContentLoaded', () => Game.boot());
 window.CQ = { S: () => S, L, World, Game, LESSONS, CHAPTERS };

@@ -28,6 +28,9 @@ const MISSIONS = [
   chapterMission(7, 'iPhone Adventure', 'ch7'),
   { id: 'gems12', icon: '👑', title: 'Treasure Hunter', after: 'gems3', desc: 'Find all 12 Data Gems hidden in Tech Town.', progress: () => [(S.gems || []).length, 12], reward: 30 },
   chapterMission(8, 'Cyber Guardian', 'ch8'),
+  { id: 'big3', icon: '👾', title: 'Big Game Hunter', after: 'ch3', desc: 'Squash 3 <b>Big Glitches</b>. They need 5 hits each, and you type a short word for every hit!', progress: () => [S.bigBugs || 0, 3], reward: 25 },
+  { id: 'bugs25', icon: '🏅', title: 'Glitch Legend', after: 'bugs10', desc: 'Squash 25 Glitches in total.', progress: () => [S.bugs || 0, 25], reward: 35 },
+  { id: 'king', icon: '👑', title: 'Defeat the Virus King', story: true, after: 'ch9', desc: 'The <b>Virus King</b> appeared in the City Hall garden! He needs 8 hits: type a safety word for each one.', progress: () => [Math.min(1, S.kings || 0), 1], reward: 50 },
   { id: 'scout', icon: '🦠', title: 'Virus Patrol', after: 'ch3', desc: 'Squash 5 Glitches. Glitches are like computer viruses: stay alert!', progress: () => [S.bugs || 0, 5], reward: 15 },
   chapterMission(9, 'Tech Hero', 'ch9'),
 ];

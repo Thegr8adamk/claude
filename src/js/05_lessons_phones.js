@@ -72,6 +72,45 @@ function storeInstall(P, btnSel) {
   };
 }
 
+/* ---- extra phone apps (both phones) ---- */
+function clockScreen(P) {
+  P.alarms = P.alarms || { a630: false, a700: false, a815: true };
+  const row = (id, t, lbl) => `<div class="prow" style="cursor:default"><div class="pmain"><b style="font-size:1.6em;font-weight:400">${t}</b><small>${lbl}</small></div><button class="toggle ${P.alarms[id] ? 'on' : ''}" data-al="${id}" aria-label="Alarm ${t}"></button></div>`;
+  P.set(`<div class="papp"><div class="phead">⏰ Alarms</div><div class="plist">${row('a630', '6:30 AM', 'Weekdays')}${row('a700', '7:00 AM', 'Every day · Wake up')}${row('a815', '8:15 AM', 'Sat, Sun')}</div></div>`);
+  $$('[data-al]', P.view).forEach(b => b.onclick = () => { const id = b.dataset.al; P.alarms[id] = !P.alarms[id]; b.classList.toggle('on', P.alarms[id]); P.hook('alarm', { id, on: P.alarms[id] }); });
+}
+function displayScreen(P, back) {
+  P.font = P.font || 1;
+  const names = ['Small', 'Default', 'Large', 'Largest'];
+  P.set(`<div class="papp"><div class="phead"><button id="dB">${back}</button><span class="sp">Display</span></div><div style="padding:14px"><b>Text size</b>
+    <div style="display:flex;align-items:center;gap:10px;margin:10px 0"><button class="pbtn" id="fMinus" style="background:#c7ccd3;color:#111">A−</button><b id="fName" style="flex:1;text-align:center">${names[P.font]}</b><button class="pbtn" id="fPlus">A+</button></div>
+    <div id="fPrev" style="background:#f2f4f7;border-radius:12px;padding:10px;font-size:${.8 + P.font * .25}em">Hi! This is how text will look on your phone.</div>
+    <div style="margin-top:14px"><b>Brightness</b> ☀️<input type="range" min="0" max="100" value="60" style="width:100%"></div></div></div>`);
+  $('#dB').onclick = P.back;
+  const upd = d => { P.font = Math.max(0, Math.min(3, P.font + d)); $('#fName').textContent = names[P.font]; $('#fPrev').style.fontSize = (.8 + P.font * .25) + 'em'; P.hook('font', P.font); };
+  $('#fMinus').onclick = () => upd(-1); $('#fPlus').onclick = () => upd(1);
+}
+function mapsScreen(P) {
+  P.set(`<div class="papp" style="padding-top:30px"><div style="position:relative;flex:1;background:linear-gradient(90deg,transparent 48%,#fff 48%,#fff 52%,transparent 52%),linear-gradient(0deg,transparent 58%,#fff 58%,#fff 62%,transparent 62%),#dfeee0">
+    <input id="mapIn" placeholder="🔍 Search here" autocomplete="off" inputmode="none" style="position:absolute;left:10px;right:10px;top:10px;border:none;border-radius:99px;padding:.6em 1em;font-size:1em;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+    <div style="position:absolute;left:46%;top:56%;font-size:1.6em">🔵</div><div id="mapRes"></div></div><div id="kbSlot"></div></div>`);
+  const inp = $('#mapIn'); inp.addEventListener('focus', () => P.hook('mapFocus'));
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return; e.preventDefault(); inp.blur(); P.hook('mapSearch', inp.value.trim());
+    if (!/library/i.test(inp.value)) return;
+    $('#mapRes').innerHTML = `<div style="position:absolute;left:20%;top:22%;font-size:1.8em">📍</div><div class="sheet" id="mapSheet"><b>📚 Tech Town Library</b><div style="font-size:.85em;color:#6b7785">0.4 mi · Open until 8 PM</div><div style="display:flex;gap:8px;margin-top:8px"><button class="pbtn green" id="mapDir">↱ Directions</button><button class="pbtn" style="background:#c7ccd3;color:#111">📞 Call</button></div></div>`;
+    $('#mapDir').onclick = () => { $('#mapSheet').innerHTML = '<b>🚶 8 min (0.4 mi)</b><div style="font-size:.85em;color:#6b7785">Walk along Main Street</div><button class="pbtn green" id="mapGo" style="margin-top:8px;width:100%">▶ Start</button>'; P.hook('mapDir'); $('#mapGo').onclick = () => { $('#mapSheet').innerHTML = '<b>🧭 Head north on Main Street</b><div style="font-size:.85em">Then turn left in 300 ft</div>'; P.hook('mapStart'); }; };
+  });
+}
+function notesScreen(P) {
+  P.set(`<div class="papp" style="background:#fffdf0"><div class="phead"><span class="sp">📝 Notes</span><button id="nNew" aria-label="New note">✏️</button></div><div class="plist" id="nList"><div class="prow"><div class="pmain"><b>Recipe ideas</b><small>Pancakes, soup…</small></div></div></div><div id="kbSlot"></div></div>`);
+  $('#nNew').onclick = () => {
+    $('#nList').innerHTML = '<div style="padding:10px"><input id="nText" placeholder="Start typing…" autocomplete="off" inputmode="none" style="width:100%;border:none;background:transparent;font-size:1.2em;outline:none;border-bottom:2px solid #f5b700"></div><div style="padding:0 10px"><button class="pbtn" id="nDone">Done</button></div>';
+    P.hook('noteNew');
+    $('#nDone').onclick = () => { const t = $('#nText').value.trim(); P.hook('noteDone', t); if (t) $('#nList').innerHTML = `<div class="prow"><div class="pmain"><b>${esc(t)}</b><small>Just now</small></div></div><div class="prow"><div class="pmain"><b>Recipe ideas</b><small>Pancakes, soup…</small></div></div>`; };
+  };
+}
+
 /* ---------------- ANDROID ---------------- */
 function androidScreens(P) {
   const BG = 'pbg-and';
@@ -110,7 +149,7 @@ function androidScreens(P) {
     },
     Settings: () => {
       P.set(`<div class="papp"><div class="phead">Settings</div><div class="plist">${[['net', '📶', 'Network & internet', 'Wi-Fi, mobile data'], ['dev', '🔗', 'Connected devices', 'Bluetooth'], ['apps', '🧩', 'Apps', 'Recent apps'], ['bat', '🔋', 'Battery', '80%'], ['disp', '☀️', 'Display', 'Brightness, text size'], ['snd', '🔊', 'Sound', 'Volume, ringtone']].map(r => `<div class="prow" data-s="${r[0]}"><div class="pav">${r[1]}</div><div class="pmain"><b>${r[2]}</b><small>${r[3]}</small></div></div>`).join('')}</div></div>`);
-      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'net') P.go('wifi'); });
+      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'net') P.go('wifi'); if (r.dataset.s === 'disp') P.go('display'); });
     },
     wifi: () => {
       P.set(`<div class="papp"><div class="phead"><button id="wB">←</button><span class="sp">Internet</span></div><div class="prow" style="cursor:default"><div class="pmain"><b>Wi-Fi</b><small>${P.wifi ? 'On' : 'Off'}</small></div><button class="toggle ${P.wifi ? 'on' : ''}" id="wTog" aria-label="Wi-Fi switch"></button></div><div class="plist" id="nets">${wifiNetworks(P, P.wifi, P.wifiConn)}</div></div>`);
@@ -118,6 +157,9 @@ function androidScreens(P) {
       $('#wTog').onclick = () => { P.wifi = !P.wifi; sc.wifi(); P.hook('wifi', P.wifi); };
       $$('[data-net]', P.view).forEach(r => r.onclick = () => { P.hook('net', r.dataset.net); if (r.dataset.net === 'TownHome-WiFi') wifiSheet(P, sc.wifi, 'Connect', '←'); });
     },
+    Clock: () => clockScreen(P),
+    display: () => displayScreen(P, '←'),
+    Maps: () => mapsScreen(P),
     'Play Store': () => {
       P.set(`<div class="papp"><div class="phead">Play Store</div><div style="padding:0 12px"><input id="psIn" placeholder="🔍 Search apps & games" autocomplete="off" inputmode="none" style="width:100%;border:none;background:#eef1f4;border-radius:99px;padding:.6em 1em;font-size:1em"></div><div class="plist" id="psRes"><div style="padding:14px;color:#6b7785">Top charts · Games · Kids</div></div><div id="kbSlot"></div></div>`);
       const inp = $('#psIn'); inp.addEventListener('focus', () => P.hook('storeFocus'));
@@ -165,13 +207,16 @@ function iphoneScreens(P) {
     photoView: () => { P.set(`<div class="papp dark"><div class="phead"><button id="pvB">‹ Back</button></div><div style="flex:1;display:grid;place-items:center"><div style="width:90%;aspect-ratio:3/4;background:linear-gradient(#8fd3ff 0 45%,#6cc070 45%);display:grid;place-items:center;font-size:5em;border-radius:6px">🌻</div></div></div>`); $('#pvB').onclick = P.back; P.hook('photoView'); },
     Settings: () => {
       P.set(`<div class="papp" style="background:#f2f2f7"><div class="phead">Settings</div><div class="plist" style="background:#fff;margin:0 10px;border-radius:12px">${[['air', '✈️', 'Airplane Mode'], ['wifi', '📶', 'Wi-Fi'], ['bt', '🔵', 'Bluetooth'], ['notif', '🔔', 'Notifications'], ['snd', '🔊', 'Sounds & Haptics'], ['disp', '☀️', 'Display & Brightness']].map(r => `<div class="prow" data-s="${r[0]}"><div class="pav">${r[1]}</div><div class="pmain"><b>${r[2]}</b></div><span style="color:#c7c7cc">›</span></div>`).join('')}</div></div>`);
-      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'wifi') P.go('wifi'); });
+      $$('[data-s]', P.view).forEach(r => r.onclick = () => { P.hook('setting', r.dataset.s); if (r.dataset.s === 'wifi') P.go('wifi'); if (r.dataset.s === 'disp') P.go('display'); });
     },
     wifi: () => {
       P.set(`<div class="papp" style="background:#f2f2f7"><div class="phead"><button id="wB">‹ Settings</button></div><div style="padding:0 14px;font-weight:900;font-size:1.3em">Wi-Fi</div><div class="prow" style="background:#fff;margin:8px 10px;border-radius:12px;cursor:default"><div class="pmain"><b>Wi-Fi</b></div><button class="toggle ${P.wifi ? 'on' : ''}" id="wTog" aria-label="Wi-Fi switch"></button></div><div class="plist" style="background:#fff;margin:0 10px;border-radius:12px;flex:none">${wifiNetworks(P, P.wifi, P.wifiConn)}</div></div>`);
       $('#wB').onclick = P.back; $('#wTog').onclick = () => { P.wifi = !P.wifi; sc.wifi(); P.hook('wifi', P.wifi); };
       $$('[data-net]', P.view).forEach(r => r.onclick = () => { P.hook('net', r.dataset.net); if (r.dataset.net === 'TownHome-WiFi') wifiSheet(P, sc.wifi, 'Join', '‹'); });
     },
+    Clock: () => clockScreen(P),
+    display: () => displayScreen(P, '‹ Settings'),
+    Notes: () => notesScreen(P),
     'App Store': (tab) => {
       const search = tab === 'search';
       P.set(`<div class="papp"><div class="phead">${search ? 'Search' : 'Today'}</div>${search ? `<div style="padding:0 12px"><input id="asIn" placeholder="🔍 Games, Apps and more" autocomplete="off" inputmode="none" style="width:100%;border:none;background:#eef1f4;border-radius:12px;padding:.6em 1em;font-size:1em"></div><div class="plist" id="asRes"></div><div id="kbSlot"></div>` : '<div class="plist"><div style="margin:10px;height:60%;border-radius:18px;background:linear-gradient(135deg,#7c4dff,#ff9ec7);display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.4em">App of the Day</div></div>'}<div class="ptabbar"><button class="${search ? '' : 'on'}" id="tToday">📰<span>Today</span></button><button>🎮<span>Games</span></button><button>📦<span>Apps</span></button><button class="${search ? 'on' : ''}" id="tSearch">🔍<span>Search</span></button></div></div>`);

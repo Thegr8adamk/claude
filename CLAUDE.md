@@ -18,7 +18,8 @@ src/js/01_core.js           state + save, chapters list, levels/XP, voice (speec
 src/js/02_world.js          three.js world: layout (STREETS, BLD), procedural textures, cel shading +
                             outlines, characters, NPCs, cars, Glitch enemies, items, typed-command
                             proximity, camera, static-mesh merging
-src/js/03..05*_lessons_*.js lesson content, one LESSONS[id] per chapter
+src/js/03..05*_lessons_*.js lesson content, one LESSONS[id] per chapter; 05c_lessons_more.js inserts
+                            extra steps into every chapter with addSteps()
 src/js/06_game.js           final quiz, certificate, game flow (title, creation, tutorial, typed
                             commands, battles, map/badges/settings), NPCS list
 src/js/07_missions.js       MISSIONS list + Missions engine (check/tracker/modal)
@@ -37,6 +38,8 @@ python3 blender/build_assets.py               # rebuild 3D assets (needs `pip in
 cat src/js/*.js > /tmp/cq.js && node --check /tmp/cq.js   # quick syntax check of all game code
 PLAYWRIGHT_PATH=/opt/node22/lib/node_modules/playwright node tools/tests/lessons.test.js   # plays all 10 chapters
 PLAYWRIGHT_PATH=/opt/node22/lib/node_modules/playwright node tools/tests/missions.test.js  # town + missions
+PLAYWRIGHT_PATH=/opt/node22/lib/node_modules/playwright node tools/tests/world.test.js     # cars, solids, Glitches, certificate
+python3 tools/build.py --artifact OUT.html && publish OUT.html to the same Artifact URL with capabilities {downloads: true}
 ```
 Headless Chromium needs `--use-gl=angle --use-angle=swiftshader` (already in the tests). Software
 rendering is slow (a few fps), so tests call `World.update()` directly or wait generously.

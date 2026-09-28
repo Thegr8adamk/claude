@@ -501,13 +501,25 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px soli
   #movepad{grid-template-columns:repeat(3,3.4em);grid-template-rows:repeat(2,3.4em)}
 }
 
+/* ============ EXTRA LESSON BITS ============ */
+#printArea{display:none}
+.tray{border:none;background:transparent;color:#fff;font-size:1em;padding:0 .25em;cursor:pointer}
+.tray-pop{position:absolute;right:2%;bottom:15%;background:#f3f5f8;color:#1f2d3d;border-radius:10px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:6px;font-size:.95em;z-index:4}
+.hovermenu{position:absolute;left:30%;top:15%;background:#fff;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.2);min-width:230px;font-weight:800;cursor:pointer}
+.hm-top{padding:.6em 1em;background:#2d7ff9;color:#fff;border-radius:12px}
+.hm-list{display:none}.hovermenu.open .hm-list{display:block}
+.hm-list div{padding:.55em 1em}.hm-list div:hover{background:#e8f1ff}
+.dot{position:absolute;border-radius:50%;border:4px solid #fff;background:radial-gradient(#ff8a8a,#e5484d);color:#fff;font-weight:900;box-shadow:0 0 0 3px #e5484d;transform:translate(-50%,-50%);cursor:pointer;padding:0}
+.callin{position:absolute;inset:0;background:linear-gradient(#2b3a55,#0e1626);color:#fff;display:flex;flex-direction:column;align-items:center;padding:30% 14px 20px;gap:8px;text-align:center}
 /* ============ PRINT (certificate) ============ */
 @media print{
-  body *{visibility:hidden}
-  #printArea,#printArea *{visibility:visible}
-  #printArea{position:fixed;left:0;top:0;width:100%}
-  .cert{box-shadow:none;width:100%}
+  @page{size:landscape;margin:10mm}
+  body{background:#fff!important}
+  body > *:not(#printArea){display:none!important}
+  #printArea{display:block!important;position:static}
+  .cert{box-shadow:none;width:100%;font-size:16px}
 }
+
 </style>
 </head>
 <body>

@@ -69,6 +69,27 @@ and ship as **one full HTML file**.
     "take a screenshot" note, because hosted pages cannot open the print dialog. Republish to the same
     link after every change.
 
+11. **Print the certificate from the certificate window.** The certificate window has **🖨️ Print**,
+    **📄 Save as PDF** and **🖼️ Save as picture**. In the downloaded HTML file, Print opens the browser's print
+    dialog (landscape). On the hosted link, where pages cannot open the print dialog, Print makes a PDF and
+    hands it over with the `downloads` capability (publish with `capabilities: {downloads: true}`); open
+    the PDF and print it. The PDF is built without a library (`Game.jpegPdf`).
+12. **More Glitches, and bigger ones take more hits.** 31 Glitches: Tiny (2 hits, a letter each),
+    Glitch (3), Big Glitch (5 hits, type a short word each, after Typing School) and the
+    **Virus King** boss (8 hits, type a safety word each, City Hall garden, after Cyber Safety HQ).
+    New missions: Big Game Hunter, Glitch Legend (25), Defeat the Virus King.
+13. **A longer game with more in every chapter.** About 45 new steps (`src/js/05c_lessons_more.js`):
+    volume, Wi-Fi on a computer, frozen screen, charging (Ch1); hover menus, highlighting text, precise
+    clicks (Ch2); question marks, phone numbers, a sentence, copy & paste (Ch3); Recycle Bin restore,
+    rename, new folder, search (Ch4); bookmarks, zoom, cookie banners, online forms (Ch5); forward,
+    search, star, unsubscribe (Ch6); alarms, bigger text, Maps / Notes (Ch7 and Ch8); tech-support
+    scam calls, app permissions, gift-card scams, locking the screen, backups (Ch9); 4 more final
+    questions (Ch10).
+14. **Cars drive the correct way, and things are solid.** Cars face their driving direction and keep
+    to the right. Cars, townspeople, Maya and Glitches are solid for the player and each other
+    (`World.buildDynamic` + `collide`), cars stop for people and Glitches, and sidewalk props were
+    moved off the walking lanes.
+
 ## Chapters (one building each)
 
 | # | Building | Skill | Badge |
@@ -82,7 +103,7 @@ and ship as **one full HTML file**.
 | 7 | Green Phone Shop | Android: wake, swipe to unlock, PIN, apps, texting, Home/Back, calls, Wi-Fi, Play Store, quick settings, volume | 🤖 Android Ace |
 | 8 | Silver Phone Shop | iPhone: side button, swipe up, passcode, Messages, going Home, Camera/Photos, Control Center, Wi-Fi, App Store; Android vs iPhone table | 📱 iPhone Ace |
 | 9 | Cyber Safety HQ | Malware types, strong passwords (live meter), two-step codes, real updates vs fake update pop-ups, fake download buttons, dangerous attachments (.exe), Spam folder (Not spam / Block), look-alike web addresses, scam texts, antivirus scan, public Wi-Fi, "if you've been hacked" plan | 🛡️ Cyber Guardian |
-| 10 | City Hall | Final review quiz (13 questions) and printable certificate | 🏆 Tech Hero |
+| 10 | City Hall | Final review quiz (17 questions) and printable certificate | 🏆 Tech Hero |
 
 ## Also in the town
 

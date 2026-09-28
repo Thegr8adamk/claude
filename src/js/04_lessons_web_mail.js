@@ -20,7 +20,7 @@ const WEB_PAGES = {
   notfound: (u) => ({ url: u, title: 'Not found', secure: true, html: `<div class="page"><h1>🤔 Hmm, can't find that site</h1><p>“${esc(u)}” doesn't exist in Tech Town. Check the spelling in the address bar and try again.</p></div>` }),
 };
 function makeBrowser(ctx) {
-  const w = openWin(ctx.dsk, { id: 'br', title: '🌐 Web Browser', cls: 'browser max', tool: `<div class="tabs" id="tabs"></div><div class="btool"><button class="navb" id="bBack" title="Back">←</button><button class="navb" id="bFwd" title="Forward">→</button><button class="navb" id="bReload" title="Reload">⟳</button><div class="addr"><button class="lock" id="bLock" title="View site information">🔒</button><input id="bAddr" autocomplete="off" spellcheck="false" placeholder="Search or type a web address"></div><button class="navb" title="Bookmark">☆</button></div>`, body: '<div class="loadbar" id="bLoad"></div><div id="bPage" style="height:100%;position:relative"></div>' });
+  const w = openWin(ctx.dsk, { id: 'br', title: '🌐 Web Browser', cls: 'browser max', tool: `<div class="tabs" id="tabs"></div><div class="btool"><button class="navb" id="bBack" title="Back">←</button><button class="navb" id="bFwd" title="Forward">→</button><button class="navb" id="bReload" title="Reload">⟳</button><div class="addr"><button class="lock" id="bLock" title="View site information">🔒</button><input id="bAddr" autocomplete="off" spellcheck="false" placeholder="Search or type a web address"></div><button class="navb" id="bStar" title="Bookmark this page">☆</button><button class="navb" id="bMenu" title="Menu">⋮</button></div>`, body: '<div class="loadbar" id="bLoad"></div><div id="bPage" style="height:100%;position:relative"></div>' });
   const B = ctx.B = { tabs: [], cur: 0, w };
   const hook = (ev, d) => ctx.hook && ctx.hook(ev, d);
   B.tab = () => B.tabs[B.cur];
@@ -47,6 +47,15 @@ function makeBrowser(ctx) {
   B.closeTab = (i) => { const k = B.tabs[i].key; B.tabs.splice(i, 1); if (i < B.cur) B.cur--; if (!B.tabs.length) B.tabs.push({ page: WEB_PAGES.start(), hist: [], key: 'start' }); B.cur = Math.max(0, Math.min(B.cur, B.tabs.length - 1)); B.render(); hook('closetab', k); };
   $('#bBack').onclick = () => { const t = B.tab(); if (!t.hist.length) return hook('backnone'); const h = t.hist.pop(); t.page = h.page; t.key = h.key; B.render(); hook('back'); };
   $('#bLock').onclick = () => { const p = B.tab().page; const pop = document.createElement('div'); pop.className = 'pop'; pop.innerHTML = p.secure ? '🔒 <b>Connection is secure</b><br><small>Information you send to this site is private.</small>' : '⚠️ <b>Not secure</b><br><small>Don\'t type passwords or card numbers here.</small>'; $('#bPage').appendChild(pop); setTimeout(() => pop.remove(), 4000); hook('lock'); };
+  B.zoom = 100;
+  $('#bStar').onclick = () => { $('#bStar').textContent = '★'; $('#bStar').style.color = '#f5b700'; const pop = document.createElement('div'); pop.className = 'pop'; pop.style.left = 'auto'; pop.style.right = '14px'; pop.innerHTML = '★ <b>Bookmark added</b><br><small>' + esc(B.tab().page.title) + '</small>'; $('#bPage').appendChild(pop); setTimeout(() => pop.remove(), 3000); hook('bookmark'); };
+  $('#bMenu').onclick = () => {
+    if ($('#bDrop')) { $('#bDrop').remove(); return; }
+    w.insertAdjacentHTML('beforeend', `<div class="ctxmenu" id="bDrop" style="right:10px;top:84px;z-index:40"><div>🆕 New tab</div><div style="display:flex;align-items:center;gap:8px">🔍 Zoom <button class="navb" id="zOut" title="Zoom out">−</button><b id="zLvl">${B.zoom}%</b><button class="navb" id="zIn" title="Zoom in">+</button></div><div>🕘 History</div><div>★ Bookmarks</div></div>`);
+    const setZ = z => { B.zoom = Math.max(50, Math.min(200, z)); $('#zLvl').textContent = B.zoom + '%'; $('#bPage').style.fontSize = B.zoom + '%'; hook('zoom', B.zoom); };
+    $('#zIn').onclick = e => { e.stopPropagation(); setZ(B.zoom + 25); }; $('#zOut').onclick = e => { e.stopPropagation(); setZ(B.zoom - 25); };
+    hook('menu');
+  };
   const addr = $('#bAddr');
   addr.addEventListener('focus', () => { addr.select(); hook('addrFocus'); });
   addr.addEventListener('keydown', e => {
@@ -140,6 +149,7 @@ LESSONS.web = {
 };
 
 /* ---------------- CHAPTER 6: POST OFFICE — email ---------------- */
+const d2t = h => { const d = document.createElement('div'); d.innerHTML = h.replace(/<br>/g, '\n'); return d.textContent; };
 function mailSim(S, ctx) {
   ctx.dsk = desktopSim(S, []);
   ctx.emails = [
@@ -149,19 +159,23 @@ function mailSim(S, ctx) {
     { id: 'news', from: 'Town Newsletter', addr: 'news@techtown.gov', subj: 'Weekly Town Newsletter', body: 'This week: the park fountain has been cleaned! (Old news.)', unread: false, folder: 'inbox', time: 'Mon' },
   ];
   ctx.folder = 'inbox'; ctx.sel = null; ctx.attachment = null;
-  const w = openWin(ctx.dsk, { id: 'mail', title: '✉️ TownMail', cls: 'max', body: `<div class="mail"><div class="mside"><button class="compose" id="mCompose">✏️ Compose</button><button data-f="inbox" class="on">📥 Inbox</button><button data-f="sent">📤 Sent</button><button data-f="spam">🚫 Spam</button><button data-f="trash">🗑️ Trash</button></div><div class="mlist" id="mList"></div><div class="mread" id="mRead"><div style="color:#8a94a0;margin-top:30%;text-align:center">Click an email to read it</div></div></div>` });
+  const w = openWin(ctx.dsk, { id: 'mail', title: '✉️ TownMail', cls: 'max', body: `<div class="mail"><div class="mside"><button class="compose" id="mCompose">✏️ Compose</button><button data-f="inbox" class="on">📥 Inbox</button><button data-f="sent">📤 Sent</button><button data-f="spam">🚫 Spam</button><button data-f="trash">🗑️ Trash</button></div><div class="mlist"><div style="padding:6px"><input id="mSearch" placeholder="🔍 Search mail" autocomplete="off" style="width:100%;border:2px solid #d3d9e0;border-radius:99px;padding:.3em .8em;font-size:.95em"></div><div id="mList"></div></div><div class="mread" id="mRead"><div style="color:#8a94a0;margin-top:30%;text-align:center">Click an email to read it</div></div></div>` });
   const hook = (ev, d) => ctx.hook && ctx.hook(ev, d);
   ctx.renderSide = () => { const n = ctx.emails.filter(e => e.folder === 'inbox' && e.unread).length; $$('.mside [data-f]', w).forEach(b => { b.classList.toggle('on', b.dataset.f === ctx.folder); if (b.dataset.f === 'inbox') b.textContent = '📥 Inbox' + (n ? ` (${n})` : ''); }); };
   ctx.renderList = () => {
-    const list = ctx.emails.filter(e => e.folder === ctx.folder);
+    const q = (ctx.query || '').toLowerCase();
+    const list = ctx.emails.filter(e => e.folder === ctx.folder && (!q || (e.subj + ' ' + e.from + ' ' + (e.body || '')).toLowerCase().includes(q)));
     $('#mList').innerHTML = list.length ? list.map(e => `<div class="mitem ${e.unread ? 'unread' : ''} ${ctx.sel === e.id ? 'sel' : ''}" data-id="${e.id}"><div class="mf">${esc(ctx.folder === 'sent' ? 'To: ' + e.to : e.from)} <span style="float:right;font-weight:400;font-size:.8em">${e.time}</span></div><div class="ms">${esc(e.subj)}</div></div>`).join('') : '<div style="padding:1em;color:#8a94a0">Nothing here.</div>';
     $$('.mitem', w).forEach(el => el.onclick = () => ctx.openMail(el.dataset.id));
     ctx.renderSide();
   };
   ctx.openMail = id => {
     const e = ctx.emails.find(x => x.id === id); if (!e) return; e.unread = false; ctx.sel = id; ctx.renderList();
-    $('#mRead').innerHTML = `<div class="mact"><button id="mReply">↩️ Reply</button><button>➡️ Forward</button><button id="mDel">🗑️ Delete</button><button id="mSpam">🚫 Report spam</button></div><h3>${esc(e.subj)}</h3><div class="mmeta">From: <b>${esc(e.from)}</b> &lt;${esc(e.addr)}&gt; · ${e.time}</div><div>${e.body}</div>${e.attach ? `<div class="attach" id="mAtt">🖼️ ${e.attach}</div>` : ''}`;
+    $('#mRead').innerHTML = `<div class="mact"><button id="mReply">↩️ Reply</button><button id="mFwd">➡️ Forward</button><button id="mStar">${e.star ? '⭐ Starred' : '☆ Star'}</button><button id="mDel">🗑️ Delete</button><button id="mSpam">🚫 Report spam</button></div><h3>${esc(e.subj)}</h3><div class="mmeta">From: <b>${esc(e.from)}</b> &lt;${esc(e.addr)}&gt; · ${e.time}</div><div>${e.body}</div>${e.attach ? `<div class="attach" id="mAtt">🖼️ ${e.attach}</div>` : ''}`;
     $('#mReply').onclick = () => { ctx.compose({ to: e.addr, subj: 'Re: ' + e.subj }); hook('reply', id); };
+    $('#mFwd').onclick = () => { ctx.compose({ to: '', subj: 'Fwd: ' + e.subj }); const b = $('#cBody'); if (b) b.value = '\n\n---------- Forwarded message ----------\nFrom: ' + e.from + '\n' + d2t(e.body); hook('forward', id); };
+    $('#mStar').onclick = () => { e.star = !e.star; $('#mStar').textContent = e.star ? '⭐ Starred' : '☆ Star'; hook('star', id); };
+    const un = $('#unsubLink'); if (un) un.onclick = () => hook('unsub', id);
     $('#mDel').onclick = () => { e.folder = 'trash'; ctx.sel = null; ctx.renderList(); $('#mRead').innerHTML = '<div style="color:#8a94a0;margin-top:30%;text-align:center">Moved to Trash</div>'; hook('delete', id); };
     $('#mSpam').onclick = () => { e.folder = 'spam'; ctx.sel = null; ctx.renderList(); $('#mRead').innerHTML = '<div style="color:#8a94a0;margin-top:30%;text-align:center">🚫 Reported as spam and moved to the Spam folder</div>'; hook('spam', id); };
     const att = $('#mAtt'); if (att) att.onclick = () => { $('#mRead').insertAdjacentHTML('beforeend', '<div class="dlg" id="imgView"><h4>beach.jpg</h4><div style="font-size:110px;text-align:center;background:linear-gradient(#8fd3ff 0 55%,#f4d58d 55%);border-radius:10px">🏖️</div><div class="row"><button onclick="this.closest(\'.dlg\').remove()">Close</button></div></div>'); hook('attach', id); };
@@ -187,6 +201,7 @@ function mailSim(S, ctx) {
     $('#mRead').innerHTML = '<div style="color:#23a55a;margin-top:30%;text-align:center;font-weight:900;font-size:1.2em">✅ Message sent!</div>'; ctx.renderList();
   };
   $('#mCompose').onclick = () => { ctx.compose(); hook('compose'); };
+  const ms = $('#mSearch'); ms.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { e2.preventDefault(); ctx.query = ms.value.trim(); ctx.renderList(); hook('search', ctx.query); } }); ms.addEventListener('input', () => { if (!ms.value) { ctx.query = ''; ctx.renderList(); } });
   $$('.mside [data-f]', w).forEach(b => b.onclick = () => { ctx.folder = b.dataset.f; ctx.sel = null; ctx.renderList(); hook('folder', ctx.folder); });
   ctx.renderList();
 }

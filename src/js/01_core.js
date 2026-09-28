@@ -352,7 +352,7 @@ const L = {
       <div style="font-size:4.5em;line-height:1.1">${ch.badgeIcon}</div><h3>Chapter complete!</h3>
       <p>You earned the <b>${ch.badge}</b> badge for <b>${ch.skill.toLowerCase()}</b>.${first ? '<br>⭐ +100 bonus XP' : ''}</p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        ${isFinal ? `<button class="btn big gold" id="cCert">📜 ${window.CQ_ARTIFACT ? 'See' : 'Print'} my certificate</button>` : ''}
+        ${isFinal ? `<button class="btn big gold" id="cCert">🖨️ Print my certificate</button>` : ''}
         <button class="btn big green" id="cBack">Back to Town ▶</button>
         <button class="btn ghost" id="cAgain">↺ Practice this chapter again</button></div></div>`;
     $('#cBack').onclick = () => this.close(true);

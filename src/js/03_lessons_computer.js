@@ -19,7 +19,7 @@ function pcPart(sel, name, lx, ly) {
   return (S, api) => { ensurePC(S); const el = $(sel); api.target(el); api.listen(el, 'click', e => { e.stopPropagation(); plabel(name, lx, ly); api.done(); }); };
 }
 const MINI_DESK = `<div class="mini-desk"><div class="mi" style="left:4%;top:5%"><span>🗑️</span>Recycle Bin</div><div class="mi" style="left:4%;top:32%"><span>🌐</span>Browser</div>
-  <div class="mi" style="left:4%;top:59%"><span>📁</span>Documents</div><div class="mini-task"><button class="startb" id="pcStart">⊞</button><span style="margin-left:auto;font-size:.8em;padding-right:6px">${clockStr()}</span></div></div>`;
+  <div class="mi" style="left:4%;top:59%"><span>📁</span>Documents</div><div class="mini-task"><button class="startb" id="pcStart">⊞</button><button class="tray" id="pcWifi" style="margin-left:auto" aria-label="Wi-Fi">📶</button><button class="tray" id="pcVol" aria-label="Volume">🔊</button><span style="font-size:.8em;padding-right:6px">${clockStr()}</span></div></div>`;
 
 LESSONS.home = {
   steps: [
