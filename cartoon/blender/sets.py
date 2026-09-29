@@ -94,6 +94,48 @@ def blob(name, radius, mat, seed, lumpy=0.35, subdiv=4):
     return smooth(ob)
 
 
+def leaf_card(mat):
+    """A small cupped leaf mesh used as a particle instance."""
+    ob = bpy.data.objects.get("LeafCard")
+    if ob:
+        return ob
+    me = bpy.data.meshes.new("LeafCard")
+    verts = [(0, 0, 0), (0.35, 0.18, 0.04), (0.35, -0.18, 0.04), (0.75, 0.2, 0.06), (0.75, -0.2, 0.06),
+             (1.0, 0, 0.02), (0.55, 0, -0.02)]
+    faces = [(0, 1, 6), (0, 6, 2), (1, 3, 6), (6, 4, 2), (3, 5, 6), (6, 5, 4)]
+    me.from_pydata(verts, [], faces)
+    ob = bpy.data.objects.new("LeafCard", me)
+    ob.data.materials.append(mat)
+    for p in me.polygons:
+        p.use_smooth = True
+    return ob
+
+
+def add_leaves(blob_ob, mat, count=500, size=0.16):
+    """Scatter leaf instances over a foliage blob so it reads as real foliage."""
+    st = bpy.data.particles.new(blob_ob.name + "_Leaves")
+    st.type = "EMITTER"
+    st.count = count
+    st.frame_start = st.frame_end = 1
+    st.lifetime = 100000
+    st.emit_from = "FACE"
+    st.distribution = "RAND"
+    st.physics_type = "NO"
+    st.render_type = "OBJECT"
+    st.instance_object = leaf_card(mat)
+    st.particle_size = size
+    st.size_random = 0.5
+    st.use_rotations = True
+    st.rotation_mode = "NOR"
+    st.rotation_factor_random = 0.6
+    st.phase_factor_random = 2.0
+    mod = blob_ob.modifiers.new("Leaves", "PARTICLE_SYSTEM")
+    old = mod.particle_system.settings
+    mod.particle_system.settings = st
+    bpy.data.particles.remove(old)
+    mod.particle_system.seed = hash(blob_ob.name) % 1000
+
+
 def make_tree(name, seed, bark, leaves, height=7.0, coll=None):
     """One stylized tree: curved trunk, a few branches, clusters of foliage."""
     rnd = random.Random(seed)
@@ -104,9 +146,9 @@ def make_tree(name, seed, bark, leaves, height=7.0, coll=None):
         x += rnd.uniform(-0.12, 0.12)
         y += rnd.uniform(-0.12, 0.12)
         pts.append((x, y, z))
-        radii.append(0.42 * (1 - i / 7) + (0.25 if i == 0 else 0))
+        radii.append(0.26 * (1 - i / 8) + (0.14 if i == 0 else 0))
     trunk = meta(name + "_Trunk", [CURVE(pts, radii, per_seg=4),
-                                   *[E((math.cos(a) * 0.35, math.sin(a) * 0.35, 0.1), 0.25, 0.25, 0.15)
+                                   *[E((math.cos(a) * 0.25, math.sin(a) * 0.25, 0.08), 0.16, 0.16, 0.12)
                                      for a in (0.3, 2.3, 4.2)]], bark, res=0.06)
     parts = [trunk]
     top = Vector(pts[-1])
@@ -120,10 +162,12 @@ def make_tree(name, seed, bark, leaves, height=7.0, coll=None):
         f.location = c
         f.scale = (1, 1, 0.8)
         link(f)
+        add_leaves(f, leaves[k % len(leaves)])
         parts.append(f)
     top_blob = blob(f"{name}_LeafTop", 1.6 * height / 7, leaves[0], seed * 10 + 99)
     top_blob.location = top + Vector((0, 0, 0.6))
     link(top_blob)
+    add_leaves(top_blob, leaves[0], count=700)
     parts.append(top_blob)
     coll = coll or _coll("TreeProtos")
     for p in parts:
@@ -137,59 +181,53 @@ def ground_mat():
     m = bpy.data.materials.new("ForestFloor")
     m.use_nodes = True
     nt = m.node_tree
-    b = nt.nodes["Principled BSDF"]
+    n, L = nt.nodes, nt.links.new
+    b = n["Principled BSDF"]
     b.inputs["Roughness"].default_value = 0.9
-    b.inputs["Sheen Weight"].default_value = 0.6
-    tc = nt.nodes.new("ShaderNodeTexCoord")
-    nz = nt.nodes.new("ShaderNodeTexNoise")
+    tc = n.new("ShaderNodeTexCoord")
+    nz = n.new("ShaderNodeTexNoise")
     nz.inputs["Scale"].default_value = 0.35
     nz.inputs["Detail"].default_value = 6
-    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp = n.new("ShaderNodeValToRGB")
     cr = ramp.color_ramp
-    cr.elements[0].color = (0.1, 0.16, 0.04, 1)       # moss
-    cr.elements[1].color = (0.45, 0.2, 0.05, 1)       # fallen leaves
-    cr.elements[0].position = 0.42
-    cr.elements[1].position = 0.6
-    e = cr.elements.new(0.75); e.color = (0.55, 0.3, 0.06, 1)
-    # Path: dirt along x ~ 0
-    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
-    absx = nt.nodes.new("ShaderNodeMath"); absx.operation = "ABSOLUTE"
-    wob = nt.nodes.new("ShaderNodeTexNoise"); wob.inputs["Scale"].default_value = 0.3
-    add = nt.nodes.new("ShaderNodeMath"); add.operation = "MULTIPLY_ADD"
-    add.inputs[1].default_value = 1.2
-    path = nt.nodes.new("ShaderNodeMapRange")
-    path.inputs["From Min"].default_value = 0.7
-    path.inputs["From Max"].default_value = 1.4
-    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
-    mix.inputs[7].default_value = (0.32, 0.21, 0.12, 1)
-    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
-    nt.links.new(nz.outputs["Fac"], ramp.inputs["Fac"])
-    nt.links.new(tc.outputs["Object"], sep.inputs["Vector"])
-    nt.links.new(sep.outputs["X"], absx.inputs[0])
-    nt.links.new(tc.outputs["Object"], wob.inputs["Vector"])
-    nt.links.new(wob.outputs["Fac"], add.inputs[0])
-    nt.links.new(absx.outputs[0], add.inputs[2])
-    nt.links.new(add.outputs[0], path.inputs["Value"])
-    nt.links.new(path.outputs["Result"], mix.inputs["Factor"])
-    nt.links.new(ramp.outputs["Color"], mix.inputs[6])
-    mix.inputs[6].default_value = (0.3, 0.2, 0.1, 1)
-    # Factor 0 = dirt (on path), 1 = forest floor
-    nt.links.remove(mix.inputs[6].links[0])
-    nt.links.new(ramp.outputs["Color"], mix.inputs[7])
-    mix.inputs[6].default_value = (0.3, 0.19, 0.1, 1)
-    nt.links.new(mix.outputs[2], b.inputs["Base Color"])
-    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.5
-    fine = nt.nodes.new("ShaderNodeTexVoronoi"); fine.inputs["Scale"].default_value = 18
-    nt.links.new(tc.outputs["Object"], fine.inputs["Vector"])
-    nt.links.new(fine.outputs["Distance"], bump.inputs["Height"])
-    nt.links.new(bump.outputs["Normal"], b.inputs["Normal"])
+    cr.elements[0].position, cr.elements[0].color = 0.42, (0.06, 0.12, 0.025, 1)   # moss
+    cr.elements[1].position, cr.elements[1].color = 0.58, (0.32, 0.12, 0.03, 1)    # red leaves
+    e = cr.elements.new(0.72)
+    e.color = (0.45, 0.24, 0.04, 1)                                                 # gold leaves
+    L(tc.outputs["Object"], nz.inputs["Vector"])
+    L(nz.outputs["Fac"], ramp.inputs["Fac"])
+    # Dirt path along x ~ 0 with a wobbly edge.
+    sep = n.new("ShaderNodeSeparateXYZ")
+    absx = n.new("ShaderNodeMath"); absx.operation = "ABSOLUTE"
+    wob = n.new("ShaderNodeTexNoise"); wob.inputs["Scale"].default_value = 0.3
+    edge = n.new("ShaderNodeMath"); edge.operation = "MULTIPLY_ADD"
+    edge.inputs[1].default_value = 1.2
+    path = n.new("ShaderNodeMapRange")
+    path.inputs["From Min"].default_value = 1.1
+    path.inputs["From Max"].default_value = 1.8
+    L(tc.outputs["Object"], sep.inputs["Vector"])
+    L(sep.outputs["X"], absx.inputs[0])
+    L(tc.outputs["Object"], wob.inputs["Vector"])
+    L(wob.outputs["Fac"], edge.inputs[0])
+    L(absx.outputs[0], edge.inputs[2])
+    L(edge.outputs[0], path.inputs["Value"])
+    mix = n.new("ShaderNodeMix"); mix.data_type = "RGBA"
+    mix.inputs[6].default_value = (0.2, 0.12, 0.06, 1)                              # dirt
+    L(path.outputs["Result"], mix.inputs["Factor"])
+    L(ramp.outputs["Color"], mix.inputs[7])
+    L(mix.outputs[2], b.inputs["Base Color"])
+    bump = n.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.5
+    fine = n.new("ShaderNodeTexVoronoi"); fine.inputs["Scale"].default_value = 18
+    L(tc.outputs["Object"], fine.inputs["Vector"])
+    L(fine.outputs["Distance"], bump.inputs["Height"])
+    L(bump.outputs["Normal"], b.inputs["Normal"])
     return m
 
 
 def ground(size=80, path=True):
     me = bpy.data.meshes.new("Ground")
     bm = bmesh.new()
-    bmesh.ops.create_grid(bm, x_segments=160, y_segments=160, size=size / 2)
+    bmesh.ops.create_grid(bm, x_segments=220, y_segments=220, size=size / 2)
     for v in bm.verts:
         h = noise.noise(Vector((v.co.x * 0.08, v.co.y * 0.08, 0))) * 1.2
         h += noise.noise(Vector((v.co.x * 0.4, v.co.y * 0.4, 5))) * 0.12
@@ -211,7 +249,7 @@ def ground_height(x, y, path=True):
     return h
 
 
-def sky(scn, sun_elev=25, sun_rot=40, strength=0.6, night=False):
+def sky(scn, sun_elev=25, sun_rot=40, strength=0.12, night=False):
     w = bpy.data.worlds.new("Sky")
     scn.world = w
     w.use_nodes = True
@@ -229,7 +267,7 @@ def sky(scn, sun_elev=25, sun_rot=40, strength=0.6, night=False):
     bpy.ops.object.light_add(type="SUN", rotation=(math.radians(90 - sun_elev), 0,
                                                     math.radians(sun_rot + 90)))
     sun = bpy.context.object
-    sun.data.energy = 0.3 if night else 4.0
+    sun.data.energy = 0.3 if night else 3.0
     sun.data.color = (0.6, 0.7, 1.0) if night else (1.0, 0.85, 0.65)
     sun.data.angle = math.radians(2)
     return sun
@@ -253,7 +291,8 @@ def mist(density=0.015, color=(0.9, 0.85, 0.75), size=60):
     return ob
 
 
-def build_forest(seed=1, radius=28, count=70, clearing=3.5, palette="autumn", path=True):
+def build_forest(seed=1, radius=30, count=320, clearing=2.6, palette="autumn", path=True,
+                 y_range=(-25, 70)):
     rnd = random.Random(seed)
     bark = bark_mat()
     if palette == "autumn":
@@ -266,15 +305,15 @@ def build_forest(seed=1, radius=28, count=70, clearing=3.5, palette="autumn", pa
     for i in range(5):
         protos.append(make_tree(f"Tree{i}", seed * 100 + i, bark, leaves,
                                 height=rnd.uniform(6, 9), coll=_coll(f"TreeProto{i}")))
-    ground(path=path)
+    ground(size=180, path=path)
     placed = []
     tries = 0
     while len(placed) < count and tries < count * 30:
         tries += 1
-        x, y = rnd.uniform(-radius, radius), rnd.uniform(-radius, radius)
-        if path and abs(x) < clearing:
+        x, y = rnd.uniform(-radius, radius), rnd.uniform(*y_range)
+        if path and abs(x) < clearing and y < 40:  # far trees close off the view down the path
             continue
-        if any((x - px) ** 2 + (y - py) ** 2 < 9 for px, py in placed):
+        if any((x - px) ** 2 + (y - py) ** 2 < 4.4 for px, py in placed):
             continue
         placed.append((x, y))
         inst = bpy.data.objects.new(f"TreeInst{len(placed)}", None)
@@ -306,4 +345,14 @@ def build_forest(seed=1, radius=28, count=70, clearing=3.5, palette="autumn", pa
         meta(f"MushStem{i}", [B((x, y, z + 0.05 * s), 0.025 * s), B((x, y, z + 0.1 * s), 0.02 * s)],
              stem, res=0.006)
         meta(f"MushCap{i}", [E((x, y, z + 0.13 * s), 0.06 * s, 0.06 * s, 0.035 * s)], cap, res=0.006)
+    bush_mats = [leaf_mat("BushGreen", (0.08, 0.2, 0.03), (0.22, 0.38, 0.06)), leaves[0], leaves[1]]
+    for i in range(70):
+        x = rnd.choice((-1, 1)) * rnd.uniform(clearing * 0.9, clearing + 9)
+        y = rnd.uniform(-radius, radius)
+        r = rnd.uniform(0.35, 0.9)
+        bsh = blob(f"Bush{i}", r, rnd.choice(bush_mats), i + 900, lumpy=0.3, subdiv=3)
+        bsh.location = (x, y, ground_height(x, y, path) + r * 0.25)
+        bsh.scale.z = 0.75
+        link(bsh)
+        add_leaves(bsh, bsh.data.materials[0], count=int(260 * r), size=0.09)
     return placed

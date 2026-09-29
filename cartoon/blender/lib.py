@@ -281,18 +281,41 @@ def skin(name="Skin", color=(0.85, 0.52, 0.38)):
     ramp.color_ramp.elements[1].position = 0.7
     l.new(tc.outputs["Object"], nz.inputs["Vector"])
     l.new(nz.outputs["Fac"], ramp.inputs["Fac"])
-    l.new(ramp.outputs["Color"], b.inputs["Base Color"])
+    # Painted blush (see paint_blush): warm red on cheeks, nose and ears.
+    attr = n.new("ShaderNodeAttribute")
+    attr.attribute_name = "blush"
+    mix = n.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.inputs[7].default_value = (color[0] * 0.95, color[1] * 0.42, color[2] * 0.42, 1)
+    l.new(attr.outputs["Fac"], mix.inputs["Factor"])
+    l.new(ramp.outputs["Color"], mix.inputs[6])
+    l.new(mix.outputs[2], b.inputs["Base Color"])
     _bump(nt, b, scale=400.0, strength=0.04)
     return m
+
+
+def paint_blush(ob, spots):
+    """Store a 0-1 'blush' point attribute: spots = [(center, radius, strength)]."""
+    me = ob.data
+    at = me.attributes.get("blush") or me.attributes.new("blush", "FLOAT", "POINT")
+    for v in me.vertices:
+        p = v.co  # character-local: body meshes sit at the root's origin
+        val = 0.0
+        for c, r, k in spots:
+            d = (p - Vector(c)).length / r
+            if d < 1:
+                val = max(val, k * (1 - d * d) ** 2)
+        at.data[v.index].value = val
+    return at
 
 
 def fur(name, color, tip=None, scale=90.0, strength=0.35):
     """Fur-like surface for blob bodies: sheen, soft noise and strong fine bump."""
     m, nt, n, l, b = _nodes(name)
     b.inputs["Roughness"].default_value = 0.75
-    b.inputs["Sheen Weight"].default_value = 0.9
+    b.inputs["Sheen Weight"].default_value = 0.35
     b.inputs["Sheen Roughness"].default_value = 0.35
-    b.inputs["Sheen Tint"].default_value = (*(tip or color), 1)
+    b.inputs["Sheen Tint"].default_value = (*color, 1)
     b.inputs["Specular IOR Level"].default_value = 0.3
     tc = n.new("ShaderNodeTexCoord")
     nz = n.new("ShaderNodeTexNoise")
@@ -459,3 +482,38 @@ def hair_mat(name, color, melanin=None):
     out = nt.nodes["Material Output"]
     nt.links.new(h.outputs[0], out.inputs["Surface"])
     return m
+
+
+# ---------------------------------------------------------------- face placement
+
+def bvh_of(ob):
+    from mathutils.bvhtree import BVHTree
+    me = ob.data
+    return BVHTree.FromPolygons([v.co.copy() for v in me.vertices],
+                                [tuple(p.vertices) for p in me.polygons])
+
+
+def surf(bvh, x, z, y0=-3.0):
+    """First surface point hit by a ray fired along +Y at (x, z), or None."""
+    loc, _n, _i, _d = bvh.ray_cast(Vector((x, y0, z)), Vector((0, 1, 0)))
+    return loc
+
+
+def smile_arc(bvh, cx, cz, half_w, lift, n=9):
+    """Points on the face surface along a smile curve (ends lifted by `lift`)."""
+    pts = []
+    for i in range(n):
+        t = -1 + 2 * i / (n - 1)
+        p = surf(bvh, cx + t * half_w, cz + lift * t * t)
+        if p is not None:
+            pts.append(p)
+    return pts
+
+
+def remeta(ob, elems, mat, **kw):
+    """Rebuild a meta object in place (same name) with new elements."""
+    name, parent = ob.name, ob.parent
+    me = ob.data
+    bpy.data.objects.remove(ob)
+    bpy.data.meshes.remove(me)
+    return meta(name, elems, mat, parent=parent, **kw)

@@ -25,7 +25,7 @@ scn.view_settings.look = "AgX - Punchy"
 
 build_forest(seed=3)
 sky(scn, sun_elev=30, sun_rot=30)
-mist(0.012)
+mist(0.004)
 build_walt((0, 0, ground_height(0, 0)))
 
 bpy.ops.object.camera_add(location=(1.6, -4.5, 1.3), rotation=(math.radians(88), 0, math.radians(18)))
