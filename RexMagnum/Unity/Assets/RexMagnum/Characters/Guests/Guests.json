@@ -497,6 +497,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Justin",
+   "fbx": "Justin.fbx",
+   "voice": "fV5vDeUO8ghvK7ntjiVC",
+   "security": false,
+   "materials": [
+    {
+     "name": "Justin_Skin",
+     "baseMap": "Textures/Justin_Skin_BC.png",
+     "normalMap": "Textures/Justin_Skin_N.png",
+     "maskMap": "Textures/Justin_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Justin_Bottom",
+     "color": [
+      0.8500000238418579,
+      0.15000000596046448,
+      0.11999999731779099,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Justin_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.24196000000000004,
+      0.164256,
+      0.085024,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Justin_HairCap",
+     "color": [
+      0.24196000397205353,
+      0.1642560064792633,
+      0.08502399921417236,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Justin_Sole",
+     "color": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.10000000149011612,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Justin_Top",
+     "color": [
+      0.949999988079071,
+      0.949999988079071,
+      0.949999988079071,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
