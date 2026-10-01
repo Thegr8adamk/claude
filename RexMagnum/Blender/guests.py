@@ -538,7 +538,7 @@ def export_guest(g, ob, arm, size, rex_export):
 
 def render_lineup(names, path):
     import rex_render
-    rex_render.setup(samples=48, res=(1800, 700))
+    rex_render.setup(samples=48, res=(1800, 700) if len(names) > 1 else (360, 700))
     sc = bpy.context.scene
     cam = sc.camera
     if cam is None:
@@ -576,7 +576,9 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "Guests_v01.blend"), compress=True)
     if a.render:
         os.makedirs(os.path.join(ROOT, "Renders", "guests"), exist_ok=True)
-        render_lineup([g["name"] for g, _, _ in built], os.path.join(ROOT, "Renders", "guests", "guests_lineup.png"))
+        names = [g["name"] for g, _, _ in built]
+        fn = f"guest_{names[0]}.png" if len(names) == 1 else "guests_lineup.png"
+        render_lineup(names, os.path.join(ROOT, "Renders", "guests", fn))
     rows = [export_guest(g, ob, arm, a.size, rex_export) for g, ob, arm in built]
     path = os.path.join(OUT, "Guests.json")
     old = json.load(open(path))["guests"] if os.path.exists(path) else []
