@@ -167,6 +167,8 @@ namespace RexMagnum
             busyUntil = Time.time + (heavy ? 0.9f : 0.5f);
             controller.FaceAimFor(heavy ? 0.9f : 0.5f);
             StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.2f));
+            string swing = d.id == WeaponId.Towel ? "towel_crack" : d.id == WeaponId.GolfClub ? "golf_swing" : null;
+            if (swing != null) StartCoroutine(PlayLater(swing, heavy ? 0.4f : 0.15f));
         }
 
         IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay)
@@ -185,6 +187,8 @@ namespace RexMagnum
                     if (d.id == WeaponId.Towel && heavy) blob.Stun(2f);          // brief: wind-up snap stuns 2 s
                 }
                 h.Damage(heavy ? d.holdDamage : d.tapDamage, col.ClosestPoint(c), gameObject);
+                if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
+                if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
                 if (h.IsDead)
                 {
                     RexVoice.Say(gameObject, d.id == WeaponId.Fists ? "Fists" : d.id.ToString());
@@ -192,6 +196,7 @@ namespace RexMagnum
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
+                    Sfx.Play("bottle_break", c);
                     owned.Remove(WeaponId.Bottle);
                     Give(WeaponId.BottleBroken);
                     SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
@@ -212,6 +217,7 @@ namespace RexMagnum
             ammo[d.id]--;
             nextShot = Time.time + (d.id == WeaponId.Sniper ? 1.2f : d.id == WeaponId.Harpoon ? 1.0f : 0.25f);
             controller.FaceAimFor(0.6f);
+            Sfx.Play(d.id == WeaponId.Sniper ? "sniper" : d.id == WeaponId.Harpoon ? "harpoon" : "pistol", transform.position);
             Vector3 target = cameraRig.AimPoint(d.reach);
             Transform muzzle = MuzzleOf(cameraRig.Mode == RexCameraRig.CameraMode.FirstPerson ? heldArms : heldBody);
             Vector3 from = muzzle != null ? muzzle.position : cameraRig.transform.position;
@@ -297,8 +303,15 @@ namespace RexMagnum
             return dir.normalized * (longThrow ? 15f : 8f);
         }
 
+        System.Collections.IEnumerator PlayLater(string sfx, float t)
+        {
+            yield return new WaitForSeconds(t);
+            Sfx.Play(sfx, transform.position);
+        }
+
         void ThrowCoconut(bool longThrow)
         {
+            Sfx.Play("coconut", transform.position);
             if (Ammo(WeaponId.Coconut) <= 0) return;
             ammo[WeaponId.Coconut]--;
             controller.SetTrigger(Animator.StringToHash("Swing"));

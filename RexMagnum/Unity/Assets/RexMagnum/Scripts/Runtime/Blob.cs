@@ -101,6 +101,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (!health.IsDead && Random.value < Time.deltaTime * 0.06f) Sfx.Play("blob_idle", transform.position, 0.5f);
             if (health.IsDead) return;
             if (animator != null) animator.SetFloat(SpeedHash, agent.velocity.magnitude);
 
@@ -146,6 +147,7 @@ namespace RexMagnum
             bool melee = kind == Kind.Bouncer || (kind == Kind.KingGlorp && dist < 4f) || dist < 2.2f;
             string clip = melee ? "Whip" : kind == Kind.Lifeguard ? "Throw" : "Spit";
             Play(clip);
+            if (!melee) Sfx.Play("blob_spit", transform.position, 0.8f);
             busyUntil = Time.time + 0.6f;
             yield return new WaitForSeconds(melee ? 0.4f : 0.45f);
             if (health.IsDead || rex == null) yield break;
@@ -179,6 +181,7 @@ namespace RexMagnum
         {
             if (health.IsDead || IsStunned) return;
             Play("Rude");
+            Sfx.Play("blob_angry", transform.position);
             busyUntil = Time.time + 1.5f;
             angryUntil = Time.time + 10f;
         }
@@ -203,6 +206,7 @@ namespace RexMagnum
         void OnDamaged(float amount, Vector3 point, GameObject attacker)
         {
             if (!health.IsDead && !IsStunned) Play("Hit", 0.03f);
+            Sfx.Play("blob_hit", point);
         }
 
         void OnDied(GameObject killer)
@@ -210,6 +214,7 @@ namespace RexMagnum
             agent.enabled = false;
             foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
             Play("Pop", 0.02f);
+            Sfx.Play("blob_pop", transform.position);
             StartCoroutine(PopRoutine());
         }
 

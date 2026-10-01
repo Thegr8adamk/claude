@@ -17,10 +17,11 @@ namespace RexMagnum
             Vector3 dir = new Vector3(hit.moveDirection.x, 0.25f, hit.moveDirection.z).normalized;
             float speed = GetComponent<CharacterController>().velocity.magnitude;
             rb.AddForceAtPosition(dir * force * Mathf.Max(1f, speed), hit.point, ForceMode.Impulse);
-            if (clink != null && Time.time > nextSound)
+            if (Time.time > nextSound)
             {
                 nextSound = Time.time + 0.15f;
-                AudioSource.PlayClipAtPoint(clink, hit.point, 0.6f);
+                if (clink != null) AudioSource.PlayClipAtPoint(clink, hit.point, 0.6f);
+                else Sfx.Play("bottle_clink", hit.point, 0.6f);
             }
         }
     }

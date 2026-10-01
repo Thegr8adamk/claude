@@ -19,8 +19,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import bpy  # noqa: E402  (bpy must be imported before bmesh)
 import bmesh  # noqa: E402
-import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
