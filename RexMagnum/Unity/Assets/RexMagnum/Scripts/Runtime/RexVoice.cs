@@ -32,6 +32,10 @@ namespace RexMagnum
             { "Harpoon", new[] { "Stick around.", "Shaft happens.", "Get the point?", "First thing I've nailed in this hotel.", "Hang in there. No, really. You're stuck." } },
             { "Sniper", new[] { "That's a wrap.", "One take. Like my wedding nights. All four.", "Long-distance relationship. Over.", "Head shot. I used to have one of those. Eight by ten. Glossy.", "I can hit anything from up here. Except rock bottom. Already did." } },
             { "Coconut", new[] { "Go nuts.", "Drinks are on me. And on you. And on the wall.", "Blow me. I'm talking to the coconut.", "Fire in the hole. That's what she said. Then she took the house." } },
+            { "Mirror", new[] { "It's not bald. It's aerodynamic.", "Still got it. Most of it. Some of it.", "Hello, handsome. Hello, handsome's father." } },
+            { "Door", new[] { "Knock knock. Who's there? Me. Leaving.", "I've kicked down bigger doors. On a sound stage." } },
+            { "Idle", new[] { "Hello? I'm being heroic over here.", "Back in '86 I had a trailer. With a door.", "Is this thing on? Is anything on?" } },
+            { "Rescue", new[] { "Did you film that? Tag me.", "You're welcome. Cash is fine.", "Tell your friends. Tell a casting director." } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };

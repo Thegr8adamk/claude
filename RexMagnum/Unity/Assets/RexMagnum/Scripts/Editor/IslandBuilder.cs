@@ -43,7 +43,13 @@ namespace RexMagnum.EditorTools
         [Serializable] class Layer { public string name, diffuse, normal, mask; public float tile; }
         [Serializable] class TerrainInfo { public float size, minH, maxH; public int res; public string raw; public string[] splat; public Layer[] layers; }
         [Serializable] class Spawn { public float[] pos; public float yaw; }
-        [Serializable] class Data { public MatRow[] materials; public AssetRow[] assets; public Veg vegetation; public TerrainInfo terrain; public Spawn spawn; }
+        [Serializable] class Room
+        {
+            public float[] doorHinge, bedLie, wake, fullBottle, towel, closetMirror, bathMirror, tv, lamp1, lamp2, ceiling, balcony;
+        }
+        [Serializable] class Data { public MatRow[] materials; public AssetRow[] assets; public Veg vegetation; public TerrainInfo terrain; public Spawn spawn; public Room room304; public float[] pool; }
+
+        static Vector3 U(float[] p) => p == null || p.Length < 3 ? Vector3.zero : U(p[0], p[1], p[2]);
 
         /// <summary>Blender (x east, y north, z up) to Unity (x, y up, z north).</summary>
         static Vector3 U(float x, float y, float z) => new Vector3(x, z, y);
@@ -90,14 +96,20 @@ namespace RexMagnum.EditorTools
 
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Rex + blobs + weapons", 0.9f);
                 var (rexPrefab, controller) = RexBuilder.BuildAssets();
+                var room = data.room304;
+                bool hasRoom = room != null && room.wake != null && room.wake.Length == 3;
                 var sp = data.spawn.pos;
-                Vector3 spawn = U(sp[0], sp[1], sp[2]);
-                RexBuilder.AddPlayer(rexPrefab, controller, spawn, data.spawn.yaw + 180f, spawn + new Vector3(-12f, 0f, 3f), 2500f);
+                Vector3 spawn = hasRoom ? U(room.wake) : U(sp[0], sp[1], sp[2]);
+                var rex = RexBuilder.AddPlayer(rexPrefab, controller, spawn, hasRoom ? 270f : data.spawn.yaw + 180f, null, 2500f);
                 var nav = UnityEngine.Object.FindFirstObjectByType<RuntimeNavMesh>();
-                if (nav != null) { nav.center = spawn; nav.size = new Vector3(160f, 60f, 160f); }
+                Vector3 pool = data.pool != null && data.pool.Length == 3 ? U(data.pool) : spawn;
+                if (nav != null) { nav.center = pool; nav.size = new Vector3(170f, 60f, 170f); }
+                var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+                if (spawner != null) { spawner.transform.position = pool; spawner.radius = 18f; spawner.maxAlive = 6; }
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
+                if (hasRoom) Room304(room, rex, game);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -342,7 +354,7 @@ namespace RexMagnum.EditorTools
             var model = (GameObject)PrefabUtility.InstantiatePrefab(asset, root.transform);
             ApplyFix(model.transform);
             var rs = model.GetComponentsInChildren<MeshRenderer>();
-            var lod0 = rs.Where(r => !r.name.EndsWith("_LOD1")).ToArray();
+            var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();
             var lod1 = rs.Where(r => r.name.EndsWith("_LOD1")).ToArray();
             var lg = root.AddComponent<LODGroup>();
             lg.SetLODs(lod1.Length > 0
@@ -392,6 +404,119 @@ namespace RexMagnum.EditorTools
             AssetDatabase.DeleteAsset(p);
             AssetDatabase.CreateAsset(m, p);
             return m;
+        }
+
+        // ---------------------------------------------------------------- room 304 (first playable)
+
+        static GameObject Point(string name, Vector3 pos, float yaw, Transform parent)
+        {
+            var g = new GameObject(name);
+            g.transform.SetParent(parent, false);
+            g.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
+            return g;
+        }
+
+        static void PointLight(string name, Vector3 pos, Color c, float intensity, float range, Transform parent, bool shadows)
+        {
+            var l = new GameObject(name).AddComponent<Light>();
+            l.transform.SetParent(parent, false);
+            l.transform.position = pos;
+            l.type = LightType.Point;
+            l.color = c;
+            l.intensity = intensity;
+            l.range = range;
+            l.shadows = shadows ? LightShadows.Soft : LightShadows.None;
+        }
+
+        static void Room304(Room room, GameObject rex, GameObject game)
+        {
+            var inst = GameObject.Find("Island/Room304");
+            if (inst == null) { Debug.LogWarning("[Rex Magnum] Room304 prefab not found in the scene."); return; }
+            PrefabUtility.UnpackPrefabInstance(inst, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            var gp = new GameObject("Room304_Gameplay").transform;
+            // stuck door on a hinge
+            var door = inst.GetComponentsInChildren<MeshRenderer>(true).FirstOrDefault(r => r.name.EndsWith("_Door"));
+            if (door != null)
+            {
+                var hinge = Point("DoorHinge", U(room.doorHinge), 0f, gp);
+                door.transform.SetParent(hinge.transform, true);
+                door.gameObject.AddComponent<MeshCollider>();
+                var hh = hinge.AddComponent<Health>();
+                hh.maxHealth = 30f;
+                hinge.AddComponent<AudioSource>().spatialBlend = 1f;
+                hinge.AddComponent<StuckDoor>();
+            }
+            // kickable empty bottles
+            foreach (var b in inst.GetComponentsInChildren<MeshRenderer>(true).Where(r => r.name.Contains("_Bottle")))
+            {
+                b.gameObject.isStatic = false;
+                var mc = b.gameObject.AddComponent<MeshCollider>();
+                mc.convex = true;
+                var rb = b.gameObject.AddComponent<Rigidbody>();
+                rb.mass = 0.35f;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+            }
+            rex.AddComponent<RexKick>();
+            // pickups: full beer on the table, towel on the balcony rail
+            foreach (var (prefab, at) in new[] { ("Pickup_Bottle", room.fullBottle), ("Pickup_Towel", room.towel) })
+            {
+                var pf = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/RexMagnum/Prefabs/Weapons/{prefab}.prefab");
+                if (pf == null) continue;
+                var p = (GameObject)PrefabUtility.InstantiatePrefab(pf, gp);
+                p.transform.position = U(at);
+            }
+            // mirrors (closet faces -X in Unity, bathroom faces +X)
+            foreach (var (n, at, normal) in new[] { ("ClosetMirror", room.closetMirror, Vector3.left), ("BathMirror", room.bathMirror, Vector3.right) })
+            {
+                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                q.name = n;
+                UnityEngine.Object.DestroyImmediate(q.GetComponent<Collider>());
+                q.transform.SetParent(gp, false);
+                q.transform.position = U(at) + normal * 0.012f;
+                q.transform.rotation = Quaternion.LookRotation(-normal, Vector3.up);
+                q.transform.localScale = n == "ClosetMirror" ? new Vector3(1.4f, 2.0f, 1f) : new Vector3(1.3f, 1.0f, 1f);
+                var pm = q.AddComponent<PlanarMirror>();
+                pm.localNormal = Vector3.back;
+            }
+            // lights: lamps, ceiling, flickering TV
+            var warm = new Color(1f, 0.8f, 0.55f);
+            PointLight("Lamp1", U(room.lamp1), warm, 1.2f, 4f, gp, false);
+            PointLight("Lamp2", U(room.lamp2), warm, 1.2f, 4f, gp, false);
+            PointLight("CeilingLight", U(room.ceiling), new Color(1f, 0.9f, 0.75f), 2.5f, 8f, gp, true);
+            var tv = new GameObject("TVLight").AddComponent<Light>();
+            tv.transform.SetParent(gp, false);
+            tv.transform.position = U(room.tv);
+            tv.type = LightType.Point;
+            tv.range = 5f;
+            tv.gameObject.AddComponent<LightFlicker>();
+            // wake-up points, respawn in the room (brief: Rex wakes in room 304 after dying)
+            var bed = Point("BedLie", U(room.bedLie), 270f, gp);
+            var wake = Point("WakePoint", U(room.wake), 270f, gp);
+            var life = rex.GetComponent<RexLife>();
+            if (life != null) life.respawnPoint = wake.transform;
+            // reflection probe for the room (glass, bottles, mirror frames)
+            var rp = new GameObject("RoomProbe").AddComponent<ReflectionProbe>();
+            rp.transform.SetParent(gp, false);
+            rp.transform.position = U(room.ceiling) + Vector3.down * 1.5f;
+            rp.size = new Vector3(5.5f, 3.4f, 9.5f);
+            rp.boxProjection = true;
+            rp.mode = ReflectionProbeMode.Realtime;
+            rp.refreshMode = ReflectionProbeRefreshMode.OnAwake;
+            rp.importance = 2;
+            // title camera: slow shot of the hotel from the beach; then the flow takes over
+            var tc = new GameObject("TitleCamera").AddComponent<Camera>();
+            tc.transform.position = new Vector3(75f, 26f, -420f);
+            tc.farClipPlane = 2500f;
+            var tdata = tc.gameObject.AddComponent<UniversalAdditionalCameraData>();
+            tdata.renderPostProcessing = true;
+            var flow = game.AddComponent<GameFlow>();
+            flow.titleCamera = tc;
+            var rig = UnityEngine.Object.FindFirstObjectByType<RexCameraRig>();
+            flow.playerCamera = rig != null ? rig.GetComponent<Camera>() : Camera.main;
+            flow.rex = rex.GetComponent<RexController>();
+            flow.bedPoint = bed.transform;
+            flow.wakePoint = wake.transform;
+            flow.disableDuringTitle = new Behaviour[] { rex.GetComponent<RexActions>(), rex.GetComponent<RexWeapons>(), rig };
         }
 
         // ---------------------------------------------------------------- vegetation

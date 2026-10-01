@@ -439,11 +439,29 @@ def export_assets(mats_used):
             continue
         name = an.replace("Asset_", "")
         objs = list(coll.all_objects)
-        lod0 = bpy.data.objects.new(f"{name}_LOD0", joined_mesh(objs, f"{name}_LOD0", mats_used))
-        lod1 = bpy.data.objects.new(f"{name}_LOD1", joined_mesh(objs, f"{name}_LOD1", mats_used, lod1=True))
+        # interactive parts become their own objects (door, kickable bottles); the rest is joined
+        groups = {}
+        for o in objs:
+            for key in ("Door_", "FloorBottle"):
+                if key in o.name:
+                    g = "Door" if key == "Door_" else o.name.split("FloorBottle")[1].split("x")[0]
+                    groups.setdefault(g if key == "Door_" else f"Bottle{g}", []).append(o)
+        loose = {o for v in groups.values() for o in v}
+        main = [o for o in objs if o not in loose]
+        lod0 = bpy.data.objects.new(f"{name}_LOD0", joined_mesh(main, f"{name}_LOD0", mats_used))
+        lod1 = bpy.data.objects.new(f"{name}_LOD1", joined_mesh(main, f"{name}_LOD1", mats_used, lod1=True))
         tmp.objects.link(lod0)
         tmp.objects.link(lod1)
-        export_fbx([lod0, lod1], os.path.join(BLD, f"{name}.fbx"))
+        extra = []
+        for g, gobjs in groups.items():
+            eo = bpy.data.objects.new(f"{name}_{g}", joined_mesh(gobjs, f"{name}_{g}", mats_used))
+            tmp.objects.link(eo)
+            extra.append(eo)
+        export_fbx([lod0, lod1] + extra, os.path.join(BLD, f"{name}.fbx"))
+        for eo in extra:
+            me = eo.data
+            bpy.data.objects.remove(eo)
+            bpy.data.meshes.remove(me)
         tris = sum(len(p.vertices) - 2 for p in lod0.data.polygons)
         rows.append(dict(name=name, fbx=f"Buildings/{name}.fbx", tris=tris))
         print(f"[Export] {name}: {tris} tris", flush=True)
@@ -630,6 +648,9 @@ def main():
         terrain=dict(size=I.SIZE, minH=-8.0, maxH=I.MAX_H, res=I.RES, raw="island_heightmap_1025.raw",
                      splat=["island_splat0.png", "island_splat1.png"], layers=layers),
         spawn=dict(pos=[44.0, -262.0, pb + 0.05], yaw=0.0),
+        room304={k: [round(v[0] + 40.0, 3), round(v[1] - 300.0, 3), round(v[2] + hb, 3)]
+                 for k, v in IA.room304_markers().items()},
+        pool=[40.0, -255.0, pb],
         zones={k: list(v) for k, v in I.Z.items()},
         note="Blender coordinates (x east, y north, z up). Unity = (x, z, y).",
     )

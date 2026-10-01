@@ -361,7 +361,7 @@ namespace RexMagnum.EditorTools
         /// <summary>Rex + camera rig + FP arms + weapons + blob spawner + test HUD at a position.
         /// pickupRow: where the row of weapon pickups starts (y is the ground height).</summary>
         public static GameObject AddPlayer(GameObject rexPrefab, AnimatorController controller, Vector3 pos, float yaw,
-                                           Vector3 pickupRow, float farClip)
+                                           Vector3? pickupRow, float farClip)
         {
             // Rex
             var rex = (GameObject)PrefabUtility.InstantiatePrefab(rexPrefab);
@@ -417,10 +417,11 @@ namespace RexMagnum.EditorTools
                 ik.rig = rig;
             }
             int slot = 0;
+            if (pickupRow.HasValue)
             foreach (var kv in wprefabs.pickups)
             {
                 var p = (GameObject)PrefabUtility.InstantiatePrefab(kv.Value);
-                p.transform.position = pickupRow + new Vector3(slot * 1.6f, 0f, 0f);
+                p.transform.position = pickupRow.Value + new Vector3(slot * 1.6f, 0f, 0f);
                 slot++;
             }
 

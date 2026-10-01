@@ -676,13 +676,13 @@ def uv_plane(k, corners, mat, base):
     return k._ob(base, bm, mat)
 
 
-def bottle(k, x, y, z, mat, lying=0.0, rot=0.0):
+def bottle(k, x, y, z, mat, lying=0.0, rot=0.0, base="Bottle"):
     """Brown long-neck beer bottle (0.23 m), standing or lying on its side."""
     parts = [((0, 0, 0), (0, 0, 0.15), 0.033, 0.033), ((0, 0, 0.15), (0, 0, 0.19), 0.033, 0.013),
              ((0, 0, 0.19), (0, 0, 0.235), 0.013, 0.014)]
     obs = []
     for a, b, r0, r1 in parts:
-        obs.append(k.cyl(a, b, r0, mat, segs=14, r1=r1, base="Bottle"))
+        obs.append(k.cyl(a, b, r0, mat, segs=14, r1=r1, base=base))
     for o in obs:
         o.rotation_euler = (0, lying, rot)
         o.location = (x, y, z + (0.033 if lying else 0))
@@ -726,9 +726,9 @@ def room304(m):
     for x in (dx0 - 0.06, dx1):
         k.box((x, yb, z0), (x + 0.06, yb + 0.06, z0 + 2.16), m["trim"], "DoorFrame")
     k.box((dx0 - 0.06, yb, z0 + 2.1), (dx1 + 0.06, yb + 0.06, z0 + 2.16), m["trim"], "DoorFrame")
-    k.box((dx0 + 0.01, yb + 0.02, z0 + 0.01), (dx1 - 0.01, yb + 0.06, z0 + 2.09), door, "EntryDoor")
-    k.cyl((dx1 - 0.12, yb + 0.06, z0 + 1.0), (dx1 - 0.12, yb + 0.12, z0 + 1.0), 0.025, m["alu"], base="DoorKnob")
-    k.box((dx0 + 0.2, yb + 0.061, z0 + 1.3), (dx0 + 0.45, yb + 0.07, z0 + 1.45), m["sign_board"], "DoNotDisturb")
+    k.box((dx0 + 0.01, yb + 0.02, z0 + 0.01), (dx1 - 0.01, yb + 0.06, z0 + 2.09), door, "Door_Slab")
+    k.cyl((dx1 - 0.12, yb + 0.06, z0 + 1.0), (dx1 - 0.12, yb + 0.12, z0 + 1.0), 0.025, m["alu"], base="Door_Knob")
+    k.box((dx0 + 0.2, yb + 0.061, z0 + 1.3), (dx0 + 0.45, yb + 0.07, z0 + 1.45), m["sign_board"], "Door_Sign")
     for yy in (yb + 0.02, yw - 0.02):                    # skirting boards
         k.box((xa, min(yy, yy + 0.02), z0), (xb, max(yy, yy + 0.02) + 0.0, z0 + 0.1), m["trim"], "Skirting")
 
@@ -798,7 +798,8 @@ def room304(m):
         bottle(k, tx_ + math.cos(a) * 0.25, ty_ + math.sin(a) * 0.25, z0 + 0.75, brown)
     for i in range(9):                                   # empties on the floor (some lying down)
         x, y = rng.uniform(xa + 0.8, xb - 2.4), rng.uniform(4.6, 9.8)
-        bottle(k, x, y, z0 + 0.02, brown, lying=(math.pi / 2 if rng.random() < 0.6 else 0.0), rot=rng.uniform(0, 6.3))
+        bottle(k, x, y, z0 + 0.02, brown, lying=(math.pi / 2 if rng.random() < 0.6 else 0.0), rot=rng.uniform(0, 6.3),
+               base=f"FloorBottle{i}x")          # separate physics props in Unity (kickable)
     k.box((-24.0, 8.0, z0 + 0.02), (-23.6, 8.4, z0 + 0.07), pizza, "PizzaBox")
     pz = k.box((-24.3, 8.5, z0 + 0.02), (-23.9, 8.9, z0 + 0.06), pizza, "PizzaBox")
     pz.rotation_euler = (0, 0, 0.4)
@@ -806,6 +807,19 @@ def room304(m):
     sh.rotation_euler = (0, 0, -0.3)
     k.box((xa + 0.6, 4.4, z0), (xa + 1.1, 4.9, z0 + 0.85), principled("A_Fridge", (0.85, 0.85, 0.83), 0.3), "MiniFridge")
     return k.c
+
+
+def room304_markers():
+    """Gameplay points in hotel-local coordinates (Blender axes), used by the Unity builder."""
+    F, bay = 3.6, 6.0
+    z0 = 2 * F + 0.35
+    xa, xb = -45 + ROOM304_BAY * bay + 0.35, -45 + (ROOM304_BAY + 1) * bay - 0.35
+    return dict(
+        doorHinge=(-23.7, 1.64, z0), bedLie=(xb - 1.15, 6.25, z0 + 0.6), wake=(-24.0, 6.3, z0 + 0.03),
+        fullBottle=(-25.3, 9.6, z0 + 0.76), towel=(-23.0, 12.55, z0 + 0.6), closetMirror=(-22.32, 2.3, z0 + 1.15),
+        bathMirror=(xa + 0.03, 3.0, z0 + 1.57), tv=(xa + 0.6, 6.25, z0 + 1.2), lamp1=(xb - 0.3, 4.9, z0 + 1.0),
+        lamp2=(xb - 0.3, 7.6, z0 + 1.0), ceiling=(-24.0, 6.3, z0 + 3.1), balcony=(-23.1, 12.0, z0 - 0.3),
+    )
 
 
 def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
