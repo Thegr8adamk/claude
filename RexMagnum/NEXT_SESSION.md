@@ -19,4 +19,4 @@ Brief: `RexMagnum/CLAUDE.md`. Status: `RexMagnum/README.md`. Progress log + pict
 All 8 build steps exist (Rex, blobs, weapons, island, room 304 + first playable, all zones incl. hotel interiors,
 19 guests + outfit copies, golf + cart, day/night, blob factory, cave tunnels, King Glorp + ending, accomplishments,
 album, pause menu, settings, keyboard/controller/touch remap, save). Nothing has run in real Unity yet.
-An hourly routine "Rex Magnum hourly build" fires into the OLD session; ask the owner if it should be moved or stopped.
+The hourly routine "Rex Magnum hourly build" is paused (owner request). Ask before turning it on again.
