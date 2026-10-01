@@ -1,0 +1,381 @@
+{
+ "materials": [
+  {
+   "name": "W_BrownGlass",
+   "baseMap": "",
+   "color": [
+    0.25,
+    0.09000000357627869,
+    0.019999999552965164
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.9700000006705523,
+   "transparent": true,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_BottleLabel",
+   "baseMap": "bottle_label.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.44999998807907104,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_BottleCap",
+   "baseMap": "",
+   "color": [
+    0.75,
+    0.7200000286102295,
+    0.6499999761581421
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.75,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Beer",
+   "baseMap": "",
+   "color": [
+    0.8500000238418579,
+    0.44999998807907104,
+    0.05000000074505806
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.9499999992549419,
+   "transparent": true,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Towel",
+   "baseMap": "towel_stripes.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.050000011920928955,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": true
+  },
+  {
+   "name": "W_TowelFringe",
+   "baseMap": "",
+   "color": [
+    0.949999988079071,
+    0.9399999976158142,
+    0.8999999761581421
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.050000011920928955,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": true
+  },
+  {
+   "name": "W_Steel",
+   "baseMap": "",
+   "color": [
+    0.8199999928474426,
+    0.8199999928474426,
+    0.800000011920929
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.8199999928474426,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_DarkWood",
+   "baseMap": "wood_dark.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.6500000059604645,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Chrome",
+   "baseMap": "",
+   "color": [
+    0.8999999761581421,
+    0.8999999761581421,
+    0.9200000166893005
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.9400000013411045,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_GripRubber",
+   "baseMap": "",
+   "color": [
+    0.029999999329447746,
+    0.029999999329447746,
+    0.03500000014901161
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.25,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_ClubHead",
+   "baseMap": "",
+   "color": [
+    0.699999988079071,
+    0.699999988079071,
+    0.7200000286102295
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.7800000011920929,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_FrozenFish",
+   "baseMap": "fish.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.2,
+   "smoothness": 0.85,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_FishEye",
+   "baseMap": "",
+   "color": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.019999999552965164
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.9499999992549419,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_PistolWood",
+   "baseMap": "wood_light.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.6500000059604645,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_DarkSteel",
+   "baseMap": "",
+   "color": [
+    0.05000000074505806,
+    0.05000000074505806,
+    0.054999999701976776
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.6500000059604645,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_HarpoonYellow",
+   "baseMap": "",
+   "color": [
+    1.0,
+    0.7200000286102295,
+    0.019999999552965164
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.699999988079071,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_RubberBlack",
+   "baseMap": "",
+   "color": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.019999999552965164
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.3999999761581421,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Rope",
+   "baseMap": "",
+   "color": [
+    0.8500000238418579,
+    0.8199999928474426,
+    0.699999988079071
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.10000002384185791,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_SniperStock",
+   "baseMap": "",
+   "color": [
+    0.11999999731779099,
+    0.12999999523162842,
+    0.10000000149011612
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.3999999761581421,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_ScopeLens",
+   "baseMap": "",
+   "color": [
+    0.019999999552965164,
+    0.03999999910593033,
+    0.07999999821186066
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.9800000004470348,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Coconut",
+   "baseMap": "coconut.png",
+   "color": [
+    0.800000011920929,
+    0.800000011920929,
+    0.800000011920929
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.10000002384185791,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_CoconutEye",
+   "baseMap": "",
+   "color": [
+    0.029999999329447746,
+    0.014999999664723873,
+    0.009999999776482582
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.19999998807907104,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Spark",
+   "baseMap": "",
+   "color": [
+    1.0,
+    0.6000000238418579,
+    0.10000000149011612
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.699999988079071,
+   "transparent": false,
+   "emission": 30.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Fuse",
+   "baseMap": "",
+   "color": [
+    0.6000000238418579,
+    0.550000011920929,
+    0.44999998807907104
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.10000002384185791,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_AmmoBox",
+   "baseMap": "",
+   "color": [
+    0.6499999761581421,
+    0.11999999731779099,
+    0.07999999821186066
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.30000001192092896,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  },
+  {
+   "name": "W_Brass",
+   "baseMap": "",
+   "color": [
+    0.8500000238418579,
+    0.6200000047683716,
+    0.25
+   ],
+   "metallic": 1.0,
+   "smoothness": 0.75,
+   "transparent": false,
+   "emission": 0.0,
+   "twoSided": false
+  }
+ ],
+ "weapons": [
+  "Weapon_Bottle",
+  "Weapon_BottleBroken",
+  "Weapon_Towel",
+  "Weapon_Knife",
+  "Weapon_GolfClub",
+  "Weapon_Swordfish",
+  "Weapon_Pistol",
+  "Weapon_HarpoonGun",
+  "Weapon_Sniper",
+  "Weapon_Coconut",
+  "Pickup_Ammo"
+ ]
+}

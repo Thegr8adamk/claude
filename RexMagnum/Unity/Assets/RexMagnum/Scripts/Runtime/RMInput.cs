@@ -64,6 +64,12 @@ namespace RexMagnum
         public static bool Hands => (K != null && K.hKey.wasPressedThisFrame) || (G != null && G.dpad.down.wasPressedThisFrame);
         public static bool Use => (K != null && K.fKey.wasPressedThisFrame) || (G != null && G.buttonWest.wasPressedThisFrame);
         public static bool Pause => (K != null && K.escapeKey.wasPressedThisFrame) || (G != null && G.startButton.wasPressedThisFrame);
+        public static bool NextWeapon => (K != null && K.eKey.wasPressedThisFrame) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
+                                         (G != null && G.rightShoulder.wasPressedThisFrame);
+        public static bool PrevWeapon => (K != null && K.qKey.wasPressedThisFrame) || (M != null && M.scroll.ReadValue().y > 0.1f) ||
+                                         (G != null && G.leftShoulder.wasPressedThisFrame);
+        public static bool AnyKey => (K != null && K.anyKey.wasPressedThisFrame) || AnyClick ||
+                                     (G != null && G.buttonSouth.wasPressedThisFrame);
         public static bool AnyClick => M != null && M.leftButton.wasPressedThisFrame;
     }
 }

@@ -35,7 +35,20 @@ namespace RexMagnum
         public float attackInterval = 2.5f;
         public float damage = 8f;
 
+        public DeathStyle deathStyle = DeathStyle.Pop;
+        [HideInInspector] public Vector3 flingDirection;
         public bool IsStunned => Time.time < stunUntil;
+        static int alive;
+        public static int AliveCount() => alive;
+        void OnEnable() => alive++;
+        void OnDisable() => alive--;
+
+        /// <summary>Harpoon: pinned (stuck in place, flailing) for a few seconds.</summary>
+        public void Pin(float seconds)
+        {
+            stunUntil = Time.time + seconds;
+            Play("Pinned");
+        }
         public bool IsAngry => Time.time < angryUntil;
 
         NavMeshAgent agent;
@@ -202,7 +215,46 @@ namespace RexMagnum
 
         IEnumerator PopRoutine()
         {
-            yield return new WaitForSeconds(0.4f);
+            var t = transform;
+            switch (deathStyle)
+            {
+                case DeathStyle.Leak:          // knife: leaks and shrinks like a balloon
+                    if (animator != null) animator.CrossFadeInFixedTime("Hit", 0.05f);
+                    for (float k = 0; k < 1.2f; k += Time.deltaTime)
+                    {
+                        t.localScale *= 1f - Time.deltaTime * 0.9f;
+                        if (Random.value < 0.3f) SlimePuddle.Spawn(t.position, BaseColor(), 0.25f);
+                        t.Rotate(0, 600 * Time.deltaTime, 0);
+                        yield return null;
+                    }
+                    break;
+                case DeathStyle.Freeze:        // swordfish: freezes (icy white), then shatters
+                    if (jellyRenderer != null)
+                    {
+                        jellyRenderer.GetPropertyBlock(mpb);
+                        mpb.SetColor("_BaseColor", new Color(0.85f, 0.95f, 1f, 0.9f));
+                        jellyRenderer.SetPropertyBlock(mpb);
+                    }
+                    if (animator) animator.speed = 0f;
+                    yield return new WaitForSeconds(0.6f);
+                    SlimeFX.Splat(t.position + Vector3.up * HeightOf() * 0.5f, Vector3.up, new Color(0.85f, 0.95f, 1f), 24);
+                    Destroy(gameObject);
+                    yield break;
+                case DeathStyle.Fling:         // golf: flies away (into the pool / sea), then pops
+                    var rb = gameObject.AddComponent<Rigidbody>();
+                    rb.mass = 30f;
+                    rb.AddForce(flingDirection.normalized * 14f, ForceMode.VelocityChange);
+                    rb.AddTorque(Random.onUnitSphere * 8f, ForceMode.VelocityChange);
+                    yield return new WaitForSeconds(1.6f);
+                    break;
+                case DeathStyle.Pinned:
+                    Play("Pinned");
+                    yield return new WaitForSeconds(1.5f);
+                    break;
+                default:
+                    yield return new WaitForSeconds(0.4f);
+                    break;
+            }
             SlimeFX.Burst(transform.position + Vector3.up * HeightOf() * 0.5f, BaseColor(), HeightOf());
             if (kind == Kind.Bouncer && !isHalf && splitPrefab != null)
             {

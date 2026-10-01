@@ -24,6 +24,7 @@ namespace RexMagnum
         public Camera cam;
         public GameObject fpArms;           // first-person arms model (child of the camera)
         public Renderer[] bodyRenderers;    // hidden (shadow only) in first person
+        public RexWeapons weapons;          // sniper scope forces a first-person scope view
 
         [Header("Third person")]
         public float distance = 2.6f;
@@ -49,6 +50,7 @@ namespace RexMagnum
         public bool InputEnabled { get; set; } = true;
 
         float side = 1f, currentDist, blend;
+        bool wasScoped;
         Transform head;
         Vector3 armsHeadLocal;
         readonly List<(Renderer r, ShadowCastingMode m)> saved = new List<(Renderer, ShadowCastingMode)>();
@@ -101,7 +103,17 @@ namespace RexMagnum
                 Pitch = Mathf.Clamp(Pitch - look.y, -75f, 80f);
             }
             IsAiming = InputEnabled && RMInput.Aim;
-            bool fp = Mode == CameraMode.FirstPerson;
+            bool scoped = weapons != null && weapons.Scoped;
+            bool fp = Mode == CameraMode.FirstPerson || scoped;
+            if (scoped != wasScoped)
+            {
+                // brief: the sniper scope always uses the first-person view, then goes back
+                foreach (var (r, mode) in saved)
+                    if (r != null) r.shadowCastingMode = fp ? ShadowCastingMode.ShadowsOnly : mode;
+                if (fpArms != null) fpArms.SetActive(fp && !scoped);
+                wasScoped = scoped;
+                if (!scoped) SetMode(Mode);
+            }
             blend = Mathf.MoveTowards(blend, fp ? 1f : 0f, dt * 5f);
 
             Quaternion rot = Quaternion.Euler(Pitch, Yaw, 0f);
@@ -123,7 +135,7 @@ namespace RexMagnum
 
             float b = blend * blend * (3f - 2f * blend);
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);
-            cam.fieldOfView = Mathf.Lerp(Mathf.Lerp(fov, aimFov, IsAiming ? 1f : 0f), fpFov, b);
+            cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, IsAiming ? 1f : 0f), fpFov, b);
 
             if (fpArms != null && fpArms.activeSelf)
             {

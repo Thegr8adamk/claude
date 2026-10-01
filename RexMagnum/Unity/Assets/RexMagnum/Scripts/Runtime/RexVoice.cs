@@ -22,6 +22,17 @@ namespace RexMagnum
             { "Hurt", new[] { "Not the face! It's all I've got left!", "I've been hit harder by critics.", "Ow. My everything." } },
             { "Death", new[] { "Tell my agent... he's fired.", "Finally. Publicity.", "Bury me... in something slimming." } },
             { "Respawn", new[] { "Huh. Still here. Damn.", "Take two." } },
+            { "Bottle", new[] { "This round's on you.", "Last call, snot-rocket.", "Bottle service.", "I don't usually waste a beer on the first date.", "Damn. That one was half full." } },
+            { "BottleBroken", new[] { "Last call, snot-rocket.", "Bottle service." } },
+            { "Towel", new[] { "Towel service, jackass.", "Snap out of it.", "Locker room rules, baby.", "I've been whipped before. I paid extra.", "Wet T-shirt contest is over. You lost." } },
+            { "Knife", new[] { "Well done.", "Stick a fork in you. All I got is the knife.", "Relax. It's just the tip.", "You're leaking. Happens to me too. It's an age thing.", "Medium rare. Mostly rare. Mostly goo." } },
+            { "GolfClub", new[] { "Fore... play.", "Hole in one. You're the hole.", "Nice balls. Oh wait. You don't have any.", "I never play fair. Or on the fairway.", "That's a bogey. I don't know what a bogey is." } },
+            { "Swordfish", new[] { "Catch of the day.", "Sleep with the fishes. Or get beaten with one. Your call.", "Biggest thing I've swung in years. Second biggest.", "Frozen stiff. Haven't said that since '92.", "Something smells fishy. It's both of us." } },
+            { "Pistol", new[] { "Checkout time.", "Chrome, baby. Like my new hip.", "I did my own stunts. You did your last.", "Premature? No. Right on time. For once.", "Bang. That's the noise it makes. I checked." } },
+            { "Harpoon", new[] { "Stick around.", "Shaft happens.", "Get the point?", "First thing I've nailed in this hotel.", "Hang in there. No, really. You're stuck." } },
+            { "Sniper", new[] { "That's a wrap.", "One take. Like my wedding nights. All four.", "Long-distance relationship. Over.", "Head shot. I used to have one of those. Eight by ten. Glossy.", "I can hit anything from up here. Except rock bottom. Already did." } },
+            { "Coconut", new[] { "Go nuts.", "Drinks are on me. And on you. And on the wall.", "Blow me. I'm talking to the coconut.", "Fire in the hole. That's what she said. Then she took the house." } },
+            { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };
 

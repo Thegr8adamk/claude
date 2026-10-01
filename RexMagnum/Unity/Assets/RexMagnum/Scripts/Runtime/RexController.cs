@@ -63,6 +63,9 @@ namespace RexMagnum
 
         public void Revive() => lockedUntil = 0f;
 
+        float faceAimUntil;
+        public void FaceAimFor(float seconds) => faceAimUntil = Mathf.Max(faceAimUntil, Time.time + seconds);
+
         CharacterController cc;
         Vector3 velocity;
         float planarSpeed;
@@ -100,7 +103,7 @@ namespace RexMagnum
 
             // Turning
             bool fp = cameraRig != null && cameraRig.Mode == RexCameraRig.CameraMode.FirstPerson;
-            if (fp || FaceAim || (cameraRig != null && cameraRig.IsAiming))
+            if (fp || FaceAim || Time.time < faceAimUntil || (cameraRig != null && cameraRig.IsAiming))
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, yawRot, (fp ? 5000f : turnSpeed) * dt);
             else if (planar.sqrMagnitude > 0.05f)
                 transform.rotation = Quaternion.RotateTowards(transform.rotation,

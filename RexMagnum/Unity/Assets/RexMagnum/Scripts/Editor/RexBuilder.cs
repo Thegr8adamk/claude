@@ -213,6 +213,9 @@ namespace RexMagnum.EditorTools
             string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
+            var layers = ac.layers;
+            layers[0].iKPass = true;          // aim the gun arm with IK
+            ac.layers = layers;
             var sm = ac.layers[0].stateMachine;
             var loco = ac.CreateBlendTreeInController("Locomotion", out BlendTree tree, 0);
             tree.blendType = BlendTreeType.Simple1D;
@@ -372,6 +375,30 @@ namespace RexMagnum.EditorTools
             {
                 var sp = game.AddComponent<BlobSpawner>();
                 sp.prefabs = blobs.Where(kv => kv.Key != "KingGlorp").Select(kv => kv.Value).ToArray();
+            }
+
+            // Weapons: Rex's inventory + one pickup of each weapon and ammo in a row
+            var wprefabs = WeaponBuilder.Build();
+            var rw = rex.AddComponent<RexWeapons>();
+            rw.controller = ctrl;
+            rw.cameraRig = rig;
+            rw.prefabs = new GameObject[11];
+            foreach (var kv in wprefabs.held) rw.prefabs[(int)kv.Key] = kv.Value;
+            rig.weapons = rw;
+            rex.GetComponent<RexActions>().weapons = rw;
+            foreach (var an in new[] { ctrl.bodyAnimator, ctrl.armsAnimator })
+            {
+                if (an == null) continue;
+                var ik = an.gameObject.AddComponent<RexAimIK>();
+                ik.weapons = rw;
+                ik.rig = rig;
+            }
+            int slot = 0;
+            foreach (var kv in wprefabs.pickups)
+            {
+                var p = (GameObject)PrefabUtility.InstantiatePrefab(kv.Value);
+                p.transform.position = new Vector3(-8f + slot * 1.6f, 0f, -6f);
+                slot++;
             }
 
             var hudGo = new GameObject("TestHUD");

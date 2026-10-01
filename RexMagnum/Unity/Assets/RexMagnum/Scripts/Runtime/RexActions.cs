@@ -11,6 +11,7 @@ namespace RexMagnum
     {
         public RexController controller;
         public RexFace face;
+        public RexWeapons weapons;
         public float holdTime = 0.3f;
 
         static readonly int Jab = Animator.StringToHash("Jab");
@@ -22,7 +23,8 @@ namespace RexMagnum
         float pressTime = -1f, busyUntil, faceAimUntil;
         public float jabDamage = 12f, heavyDamage = 30f;
 
-        public string ActionWord => controller.HandsDown ? "Talk" : "Punch";
+        public string ActionWord => weapons != null ? weapons.ActionWord : controller.HandsDown ? "Talk" : "Punch";
+        public Color ActionColor => weapons != null ? weapons.ActionColor : new Color(1f, 0.6f, 0.2f);
 
         void Update()
         {
@@ -36,7 +38,7 @@ namespace RexMagnum
                 if (controller.armsAnimator) controller.armsAnimator.SetBool(HandsDownHash, controller.HandsDown);
             }
 
-            if (!controller.HandsDown)
+            if (!controller.HandsDown && weapons == null)
             {
                 if (RMInput.ActionDown) pressTime = Time.time;
                 if (pressTime >= 0f && !busy)
