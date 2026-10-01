@@ -122,6 +122,7 @@ namespace RexMagnum.EditorTools
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
                 Golf(File.ReadAllText(json), pool);
+                Factory(File.ReadAllText(json));
                 if (data.hotel != null && data.hotel.elevatorFloors != null)
                 {
                     Hotel(data.hotel);
@@ -371,7 +372,7 @@ namespace RexMagnum.EditorTools
             var model = (GameObject)PrefabUtility.InstantiatePrefab(asset, root.transform);
             ApplyFix(model.transform);
             var rs = model.GetComponentsInChildren<MeshRenderer>();
-            var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();
+            var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();       // extras (_Door, _Bottle, _Core) stay outside the LODs
             var lod1 = rs.Where(r => r.name.EndsWith("_LOD1")).ToArray();
             var lg = root.AddComponent<LODGroup>();
             lg.SetLODs(lod1.Length > 0
@@ -645,6 +646,55 @@ namespace RexMagnum.EditorTools
             rc.SetParent(root, false);
             rc.position = resortSpawn + new Vector3(-40f, 0.1f, -14f);
             rc.gameObject.AddComponent<ChargeStation>();
+        }
+
+        static void Factory(string json)
+        {
+            int f = json.IndexOf("\"factory\"", StringComparison.Ordinal);
+            if (f < 0) return;
+            string fac = json.Substring(f, Math.Min(600, json.Length - f));
+            var core = Pts(fac, "core");
+            if (core.Count == 0) return;
+            var root = new GameObject("Factory_Gameplay").transform;
+            var go = new GameObject("FactoryCore");
+            go.transform.SetParent(root, false);
+            go.transform.position = core[0];
+            var col = go.AddComponent<SphereCollider>();
+            col.radius = 2.0f;
+            go.AddComponent<Health>();
+            var fc = go.AddComponent<FactoryCore>();
+            // the glowing core sphere is its own object in Ruins.fbx (Ruins_Core): it pulses and vanishes when destroyed
+            var ruins = GameObject.Find("Island/Ruins");
+            if (ruins != null)
+            {
+                PrefabUtility.UnpackPrefabInstance(ruins, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                fc.coreRenderer = ruins.GetComponentsInChildren<MeshRenderer>(true).FirstOrDefault(r => r.name.EndsWith("_Core"));
+            }
+            var l = new GameObject("CoreLight").AddComponent<Light>();
+            l.transform.SetParent(go.transform, false);
+            l.type = LightType.Point; l.color = new Color(0.4f, 1f, 0.3f); l.range = 18f; l.intensity = 4f;
+            fc.coreLight = l;
+            var hall = new List<Light>();
+            foreach (var off in new[] { new Vector3(-9, 4, -5), new Vector3(9, 4, -5), new Vector3(-9, 4, 4), new Vector3(9, 4, 4) })
+            {
+                var hl = new GameObject("HallLight").AddComponent<Light>();
+                hl.transform.SetParent(root, false);
+                hl.transform.position = core[0] + off;
+                hl.type = LightType.Point; hl.color = new Color(0.35f, 1f, 0.3f); hl.range = 10f; hl.intensity = 1.5f;
+                hall.Add(hl);
+            }
+            fc.hallLights = hall.ToArray();
+            // a blob spawner inside the factory (eggs hatching) until the core is destroyed
+            var spawnerSrc = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+            if (spawnerSrc != null)
+            {
+                var sp = UnityEngine.Object.Instantiate(spawnerSrc.gameObject, root).GetComponent<BlobSpawner>();
+                foreach (var c in sp.GetComponents<Component>())
+                    if (!(c is Transform) && !(c is BlobSpawner)) UnityEngine.Object.DestroyImmediate(c);
+                sp.transform.position = core[0] + new Vector3(0, -3f, -6f);
+                sp.radius = 6f;
+                sp.maxAlive = 4;
+            }
         }
 
         static GameObject CartPrefab(GameObject fbx)

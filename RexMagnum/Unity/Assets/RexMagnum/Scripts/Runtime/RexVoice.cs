@@ -40,6 +40,7 @@ namespace RexMagnum
             { "CartDead", new[] { "I do my own stunts. I don't do my own walking.", "Dead battery. We have so much in common." } },
             { "CartPush", new[] { "Pushing. Great. My heart doctor will hear about this. If I had one." } },
             { "Night", new[] { "I can see fine. Who moved the wall?", "Sunglasses at night. It's a look. It's also a problem." } },
+            { "Factory", new[] { "I've shut down bigger productions. By showing up drunk.", "Whoops. Was that important?" } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };

@@ -1547,6 +1547,55 @@ def pier(m, length=40.0):
 
 # ------------------------------------------------------------------ ruins
 
+FACTORY_HALL = (13.0, -6.0, 13.0, 7.0)    # half width x, front y, back y, height (ruins-local)
+
+
+def blob_factory(k, m):
+    """Inside the temple: alien base / blob factory. Glowing floor seams, slime vats, egg pods, pipes,
+    a conveyor to the entrance, and the core (the target: destroy it to stop the factory)."""
+    HX, HY0, HY1, HZ = FACTORY_HALL
+    alien = textured("A_AlienFloor", "tiles", (0.05, 0.07, 0.06), (0.08, 0.1, 0.08), 0.3, 0.5, 0.2, metal=0.8)
+    k.box((-HX, HY0, 0.0), (HX, HY1, 0.05), alien, "FactoryFloor")
+    for x in range(-12, 13, 4):
+        k.box((x - 0.04, HY0, 0.05), (x + 0.04, HY1, 0.07), m["slimeglow"], "FloorSeam")
+    vat_glass = principled("A_VatGlass", (0.5, 0.9, 0.6), 0.05, **{"Transmission Weight": 0.85})
+    core_c = (0.0, 5.0)
+    for j, (vx, vy) in enumerate(((-9, 0), (-9, 9), (9, 0), (9, 9), (-4, 11), (4, 11))):
+        k.disc((vx, vy, 0.05), 1.4, 0.4, m["darkmetal"], base="VatBase")
+        k.disc((vx, vy, 0.45), 1.2, 2.8, vat_glass, base="Vat")
+        k.disc((vx, vy, 0.5), 1.1, 2.2, m["slimewater"], base="VatSlime")
+        k.disc((vx, vy, 3.25), 1.3, 0.25, m["darkmetal"], base="VatLid")
+        k.tube([(vx, vy, 3.5), (vx, vy, 5.5), (vx * 0.5 + core_c[0] * 0.5, vy * 0.5 + core_c[1] * 0.5, 6.2),
+                (core_c[0], core_c[1], 5.6)], 0.18, m["darkmetal"], base="VatPipe")
+    egg = principled("A_BlobEgg", (0.3, 0.9, 0.25), 0.15, **{"Transmission Weight": 0.5,
+                     "Emission Color": (0.3, 1.0, 0.2, 1), "Emission Strength": 0.7})
+    for j in range(24):
+        ex, ey = -11 + (j % 6) * 1.2, -4.5 + (j // 6) * 1.1
+        k.rock((ex, ey, 0.3), (0.22, 0.22, 0.3), egg, seed=600 + j, base="Egg", detail=2)
+        k.rock((-ex, ey, 0.3), (0.22, 0.22, 0.3), egg, seed=700 + j, base="Egg", detail=2)
+    k.box((-0.8, HY0 - 0.0, 0.05), (0.8, core_c[1] - 2.5, 0.75), m["darkmetal"], "Conveyor")
+    k.box((-0.7, HY0, 0.75), (0.7, core_c[1] - 2.5, 0.8), m["slimeglow"], "ConveyorBelt")
+    # the core: pedestal, glowing sphere, three rings
+    k.disc((core_c[0], core_c[1], 0.05), 2.6, 0.9, m["darkmetal"], base="CorePedestal")
+    core_mat = principled("A_FactoryCore", (0.4, 1.0, 0.3), 0.1, **{"Emission Color": (0.4, 1.0, 0.25, 1),
+                          "Emission Strength": 18.0})
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=2.0)
+    bmesh.ops.translate(bm, vec=(core_c[0], core_c[1], 3.2), verts=bm.verts)
+    k._ob("FactoryCore", bm, core_mat, smooth=True)
+    for r, tilt in ((2.6, 0.0), (2.8, 1.0), (3.0, -1.0)):
+        pts = [(core_c[0] + math.cos(a) * r, core_c[1] + math.sin(a) * r * math.cos(tilt) * 0 + math.sin(a) * r,
+                3.2 + math.sin(a) * r * math.sin(tilt) * 0.4) for a in [math.tau * t / 40 for t in range(41)]]
+        k.tube(pts, 0.08, m["darkmetal"], segs=8, base="CoreRing")
+    for x in (-HX + 0.5, HX - 0.5):          # wall lights
+        for y in (0.0, 8.0):
+            k.box((x - 0.1, y - 0.6, 4.0), (x + 0.1, y + 0.6, 4.3), m["slimeglow"], "WallGlow")
+
+
+def factory_markers():
+    return dict(core=(0.0, 5.0, 3.2), door=(-9.0, -21.0, 0.0), hall=(0.0, 3.5, 0.2))
+
+
 def ruins(m):
     """Jungle temple: 6 stepped tiers of stone, real stairs, doorway with lintel (blob factory entrance),
     glowing slime pipes, fallen columns, carved heads, vines."""
@@ -1554,9 +1603,21 @@ def ruins(m):
     rng = random.Random(4)
     tier_h = 3.5
     k.box((-21, -23, -8), (21, 21, 0.02), m["stone"], "Foundation", bevel=0.1)
+    HX, HY0, HY1, HZ = FACTORY_HALL
     for i in range(6):
         s = 40 - i * 6
-        k.box((-s / 2, -s / 2, i * tier_h), (s / 2, s / 2, (i + 1) * tier_h), m["stone"], "Tier", bevel=0.12)
+        if i < 2:      # tiers 1-2 are hollow: the blob factory hall is inside (walls around it)
+            a, b, z0, z1 = -s / 2, s / 2, i * tier_h, (i + 1) * tier_h
+            k.box((a, a, z0), (b, HY0, z1), m["stone"], "Tier", bevel=0.12) if i else None
+            if i == 0:     # front wall with the entrance tunnel (x -11..-7)
+                k.box((a, a, z0), (-11, HY0, z1), m["stone"], "Tier", bevel=0.12)
+                k.box((-7, a, z0), (b, HY0, z1), m["stone"], "Tier", bevel=0.12)
+                k.box((-11, a, 4.3), (-7, HY0, z1), m["stone"], "Tier")
+            k.box((a, HY1, z0), (b, b, z1), m["stone"], "Tier", bevel=0.12)
+            k.box((a, HY0, z0), (-HX, HY1, z1), m["stone"], "Tier", bevel=0.12)
+            k.box((HX, HY0, z0), (b, HY1, z1), m["stone"], "Tier", bevel=0.12)
+        else:
+            k.box((-s / 2, -s / 2, i * tier_h), (s / 2, s / 2, (i + 1) * tier_h), m["stone"], "Tier", bevel=0.12)
         # cornice ledge on each tier (rests on the tier top edge)
         k.box((-s / 2 - 0.3, -s / 2 - 0.3, (i + 1) * tier_h - 0.35), (s / 2 + 0.3, s / 2 + 0.3, (i + 1) * tier_h),
               m["stone"], "Ledge", bevel=0.06)
@@ -1568,18 +1629,21 @@ def ruins(m):
     for s_ in range(n):
         z0 = s_ * top / n
         y = -20 + s_ * (20 - 4) / n
-        k.box((-3, y - 0.6, 0), (3, y, z0 + top / n), m["stone"], "Stair")
+        k.box((-3, y - 0.6, FACTORY_HALL[3] if y > FACTORY_HALL[1] - 0.6 else 0), (3, y, z0 + top / n), m["stone"], "Stair")
     for sx in (-1, 1):
         sb = k.boxc((sx * 3.3, -12, top / 2 - 1), (0.6, 18.5, 0.8), m["stone"], base="StairWall")
         sb.rotation_euler = (math.atan2(top, 16), 0, 0)
     # blob factory doorway at ground level (west of the stairs) with lintel + glow
-    k.box((-12, -20.6, 0), (-6, -20.0, 5.5), m["stone"], "DoorFrame")
-    k.box((-11, -20.65, 0), (-7, -20.4, 4.3), m["slimeglow"], "FactoryGlow")
+    k.box((-12, -20.6, 0), (-11, -20.0, 5.5), m["stone"], "DoorFrame")
+    k.box((-7, -20.6, 0), (-6, -20.0, 5.5), m["stone"], "DoorFrame")
+    k.box((-11, -20.6, 4.3), (-7, -20.0, 5.5), m["stone"], "DoorFrame")
+    k.box((-11, -20.0, 0.02), (-7, HY0, 0.06), m["slimeglow"], "TunnelGlowStrip")
+    blob_factory(k, m)
     k.box((-12.5, -20.8, 5.5), (-5.5, -19.8, 6.3), m["stone"], "Lintel", bevel=0.08)
     # slime pipes: from the doorway along the ground to the jungle (clamped, resting on supports)
     for p_ in range(3):
         y = -22 - p_ * 1.0
-        pts = [(-9 + p_ * 0.8, -20.6, 0.6), (-9 + p_ * 0.8, y, 0.6), (-16, y - 2, 0.6), (-21, y - 3.5, -2.5)]
+        pts = [(-12.4 - p_ * 0.7, -20.6, 0.6), (-12.4 - p_ * 0.7, y, 0.6), (-17, y - 2, 0.6), (-21, y - 3.5, -2.5)]
         k.tube(pts, 0.28, m["slimeglow"], segs=12, base="Pipe")
         for j in range(3):
             q = Vector(pts[1]).lerp(Vector(pts[2]), j / 3)

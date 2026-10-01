@@ -464,10 +464,13 @@ def export_assets(mats_used, names=None):
         # interactive parts become their own objects (door, kickable bottles); the rest is joined
         groups = {}
         for o in objs:
-            for key in ("Door_", "FloorBottle"):
+            for key in ("Door_", "FloorBottle", "FactoryCore"):
                 if key in o.name:
-                    g = "Door" if key == "Door_" else o.name.split("FloorBottle")[1].split("x")[0]
-                    groups.setdefault(g if key == "Door_" else f"Bottle{g}", []).append(o)
+                    if key == "FactoryCore":
+                        groups.setdefault("Core", []).append(o)
+                    else:
+                        g = "Door" if key == "Door_" else o.name.split("FloorBottle")[1].split("x")[0]
+                        groups.setdefault(g if key == "Door_" else f"Bottle{g}", []).append(o)
         loose = {o for v in groups.values() for o in v}
         main = [o for o in objs if o not in loose]
         lod0 = bpy.data.objects.new(f"{name}_LOD0", joined_mesh(main, f"{name}_LOD0", mats_used))
@@ -652,6 +655,14 @@ def rebuild_assets(names, res):
         coll = builders[n](m)
         if n in ("Golf", "GolfCart"):
             pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
+        elif n == "Ruins":           # same placement as build_island_v2: on the highest ground under the temple
+            from mathutils import Matrix
+            rz = max(ha(300 + dx, 70 + dy) for dx in (-20, 0, 20) for dy in (-22, 0, 20))
+            T = Matrix.Translation((300, 70, rz))
+            for ob in coll.all_objects:
+                if ob.parent is None:
+                    ob.matrix_world = T @ ob.matrix_world
+            extra["factory"] = {k: [v[0] + 300, v[1] + 70, v[2] + rz] for k, v in IA.factory_markers().items()}
         elif n in ("Hotel", "Room304"):
             from mathutils import Matrix
             T = Matrix.Translation((40, -300, hb))
@@ -669,6 +680,8 @@ def rebuild_assets(names, res):
     have = {r["name"] for r in data["materials"]}
     new_rows = material_rows({n for n in mats_used if n not in have}, res, skip_bake=True)
     data["materials"] += new_rows
+    if "factory" in extra:
+        data["factory"] = extra["factory"]
     if "golf" in extra:
         data["golf"] = {k: (list(v) if isinstance(v, tuple) else [list(p) for p in v]) for k, v in extra["golf"].items()}
     data["room304"] = world_markers(IA.room304_markers(), hb)
