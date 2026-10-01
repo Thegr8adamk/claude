@@ -113,6 +113,11 @@ namespace RexMagnum.EditorTools
                 var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
                 if (spawner != null) { spawner.transform.position = pool; spawner.radius = 18f; spawner.maxAlive = 6; }
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
+                var dn = game.AddComponent<DayNight>();
+                dn.sun = RenderSettings.sun;
+                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                    if (l.type == LightType.Point && l.GetComponent<LightFlicker>() == null && !l.name.StartsWith("Cab"))
+                        dn.nightLights.Add(l);
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);

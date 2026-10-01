@@ -109,7 +109,7 @@ namespace RexMagnum
 
             // Angry: darker color + shake (brief); a little faster
             float angry = IsAngry ? 1f : 0f;
-            agent.speed = speed * (IsAngry ? 1.5f : 1f) * (IsStunned ? 0f : 1f);
+            agent.speed = speed * DayNight.BlobSpeed * (IsAngry ? 1.5f : 1f) * (IsStunned ? 0f : 1f);
             if (jellyRenderer != null)
             {
                 jellyRenderer.GetPropertyBlock(mpb);

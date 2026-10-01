@@ -80,6 +80,12 @@ namespace RexMagnum
             if (Time.time < nextThink) return;
             nextThink = Time.time + 0.4f;
             NearestBlob(out float blobDist);
+            // brief: at night guests lock themselves in (they walk back to their spot and stay out of sight)
+            if (!security && DayNight.Night > 0.6f && state != State.Rescued && state != State.Panic)
+            {
+                if (Vector3.Distance(transform.position, home) > 1f) agent.SetDestination(home);
+                return;
+            }
             switch (state)
             {
                 case State.Idle:
