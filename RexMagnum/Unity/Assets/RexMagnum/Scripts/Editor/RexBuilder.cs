@@ -86,27 +86,33 @@ namespace RexMagnum.EditorTools
 
         static void ConfigureTextures()
         {
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { Tex }))
+            AssetDatabase.StartAssetEditing();     // one import pass for all files (much faster)
+            try
             {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                var ti = (TextureImporter)AssetImporter.GetAtPath(p);
-                string n = Path.GetFileNameWithoutExtension(p);
-                bool normal = n.EndsWith("_N"), mask = n.EndsWith("_MS");
-                ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
-                ti.sRGBTexture = !(normal || mask);
-                ti.alphaSource = mask || n.Contains("HairCard") ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
-                ti.alphaIsTransparency = n.Contains("HairCard");
-                ti.mipmapEnabled = true;
-                ti.anisoLevel = 4;
-                ti.maxTextureSize = 2048;   // brief: 2K on PC
-                ti.textureCompression = TextureImporterCompression.CompressedHQ;
-                var android = ti.GetPlatformTextureSettings("Android");
-                android.overridden = true;
-                android.maxTextureSize = 1024;   // brief: 1K on phones
-                android.format = TextureImporterFormat.ASTC_6x6;
-                ti.SetPlatformTextureSettings(android);
-                ti.SaveAndReimport();
+                foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { Tex }))
+                {
+                    string p = AssetDatabase.GUIDToAssetPath(guid);
+                    var ti = (TextureImporter)AssetImporter.GetAtPath(p);
+                    string n = Path.GetFileNameWithoutExtension(p);
+                    bool normal = n.EndsWith("_N"), mask = n.EndsWith("_MS");
+                    ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                    ti.sRGBTexture = !(normal || mask);
+                    ti.alphaSource = mask || n.Contains("HairCard") ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
+                    ti.alphaIsTransparency = n.Contains("HairCard");
+                    ti.mipmapEnabled = true;
+                    ti.anisoLevel = 4;
+                    ti.maxTextureSize = 2048;   // brief: 2K on PC
+                    ti.textureCompression = TextureImporterCompression.CompressedHQ;
+                    var android = ti.GetPlatformTextureSettings("Android");
+                    android.overridden = true;
+                    android.maxTextureSize = 1024;   // brief: 1K on phones
+                    android.format = TextureImporterFormat.ASTC_6x6;
+                    ti.SetPlatformTextureSettings(android);
+                    ti.SaveAndReimport();
+                }
+            
             }
+            finally { AssetDatabase.StopAssetEditing(); }
         }
 
         static Dictionary<string, Material> BuildMaterials()
@@ -266,7 +272,7 @@ namespace RexMagnum.EditorTools
         {
             var asset = AssetDatabase.LoadAssetAtPath<GameObject>(fbx);
             var go = (GameObject)PrefabUtility.InstantiatePrefab(asset, parent);
-            var anim = go.GetComponent<Animator>() ?? go.AddComponent<Animator>();
+            if (!go.TryGetComponent<Animator>(out var anim)) anim = go.AddComponent<Animator>();
             anim.runtimeAnimatorController = controller;
             anim.applyRootMotion = false;
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;

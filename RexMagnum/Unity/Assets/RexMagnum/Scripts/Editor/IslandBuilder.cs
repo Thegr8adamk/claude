@@ -110,15 +110,12 @@ namespace RexMagnum.EditorTools
                 var rex = RexBuilder.AddPlayer(rexPrefab, controller, spawn, hasRoom ? 270f : data.spawn.yaw + 180f, null, 2500f);
                 var nav = UnityEngine.Object.FindFirstObjectByType<RuntimeNavMesh>();
                 Vector3 pool = data.pool != null && data.pool.Length == 3 ? U(data.pool) : spawn;
-                if (nav != null) { nav.center = pool; nav.size = new Vector3(170f, 60f, 170f); }
+                if (nav != null) { nav.center = pool + new Vector3(0f, 0f, -30f); nav.size = new Vector3(200f, 60f, 240f); }
                 var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
                 if (spawner != null) { spawner.transform.position = pool; spawner.radius = 18f; spawner.maxAlive = 6; }
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
                 var dn = game.AddComponent<DayNight>();
                 dn.sun = RenderSettings.sun;
-                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
-                    if (l.type == LightType.Point && l.GetComponent<LightFlicker>() == null && !l.name.StartsWith("Cab"))
-                        dn.nightLights.Add(l);
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
@@ -126,6 +123,12 @@ namespace RexMagnum.EditorTools
                 Factory(File.ReadAllText(json));
                 Tunnels(File.ReadAllText(json), terrain);
                 Boss(terrain);
+                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))   // lamps that switch on at dusk
+                    if (l.type == LightType.Point && l.GetComponent<LightFlicker>() == null && !l.name.StartsWith("Cab") &&
+                        l.transform.parent != null && l.transform.parent.name.StartsWith("Hotel_Gameplay") == false &&
+                        !l.transform.parent.name.StartsWith("Room304") && !l.transform.parent.name.StartsWith("Tunnels") &&
+                        !l.transform.parent.name.StartsWith("Factory"))
+                        dn.nightLights.Add(l);
                 if (data.hotel != null && data.hotel.elevatorFloors != null)
                 {
                     Hotel(data.hotel);
@@ -161,53 +164,65 @@ namespace RexMagnum.EditorTools
 
         static void ConfigureTextures()
         {
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { Dir + "/Textures" }))
+            AssetDatabase.StartAssetEditing();     // one import pass for all files (much faster)
+            try
             {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                var ti = (TextureImporter)AssetImporter.GetAtPath(p);
-                string n = Path.GetFileNameWithoutExtension(p);
-                bool normal = n.EndsWith("_nrm"), mask = n.EndsWith("_mask");
-                bool alpha = n.StartsWith("leaf_") || n.StartsWith("Fall_");
-                ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
-                ti.sRGBTexture = !(normal || mask);
-                ti.alphaSource = (mask || alpha) ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
-                ti.alphaIsTransparency = alpha;
-                ti.mipmapEnabled = true;
-                ti.wrapMode = n.StartsWith("leaf_") ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
-                ti.anisoLevel = 8;
-                ti.maxTextureSize = 2048;
-                ti.textureCompression = TextureImporterCompression.CompressedHQ;
-                var android = ti.GetPlatformTextureSettings("Android");
-                android.overridden = true;
-                android.maxTextureSize = 1024;
-                android.format = TextureImporterFormat.ASTC_6x6;
-                ti.SetPlatformTextureSettings(android);
-                ti.SaveAndReimport();
+                foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { Dir + "/Textures" }))
+                {
+                    string p = AssetDatabase.GUIDToAssetPath(guid);
+                    var ti = (TextureImporter)AssetImporter.GetAtPath(p);
+                    string n = Path.GetFileNameWithoutExtension(p);
+                    bool normal = n.EndsWith("_nrm"), mask = n.EndsWith("_mask");
+                    bool alpha = n.StartsWith("leaf_") || n.StartsWith("Fall_");
+                    ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                    ti.sRGBTexture = !(normal || mask);
+                    ti.alphaSource = (mask || alpha) ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
+                    ti.alphaIsTransparency = alpha;
+                    ti.mipmapEnabled = true;
+                    ti.wrapMode = n.StartsWith("leaf_") ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
+                    ti.anisoLevel = 8;
+                    ti.maxTextureSize = 2048;
+                    ti.textureCompression = TextureImporterCompression.CompressedHQ;
+                    var android = ti.GetPlatformTextureSettings("Android");
+                    android.overridden = true;
+                    android.maxTextureSize = 1024;
+                    android.format = TextureImporterFormat.ASTC_6x6;
+                    ti.SetPlatformTextureSettings(android);
+                    ti.SaveAndReimport();
+                }
+            
             }
+            finally { AssetDatabase.StopAssetEditing(); }
         }
 
         static void ConfigureModels(Dictionary<string, Material> mats)
         {
-            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { Dir }))
+            AssetDatabase.StartAssetEditing();     // one import pass for all files (much faster)
+            try
             {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                var mi = (ModelImporter)AssetImporter.GetAtPath(p);
-                mi.importAnimation = false;
-                mi.animationType = ModelImporterAnimationType.None;
-                mi.importCameras = false;
-                mi.importLights = false;
-                mi.globalScale = 1f;
-                mi.useFileScale = true;
-                mi.addCollider = false;
-                mi.isReadable = true;          // collision meshes + baked vegetation meshes read the vertices
-                mi.meshCompression = ModelImporterMeshCompression.Low;
-                mi.indexFormat = ModelImporterIndexFormat.Auto;
-                mi.importNormals = ModelImporterNormals.Import;
-                mi.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
-                foreach (var kv in mats)
-                    mi.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), kv.Key), kv.Value);
-                mi.SaveAndReimport();
+                foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { Dir }))
+                {
+                    string p = AssetDatabase.GUIDToAssetPath(guid);
+                    var mi = (ModelImporter)AssetImporter.GetAtPath(p);
+                    mi.importAnimation = false;
+                    mi.animationType = ModelImporterAnimationType.None;
+                    mi.importCameras = false;
+                    mi.importLights = false;
+                    mi.globalScale = 1f;
+                    mi.useFileScale = true;
+                    mi.addCollider = false;
+                    mi.isReadable = true;          // collision meshes + baked vegetation meshes read the vertices
+                    mi.meshCompression = ModelImporterMeshCompression.Low;
+                    mi.indexFormat = ModelImporterIndexFormat.Auto;
+                    mi.importNormals = ModelImporterNormals.Import;
+                    mi.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
+                    foreach (var kv in mats)
+                        mi.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), kv.Key), kv.Value);
+                    mi.SaveAndReimport();
+                }
+            
             }
+            finally { AssetDatabase.StopAssetEditing(); }
         }
 
         /// <summary>AxisProbe.fbx has empties at Blender (10,0,0), (0,10,0), (0,0,10). Expected in Unity:
@@ -311,7 +326,7 @@ namespace RexMagnum.EditorTools
                         m.SetFloat("_Smoothness", 0.95f);
                         m.SetFloat("_Metallic", 0f);
                         Transparent(m);
-                        if (r.emission != null) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", C(r.emission)); }
+                        if (r.emission != null && r.emission.Length >= 3) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", C(r.emission)); }
                         break;
                     case "foliage":
                         m = Asset(r.name, lit);
@@ -459,6 +474,7 @@ namespace RexMagnum.EditorTools
             var door = inst.GetComponentsInChildren<MeshRenderer>(true).FirstOrDefault(r => r.name.EndsWith("_Door"));
             if (door != null)
             {
+                GameObjectUtility.SetStaticEditorFlags(door.gameObject, 0);     // it moves: no static batching
                 var hinge = Point("DoorHinge", U(room.doorHinge), 0f, gp);
                 door.transform.SetParent(hinge.transform, true);
                 door.gameObject.AddComponent<MeshCollider>();
@@ -471,6 +487,7 @@ namespace RexMagnum.EditorTools
             foreach (var b in inst.GetComponentsInChildren<MeshRenderer>(true).Where(r => r.name.Contains("_Bottle")))
             {
                 b.gameObject.isStatic = false;
+                GameObjectUtility.SetStaticEditorFlags(b.gameObject, 0);
                 var mc = b.gameObject.AddComponent<MeshCollider>();
                 mc.convex = true;
                 var rb = b.gameObject.AddComponent<Rigidbody>();
@@ -695,6 +712,9 @@ namespace RexMagnum.EditorTools
                 foreach (var c in sp.GetComponents<Component>())
                     if (!(c is Transform) && !(c is BlobSpawner)) UnityEngine.Object.DestroyImmediate(c);
                 sp.transform.position = core[0] + new Vector3(0, -3f, -6f);
+                var fnav = sp.gameObject.AddComponent<RuntimeNavMesh>();
+                fnav.center = core[0];
+                fnav.size = new Vector3(80f, 40f, 80f);
                 sp.radius = 6f;
                 sp.maxAlive = 4;
             }
@@ -789,8 +809,8 @@ namespace RexMagnum.EditorTools
 
         static void Boss(Terrain terrain)
         {
-            var blobs = BlobBuilder.Build();
-            if (!blobs.TryGetValue("KingGlorp", out var glorp)) return;
+            var glorp = AssetDatabase.LoadAssetAtPath<Blob>("Assets/RexMagnum/Prefabs/Blobs/Blob_KingGlorp.prefab");
+            if (glorp == null) return;
             var at = U(55f, 278f, 0f);                         // in front of the crashed ship, on the plateau
             if (terrain != null) at.y = terrain.SampleHeight(at) + terrain.transform.position.y;
             var g = (Blob)PrefabUtility.InstantiatePrefab(glorp);
@@ -798,7 +818,8 @@ namespace RexMagnum.EditorTools
             g.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 200f, 0f));
             var boss = g.gameObject.AddComponent<KingGlorpBoss>();
             boss.crown = g.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.Contains("Crown") || t.name.Contains("Spike"));
-            boss.minionPrefabs = blobs.Where(kv => kv.Key == "Tourist").Select(kv => kv.Value).ToArray();
+            var tourist = AssetDatabase.LoadAssetAtPath<Blob>("Assets/RexMagnum/Prefabs/Blobs/Blob_Tourist.prefab");
+            boss.minionPrefabs = tourist != null ? new[] { tourist } : new Blob[0];
             // props for him to absorb as armor: deck chairs, barrels, crates around the crash site
             var mat = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_ShipHull.mat");
             var rng = new System.Random(7);

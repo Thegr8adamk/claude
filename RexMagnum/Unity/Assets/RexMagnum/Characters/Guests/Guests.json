@@ -84,79 +84,6 @@
    ]
   },
   {
-   "name": "Heather",
-   "fbx": "Heather.fbx",
-   "voice": "MnUw1cSnpiLoLhpd3Hqp",
-   "security": false,
-   "materials": [
-    {
-     "name": "Heather_Skin",
-     "baseMap": "Textures/Heather_Skin_BC.png",
-     "normalMap": "Textures/Heather_Skin_N.png",
-     "maskMap": "Textures/Heather_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Heather_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.05788500000000003,
-      0.034236000000000016,
-      0.018744000000000007,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Heather_HairCap",
-     "color": [
-      0.05788499861955643,
-      0.03423599898815155,
-      0.018743999302387238,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Heather_Sole",
-     "color": [
-      0.4000000059604645,
-      0.25,
-      0.11999999731779099,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Heather_Top",
-     "color": [
-      0.949999988079071,
-      0.75,
-      0.15000000596046448,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Lucy",
    "fbx": "Lucy.fbx",
    "voice": "lcMyyd2HUfFzxdCaC4Ta",
@@ -582,79 +509,6 @@
    ]
   },
   {
-   "name": "Marge",
-   "fbx": "Marge.fbx",
-   "voice": "MnUw1cSnpiLoLhpd3Hqp",
-   "security": false,
-   "materials": [
-    {
-     "name": "Marge_Skin",
-     "baseMap": "Textures/Marge_Skin_BC.png",
-     "normalMap": "Textures/Marge_Skin_N.png",
-     "maskMap": "Textures/Marge_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Marge_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.5417372500000001,
-      0.5231866000000001,
-      0.49659640000000005,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_HairCap",
-     "color": [
-      0.5417372584342957,
-      0.5231866240501404,
-      0.49659639596939087,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_Sole",
-     "color": [
-      0.8500000238418579,
-      0.8500000238418579,
-      0.8199999928474426,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Marge_Top",
-     "color": [
-      0.8500000238418579,
-      0.30000001192092896,
-      0.44999998807907104,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Dwayne",
    "fbx": "Dwayne.fbx",
    "voice": "MjEQaRiSe6jP1b0vagRU",
@@ -1070,79 +924,6 @@
    ]
   },
   {
-   "name": "Rosa",
-   "fbx": "Rosa.fbx",
-   "voice": "MnUw1cSnpiLoLhpd3Hqp",
-   "security": false,
-   "materials": [
-    {
-     "name": "Rosa_Skin",
-     "baseMap": "Textures/Rosa_Skin_BC.png",
-     "normalMap": "Textures/Rosa_Skin_N.png",
-     "maskMap": "Textures/Rosa_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Rosa_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.10709650000000004,
-      0.08581240000000002,
-      0.0718696,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Rosa_HairCap",
-     "color": [
-      0.10709650069475174,
-      0.08581239730119705,
-      0.07186959683895111,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Rosa_Sole",
-     "color": [
-      0.15000000596046448,
-      0.07999999821186066,
-      0.03999999910593033,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Rosa_Top",
-     "color": [
-      0.6000000238418579,
-      0.019999999552965164,
-      0.029999999329447746,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Walter",
    "fbx": "Walter.fbx",
    "voice": "fGIZlgPQ75MMlvQ6WxgY",
@@ -1541,6 +1322,225 @@
       0.75,
       0.75,
       0.75,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Marge",
+   "fbx": "Marge.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Marge_Skin",
+     "baseMap": "Textures/Marge_Skin_BC.png",
+     "normalMap": "Textures/Marge_Skin_N.png",
+     "maskMap": "Textures/Marge_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Marge_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.5417372500000001,
+      0.5231866000000001,
+      0.49659640000000005,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_HairCap",
+     "color": [
+      0.5417372584342957,
+      0.5231866240501404,
+      0.49659639596939087,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_Sole",
+     "color": [
+      0.8500000238418579,
+      0.8500000238418579,
+      0.8199999928474426,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Marge_Top",
+     "color": [
+      0.8500000238418579,
+      0.30000001192092896,
+      0.44999998807907104,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Heather",
+   "fbx": "Heather.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Heather_Skin",
+     "baseMap": "Textures/Heather_Skin_BC.png",
+     "normalMap": "Textures/Heather_Skin_N.png",
+     "maskMap": "Textures/Heather_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Heather_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.05788500000000003,
+      0.034236000000000016,
+      0.018744000000000007,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Heather_HairCap",
+     "color": [
+      0.05788499861955643,
+      0.03423599898815155,
+      0.018743999302387238,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Heather_Sole",
+     "color": [
+      0.4000000059604645,
+      0.25,
+      0.11999999731779099,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Heather_Top",
+     "color": [
+      0.949999988079071,
+      0.75,
+      0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Rosa",
+   "fbx": "Rosa.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Rosa_Skin",
+     "baseMap": "Textures/Rosa_Skin_BC.png",
+     "normalMap": "Textures/Rosa_Skin_N.png",
+     "maskMap": "Textures/Rosa_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Rosa_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.10709650000000004,
+      0.08581240000000002,
+      0.0718696,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Rosa_HairCap",
+     "color": [
+      0.10709650069475174,
+      0.08581239730119705,
+      0.07186959683895111,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Rosa_Sole",
+     "color": [
+      0.15000000596046448,
+      0.07999999821186066,
+      0.03999999910593033,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Rosa_Top",
+     "color": [
+      0.6000000238418579,
+      0.019999999552965164,
+      0.029999999329447746,
       1
      ],
      "smoothness": 0.25

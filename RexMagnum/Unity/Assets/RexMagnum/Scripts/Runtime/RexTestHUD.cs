@@ -79,8 +79,12 @@ namespace RexMagnum
             return t;
         }
 
+        Canvas canvas;
+
         void Update()
         {
+            if (canvas == null) canvas = GetComponentInChildren<Canvas>(true);
+            if (canvas != null) canvas.enabled = !GameFlow.Busy;     // no HUD over the title / intro
             if (false && RMInput.Pause)   // PauseMenu handles pause now
             {
                 paused = !paused;

@@ -37,7 +37,7 @@ namespace RexMagnum
         {
             agent = GetComponent<NavMeshAgent>();
             anim = GetComponentInChildren<Animator>();
-            voice = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+            if (!TryGetComponent(out voice)) voice = gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 1f;
             var rc = FindFirstObjectByType<RexController>();
             if (rc != null) { rex = rc.transform; rexCtrl = rc; }
@@ -77,7 +77,7 @@ namespace RexMagnum
                 nextTalk = Time.time + 5f;
                 StartCoroutine(Flirt());
             }
-            if (Time.time < nextThink) return;
+            if (Time.time < nextThink || !agent.isOnNavMesh) return;
             nextThink = Time.time + 0.4f;
             NearestBlob(out float blobDist);
             // brief: at night guests lock themselves in (they walk back to their spot and stay out of sight)

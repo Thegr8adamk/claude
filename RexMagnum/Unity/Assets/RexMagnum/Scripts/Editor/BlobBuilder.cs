@@ -48,8 +48,11 @@ namespace RexMagnum.EditorTools
             if (result.TryGetValue("Bouncer", out var b))
             {
                 var path = AssetDatabase.GetAssetPath(b);
+                var halfPath = path.Replace(".prefab", "_Half.prefab");
+                AssetDatabase.DeleteAsset(halfPath);
+                AssetDatabase.CopyAsset(path, halfPath);                 // a separate prefab (no self-reference)
                 var root = PrefabUtility.LoadPrefabContents(path);
-                root.GetComponent<Blob>().splitPrefab = b;
+                root.GetComponent<Blob>().splitPrefab = AssetDatabase.LoadAssetAtPath<Blob>(halfPath);
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 PrefabUtility.UnloadPrefabContents(root);
             }
@@ -209,7 +212,7 @@ namespace RexMagnum.EditorTools
             var root = new GameObject("Blob_" + kind) { layer = 0 };
             var model = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(fbx), root.transform);
             model.name = "Model";
-            var anim = model.GetComponent<Animator>() ?? model.AddComponent<Animator>();
+            if (!model.TryGetComponent<Animator>(out var anim)) anim = model.AddComponent<Animator>();
             anim.runtimeAnimatorController = ctrl;
             anim.applyRootMotion = false;
             // Blender front is -Y; make the blob face +Z (eyes are in front)

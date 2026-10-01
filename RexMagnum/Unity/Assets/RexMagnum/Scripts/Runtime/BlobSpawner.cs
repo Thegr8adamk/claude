@@ -16,7 +16,11 @@ namespace RexMagnum
         {
             if (prefabs == null || prefabs.Length == 0 || Time.time < next) return;
             next = Time.time + interval;
-            if (FindObjectsByType<Blob>(FindObjectsSortMode.None).Length >= maxAlive) return;
+            int near = 0;
+            float r2 = (radius * 3f) * (radius * 3f);
+            foreach (var b in Blob.All)
+                if (b && !b.IsDead && (b.transform.position - transform.position).sqrMagnitude < r2) near++;
+            if (near >= maxAlive) return;
             Vector2 c = Random.insideUnitCircle.normalized * radius;
             Vector3 p = transform.position + new Vector3(c.x, 0, c.y);
             if (NavMesh.SamplePosition(p, out NavMeshHit hit, 4f, NavMesh.AllAreas))

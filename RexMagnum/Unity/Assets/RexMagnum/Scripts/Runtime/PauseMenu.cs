@@ -47,6 +47,7 @@ namespace RexMagnum
                         }
                 return;
             }
+            if (GameFlow.Busy) return;
             if (RMInput.Pause) SetOpen(!Open);
         }
 

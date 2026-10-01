@@ -222,9 +222,8 @@ def make_top(body, L, kind, colour, name, look):
         if kind == "dress":
             if t is not None:
                 return False
-            if c.z >= hip - 0.02:
-                return torso and c.z < neck_z - 0.05 and (abs(c.x) > 0.035 or c.z < chest + 0.05)
-            return c.z > L["knee_z"] + 0.04 and not (is_leg(L, c) and False)
+            # bodice only; the skirt is a separate flared cone (make_skirt), so it does not split into trousers
+            return torso and hip - 0.04 < c.z < neck_z - 0.05 and (abs(c.x) > 0.035 or c.z < chest + 0.05)
         return False
 
     def off(c, n):
@@ -239,10 +238,52 @@ def make_top(body, L, kind, colour, name, look):
     ob = look.shell(body, f"{name}_Top", keep, off, mat)
     clean_hems(ob)
     look.smooth_shell(ob, 6 if kind == "dress" else 3, 0.5)
-    if kind == "dress":     # close the gap between the legs: pull inner skirt vertices to the middle line
-        for v in ob.data.vertices:
-            if v.co.z < L["crotch_z"] and abs(v.co.x) < 0.07:
-                v.co.x *= 0.35
+    if kind == "dress":
+        make_skirt(body, L, mat, name)
+    return ob
+
+
+def make_skirt(body, L, mat, name, rings=10, segs=40):
+    """Skirt: elliptical rings from just above the hip line (overlapping the bodice) down to the knee, flaring
+    out, with soft folds. Each ring is at least 1.5 cm outside the body, so the legs never poke through."""
+    hip = L["hip_z"]
+    top_z, bot_z = hip + 0.08, L["knee_z"] + 0.03
+    sx = abs(float(L["sh_l"].x))
+    co = body.co[np.abs(body.co[:, 0]) < sx * 1.3]       # torso + legs only (the A-pose hands hang beside the hips)
+    def half_width(z, axis):
+        band = co[(co[:, 2] > z - 0.03) & (co[:, 2] < z + 0.03)]
+        if len(band) == 0:
+            return 0.15
+        return float(np.abs(band[:, axis] - band[:, axis].mean()).max())
+    cy = float(co[(co[:, 2] > hip - 0.03) & (co[:, 2] < hip + 0.03)][:, 1].mean())
+    bm = bmesh.new()
+    prev = None
+    for r in range(rings + 1):
+        t = r / rings
+        z = top_z + (bot_z - top_z) * t
+        zs = [top_z - 0.04 + j * 0.02 for j in range(int((top_z - z) / 0.02) + 3)]   # widest point at or above z
+        rx = max(half_width(q, 0) for q in zs) + 0.018 + 0.09 * t * t
+        ry = max(half_width(q, 1) for q in zs) + 0.018 + 0.07 * t * t
+        ring = []
+        for k in range(segs):
+            a = math.tau * k / segs
+            fold = 1 + 0.035 * t * math.sin(a * 8)
+            ring.append(bm.verts.new((math.cos(a) * rx * fold, cy + math.sin(a) * ry * fold, z)))
+        if prev:
+            for k in range(segs):
+                bm.faces.new((prev[k], prev[(k + 1) % segs], ring[(k + 1) % segs], ring[k]))
+        prev = ring
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(f"{name}_Skirt")
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    me.materials.append(mat)
+    ob = bpy.data.objects.new(f"{name}_Skirt", me)
+    bpy.context.scene.collection.objects.link(ob)
+    so = ob.modifiers.new("Thickness", "SOLIDIFY")
+    so.thickness = 0.003
     return ob
 
 

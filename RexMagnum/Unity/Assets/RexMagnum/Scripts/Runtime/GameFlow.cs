@@ -41,8 +41,11 @@ namespace RexMagnum
             "The beach towel is on the balcony rail. Look at the pool. Something is wrong.",
         };
 
+        public static bool Busy { get; private set; }
+
         void Start()
         {
+            Busy = !skipTitle;
             music = gameObject.AddComponent<AudioSource>();
             music.loop = true;
             music.spatialBlend = 0f;
@@ -57,6 +60,8 @@ namespace RexMagnum
         {
             if (rex != null) rex.InputEnabled = on;
             foreach (var b in disableDuringTitle) if (b != null) b.enabled = on;
+            var pr = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
+            if (pr) pr.InputEnabled = on;
             if (titleCamera != null) titleCamera.enabled = !on && state == State.Title;
             if (playerCamera != null) playerCamera.enabled = on || state != State.Title;
         }
@@ -77,7 +82,7 @@ namespace RexMagnum
                 if (titleCamera != null)
                 {
                     titleAngle += Time.deltaTime * 1.5f;
-                    titleCamera.transform.rotation = Quaternion.Euler(8f, 205f + Mathf.Sin(titleAngle * 0.05f) * 12f, 0f);
+                    titleCamera.transform.rotation = Quaternion.Euler(8f, -16f + Mathf.Sin(titleAngle * 0.05f) * 12f, 0f);
                 }
                 if (RMInput.AnyKey && fade < 0.05f) StartCoroutine(Intro());
             }
@@ -102,6 +107,8 @@ namespace RexMagnum
             {
                 rex.Teleport(bedPoint.position, bedPoint.eulerAngles.y);
                 rex.Die();                       // face-down pose
+                var rig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
+                if (rig) { rig.InputEnabled = false; rig.enabled = true; }
             }
             yield return new WaitForSeconds(0.6f);
             fadeTarget = 0f;
@@ -118,6 +125,7 @@ namespace RexMagnum
                 if (rex.armsAnimator) rex.armsAnimator.Play("Locomotion", 0, 0f);
             }
             state = State.Play;
+            Busy = false;
             SetPlayerActive(true);
             Play("Music/day_resort");
             music.volume = 0.35f;

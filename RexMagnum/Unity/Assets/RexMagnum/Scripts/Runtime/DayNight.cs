@@ -31,7 +31,8 @@ namespace RexMagnum
             baseSun = sun != null ? sun.intensity : 2f;
             baseAmbient = RenderSettings.ambientIntensity;
             baseFog = RenderSettings.fogDensity;
-            sky = RenderSettings.skybox;
+            sky = RenderSettings.skybox != null ? new Material(RenderSettings.skybox) : null;   // do not edit the asset
+            RenderSettings.skybox = sky;
             if (sky != null && sky.HasProperty("_Exposure")) baseExposure = sky.GetFloat("_Exposure");
             spawner = FindFirstObjectByType<BlobSpawner>();
             if (spawner != null) baseMax = spawner.maxAlive;

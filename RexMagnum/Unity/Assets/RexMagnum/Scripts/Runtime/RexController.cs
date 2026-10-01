@@ -75,6 +75,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (!cc.enabled) return;              // driving the golf cart
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
             if (Time.time < lockedUntil) input = Vector2.zero;

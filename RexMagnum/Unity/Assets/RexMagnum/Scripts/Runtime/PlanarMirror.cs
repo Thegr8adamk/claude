@@ -25,12 +25,12 @@ namespace RexMagnum
         void Start()
         {
             rend = GetComponent<Renderer>();
-            rt = new RenderTexture(resolution, resolution, 16) { name = "MirrorRT" };
+            rt = new RenderTexture(Mathf.Max(256, Screen.width / 2), Mathf.Max(256, Screen.height / 2), 16) { name = "MirrorRT" };
             var go = new GameObject("MirrorCamera") { hideFlags = HideFlags.HideAndDontSave };
             mirrorCam = go.AddComponent<Camera>();
             mirrorCam.enabled = false;
             mirrorCam.targetTexture = rt;
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            var mat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
             mat.SetTexture("_BaseMap", rt);
             rend.material = mat;
             var rex = FindFirstObjectByType<RexController>();
