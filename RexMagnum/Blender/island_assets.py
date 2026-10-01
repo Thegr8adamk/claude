@@ -1761,6 +1761,172 @@ def weather_all(m):
     weather(m["cushion"], streaks=0.0, crevice=0.35, base_dirt=0.0, grime=(0.7, 0.68, 0.62))
 
 
+# ------------------------------------------------------------------ golf course (world coordinates)
+
+GOLF_C = (-280.0, -40.0)
+GOLF_HOLES = [((-60, -60), (40, -50)), ((50, -40), (70, 50)), ((60, 62), (-30, 72)), ((-45, 60), (-85, -10)),
+              ((-90, 5), (-20, 12))]
+
+
+def mown_grass(name, c0, c1, stripe):
+    m, nt = _mat(name)
+    if nt is None:
+        return m
+    p = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    w = nt.nodes.new("ShaderNodeTexWave")
+    w.inputs["Scale"].default_value = 1.0 / stripe
+    w.wave_profile = "SAW"
+    nt.links.new(tc.outputs["Object"], w.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 3.0
+    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    stp = nt.nodes.new("ShaderNodeMath")
+    stp.operation = "GREATER_THAN"
+    stp.inputs[1].default_value = 0.5
+    nt.links.new(w.outputs["Fac"], stp.inputs[0])
+    mx = nt.nodes.new("ShaderNodeMix")
+    mx.data_type = "RGBA"
+    nt.links.new(stp.outputs[0], mx.inputs[0])
+    mx.inputs[6].default_value = (*c0, 1)
+    mx.inputs[7].default_value = (*c1, 1)
+    mx2 = nt.nodes.new("ShaderNodeMix")
+    mx2.data_type = "RGBA"
+    mx2.blend_type = "MULTIPLY"
+    mx2.inputs[0].default_value = 0.25
+    nt.links.new(mx.outputs[2], mx2.inputs[6])
+    nt.links.new(nz.outputs["Color"], mx2.inputs[7])
+    nt.links.new(mx2.outputs[2], p.inputs["Base Color"])
+    p.inputs["Roughness"].default_value = 0.8
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.15
+    nt.links.new(nz.outputs["Fac"], b.inputs["Height"])
+    nt.links.new(b.outputs[0], p.inputs["Normal"])
+    return m
+
+
+def draped(k, ha, outline_fn, mat, lift, base, rings=10, segs=48):
+    """Patch draped over the terrain: outline_fn(angle) -> (x, y) on the edge; centre = average."""
+    bm = bmesh.new()
+    edge = [outline_fn(math.tau * i / segs) for i in range(segs)]
+    cx = sum(p[0] for p in edge) / segs
+    cy = sum(p[1] for p in edge) / segs
+    centre = bm.verts.new((cx, cy, ha(cx, cy) + lift))
+    prev = None
+    for r in range(1, rings + 1):
+        t = r / rings
+        ring = []
+        for (ex, ey) in edge:
+            x, y = cx + (ex - cx) * t, cy + (ey - cy) * t
+            ring.append(bm.verts.new((x, y, ha(x, y) + lift)))
+        for i in range(segs):
+            if prev is None:
+                bm.faces.new((centre, ring[i], ring[(i + 1) % segs]))
+            else:
+                bm.faces.new((prev[i], ring[i], ring[(i + 1) % segs], prev[(i + 1) % segs]))
+        prev = ring
+    return k._ob(base, bm, mat, smooth=True)
+
+
+def golf(m, ha):
+    """Golf course (west): 5 holes with tee, mown fairway, green, flag and 2 sand traps; pro shop (golf club
+    pickup) and cart shed with charge stations."""
+    k = Kit("Asset_Golf")
+    fair = mown_grass("A_Fairway", (0.1, 0.3, 0.05), (0.14, 0.36, 0.07), 6.0)
+    green = mown_grass("A_Green", (0.08, 0.32, 0.06), (0.1, 0.37, 0.08), 2.0)
+    sand = textured("A_BunkerSand", "sand", (0.8, 0.72, 0.55), (0.9, 0.84, 0.68), 0.95, 1.0, 0.4)
+    flagm = principled("A_Flag", (0.9, 0.1, 0.08), 0.7)
+    gx, gy = GOLF_C
+    rng = random.Random(18)
+    markers = dict(tees=[], greens=[])
+    for hi, ((tx, ty), (fx, fy)) in enumerate(GOLF_HOLES):
+        tx, ty, fx, fy = tx + gx, ty + gy, fx + gx, fy + gy
+        dx, dy = fx - tx, fy - ty
+        L = math.hypot(dx, dy)
+        ux, uy = dx / L, dy / L
+        nx, ny = -uy, ux
+        def fairway_edge(a, tx=tx, ty=ty, ux=ux, uy=uy, nx=nx, ny=ny, L=L):
+            # a capsule-ish shape from tee to green, a little wider in the middle
+            t = (math.cos(a) + 1) / 2
+            w = 11 + 5 * math.sin(t * math.pi)
+            side = 1 if math.sin(a) >= 0 else -1
+            along = 8 + t * (L - 16)
+            return (tx + ux * along + nx * w * side, ty + uy * along + ny * w * side)
+        draped(k, ha, fairway_edge, fair, 0.05, f"Fairway{hi}", rings=6, segs=64)
+        draped(k, ha, lambda a, fx=fx, fy=fy: (fx + math.cos(a) * 11, fy + math.sin(a) * 8), green, 0.08,
+               f"Green{hi}")
+        draped(k, ha, lambda a, tx=tx, ty=ty: (tx + math.cos(a) * 5, ty + math.sin(a) * 3.5), green, 0.08, f"Tee{hi}",
+               rings=3, segs=24)
+        for b in range(2):
+            ang = math.atan2(dy, dx) + (1.9 if b else -1.9)
+            bx, by = fx + math.cos(ang) * 14, fy + math.sin(ang) * 12
+            draped(k, ha, lambda a, bx=bx, by=by: (bx + math.cos(a) * rng.uniform(4.5, 6) + math.cos(2 * a),
+                                                   by + math.sin(a) * rng.uniform(3, 4)), sand, 0.06,
+                   f"Bunker{hi}", rings=4, segs=32)
+        z = ha(fx, fy) + 0.08
+        k.cyl((fx + 2, fy, z - 0.3), (fx + 2, fy, z + 2.3), 0.012, m["trim"], segs=8, base="FlagPole")
+        fl = k.box((0, 0, 0), (0.55, 0.01, 0.38), flagm, "Flag")
+        fl.location = (fx + 2.01, fy, z + 1.9)
+        k.disc((fx + 2, fy, z - 0.02), 0.06, 0.03, m["darkmetal"], base="Cup")
+        k.text(str(hi + 1), 1.0, (tx, ty - 4.2, ha(tx, ty) + 0.1), m["sign_board"], 0.05, rot=(math.pi / 2, 0, 0),
+               base="HoleNo")
+        markers["tees"].append((tx, ty, ha(tx, ty)))
+        markers["greens"].append((fx + 2, fy, z))
+    # pro shop + cart shed + charge stations (south edge of the course)
+    px, py = gx, gy - 92
+    pz = max(ha(px + dx_, py + dy_) for dx_ in (-8, 0, 8) for dy_ in (-5, 0, 5))
+    k.box((px - 9, py - 6, pz - 1.5), (px + 9, py + 6, pz + 0.3), m["stone"], "ProShopBase")
+    k.box((px - 8, py - 5, pz + 0.3), (px + 8, py + 5, pz + 3.6), m["stucco"], "ProShop")
+    k.box((px - 6, py + 5, pz + 0.6), (px + 6, py + 5.05, pz + 2.8), m["glass"], "ProShopWindow")
+    k.box((px - 9, py - 6.2, pz + 3.6), (px + 9, py + 6.2, pz + 3.9), m["terracotta"], "ProShopRoof")
+    k.text("PRO SHOP", 0.6, (px, py + 5.08, pz + 3.0), m["sign_board"], 0.04, rot=(math.pi / 2, 0, math.pi),
+           base="ProShopSign")
+    sx, sy = px + 22, py
+    sz = max(ha(sx + dx_, sy + dy_) for dx_ in (-9, 0, 9) for dy_ in (-5, 0, 5))
+    k.box((sx - 10, sy - 6, sz - 1.5), (sx + 10, sy + 6, sz + 0.1), m["deck"], "ShedSlab")
+    for x in (-9.8, 0, 9.6):
+        for y in (-5.8, 5.6):
+            k.box((sx + x, sy + y, sz + 0.1), (sx + x + 0.2, sy + y + 0.2, sz + 3.0), m["alu"], "ShedPost")
+    k.box((sx - 10.2, sy - 6.2, sz + 3.0), (sx + 10.2, sy + 6.2, sz + 3.15), m["alu"], "ShedRoof")
+    for j in range(3):
+        cx_ = sx - 6 + j * 6
+        k.box((cx_ - 0.3, sy + 5.0, sz + 0.1), (cx_ + 0.3, sy + 5.5, sz + 1.4), m["darkmetal"], "Charger")
+        k.box((cx_ - 0.2, sy + 4.98, sz + 1.0), (cx_ + 0.2, sy + 5.0, sz + 1.25), m["poollight"], "ChargerLight")
+    markers["proShop"] = (px, py + 5.6, pz + 0.3)
+    markers["golfClub"] = (px + 1.5, py + 6.5, pz + 0.35)
+    markers["carts"] = [(sx - 6 + j * 6, sy + 1.5, sz + 0.1) for j in range(3)]
+    markers["chargers"] = [(sx - 6 + j * 6, sy + 4.5, sz + 0.1) for j in range(3)]
+    return k.c, markers
+
+
+def golf_cart(m):
+    """Electric golf cart (local: origin = ground under the middle, +Y forward). 2.4 m long."""
+    k = Kit("Asset_GolfCart")
+    body = principled("A_CartBody", (0.92, 0.92, 0.88), 0.35, **{"Coat Weight": 0.6})
+    seat = principled("A_CartSeat", (0.35, 0.18, 0.08), 0.6)
+    tyre = principled("A_Tyre", (0.02, 0.02, 0.02), 0.8)
+    k.box((-0.6, -1.15, 0.28), (0.6, 1.2, 0.45), m["darkmetal"], "Chassis", bevel=0.03)
+    k.box((-0.62, 0.55, 0.45), (0.62, 1.25, 0.95), body, "Hood", bevel=0.08)
+    k.box((-0.58, -1.2, 0.45), (0.58, -0.4, 0.7), body, "RearBody", bevel=0.05)
+    k.box((-0.55, -0.4, 0.45), (0.55, 0.2, 0.75), seat, "SeatBase", bevel=0.05)
+    k.box((-0.55, -0.45, 0.75), (0.55, -0.25, 1.25), seat, "SeatBack", bevel=0.05)
+    for x in (-0.55, 0.55):
+        for y in (-0.5, 0.75):
+            k.cyl((x, y, 0.95 if y > 0 else 0.7), (x, y, 1.9), 0.025, m["alu"], segs=10, base="RoofPost")
+    k.box((-0.68, -0.75, 1.9), (0.68, 1.0, 1.96), body, "Roof", bevel=0.03)
+    k.box((-0.5, 1.0, 0.95), (0.5, 1.02, 1.85), m["railglass"], "Windshield")
+    k.cyl((0.0, 0.62, 0.9), (0.15, 0.4, 1.05), 0.02, m["darkmetal"], segs=8, base="SteeringCol")
+    k.disc((0.17, 0.38, 1.05), 0.17, 0.03, m["darkmetal"], base="Wheel")
+    for x in (-0.6, 0.6):
+        for y in (-0.78, 0.82):
+            w = k.cyl((x - 0.1, y, 0.24), (x + 0.1, y, 0.24), 0.24, tyre, segs=20, base="Tyre")
+            k.cyl((x - 0.105, y, 0.24), (x + 0.105, y, 0.24), 0.12, m["alu"], segs=16, base="Hub")
+    for x in (-0.4, 0.4):
+        k.disc((x, 1.255, 0.75), 0.07, 0.02, m["roomlight"], base="Headlight").rotation_euler = (math.radians(-90), 0, 0)
+    k.text("ISLA GRANDE", 0.09, (0, 1.256, 0.6), m["sign_board"], 0.005, rot=(math.pi / 2, 0, math.pi), base="CartLogo")
+    return k.c
+
+
 def build_all():
     m = M()
     weather_all(m)

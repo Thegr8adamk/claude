@@ -4,6 +4,7 @@ island_assets placed in the world. Saves Island_v02.blend and renders approval v
 Run:  python build_island_v2.py [--trees 1.0] [--samples 96] [--res 1600x900] [--only name,name] [--no-render]
 """
 import argparse
+import json
 import math
 import os
 import sys
@@ -61,6 +62,10 @@ def build(trees):
                     continue
             bpy.data.objects.remove(ob)
     waterfall_v2(ha, m)
+    gcol, gmk = IA.golf(m, ha)
+    bpy.context.scene["golf_markers"] = json.dumps(gmk)
+    cart = IA.golf_cart(m)
+    place(cart, gmk["carts"][0])
     grass(ha, zones)
     return ha
 

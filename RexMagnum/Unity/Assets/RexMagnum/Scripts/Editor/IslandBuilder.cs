@@ -51,6 +51,7 @@ namespace RexMagnum.EditorTools
         {
             public float[] pistol, knife, swordfish, sniper, elevatorX, elevatorFloors, stage, poolDoors;
         }
+        [Serializable] class GolfPts { public float[] proShop, golfClub; public float[] carts, chargers; }
         [Serializable] class Data { public MatRow[] materials; public AssetRow[] assets; public Veg vegetation; public TerrainInfo terrain; public Spawn spawn; public Room room304; public HotelPts hotel; public float[] pool; }
 
         static Vector3 U(float[] p) => p == null || p.Length < 3 ? Vector3.zero : U(p[0], p[1], p[2]);
@@ -90,7 +91,8 @@ namespace RexMagnum.EditorTools
 
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Buildings", 0.35f);
                 var world = new GameObject("Island").transform;
-                foreach (var a in data.assets) BuildingPrefab(a, data.materials, world);
+                foreach (var a in data.assets)
+                    if (a.name != "GolfCart") BuildingPrefab(a, data.materials, world);
 
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Terrain", 0.55f);
                 var terrain = BuildTerrain(data, world);
@@ -114,6 +116,7 @@ namespace RexMagnum.EditorTools
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
+                Golf(File.ReadAllText(json), pool);
                 if (data.hotel != null && data.hotel.elevatorFloors != null)
                 {
                     Hotel(data.hotel);
@@ -589,6 +592,87 @@ namespace RexMagnum.EditorTools
             e.landingDoors = doors.ToArray();
         }
 
+        // ---------------------------------------------------------------- golf: carts, chargers, golf club
+
+        static List<Vector3> Pts(string json, string key)
+        {
+            // "carts": [[x, y, z], ...] (JsonUtility cannot read nested arrays) -> parse by hand
+            var res = new List<Vector3>();
+            int i = json.IndexOf("\"" + key + "\"", StringComparison.Ordinal);
+            if (i < 0) return res;
+            int a = json.IndexOf('[', i), depth = 0, b = a;
+            for (; b < json.Length; b++) { if (json[b] == '[') depth++; else if (json[b] == ']' && --depth == 0) break; }
+            var nums = System.Text.RegularExpressions.Regex.Matches(json.Substring(a, b - a), @"-?\d+(\.\d+)?(e-?\d+)?");
+            for (int k = 0; k + 2 < nums.Count; k += 3)
+                res.Add(U(float.Parse(nums[k].Value, System.Globalization.CultureInfo.InvariantCulture),
+                          float.Parse(nums[k + 1].Value, System.Globalization.CultureInfo.InvariantCulture),
+                          float.Parse(nums[k + 2].Value, System.Globalization.CultureInfo.InvariantCulture)));
+            return res;
+        }
+
+        static void Golf(string json, Vector3 resortSpawn)
+        {
+            int g = json.IndexOf("\"golf\"", StringComparison.Ordinal);
+            if (g < 0) return;
+            string golf = json.Substring(g);
+            var root = new GameObject("Golf_Gameplay").transform;
+            var club = Pts(golf, "golfClub");
+            if (club.Count > 0) Pickup("Pickup_GolfClub", club[0] + Vector3.up * 0.1f, root);
+            foreach (var c in Pts(golf, "chargers"))
+            {
+                var t = new GameObject("ChargeStation").transform;
+                t.SetParent(root, false);
+                t.position = c;
+                GolfCart.RegisterCharger(t);
+                var cs = t.gameObject.AddComponent<ChargeStation>();
+            }
+            var cartFbx = AssetDatabase.LoadAssetAtPath<GameObject>(Dir + "/Buildings/GolfCart.fbx");
+            if (cartFbx == null) return;
+            var cartPrefab = CartPrefab(cartFbx);
+            var spots = Pts(golf, "carts");
+            spots.Add(resortSpawn + new Vector3(-40f, 0.1f, -12f));        // one cart at the resort (charge station too)
+            foreach (var p in spots)
+            {
+                var c = (GameObject)PrefabUtility.InstantiatePrefab(cartPrefab, root);
+                c.transform.position = p + Vector3.up * 0.05f;
+            }
+            var rc = new GameObject("ChargeStation").transform;
+            rc.SetParent(root, false);
+            rc.position = resortSpawn + new Vector3(-40f, 0.1f, -14f);
+            rc.gameObject.AddComponent<ChargeStation>();
+        }
+
+        static GameObject CartPrefab(GameObject fbx)
+        {
+            var root = new GameObject("GolfCart");
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(fbx, root.transform);
+            ApplyFix(model.transform);
+            foreach (var r in model.GetComponentsInChildren<MeshRenderer>())
+                if (r.name.EndsWith("_LOD1")) r.gameObject.SetActive(false);
+            var box = root.AddComponent<BoxCollider>();
+            box.center = new Vector3(0, 0.95f, 0.02f);
+            box.size = new Vector3(1.3f, 1.4f, 2.45f);
+            root.AddComponent<Rigidbody>();
+            var seat = new GameObject("Seat").transform;
+            seat.SetParent(root.transform, false);
+            seat.localPosition = new Vector3(-0.25f, 0.45f, -0.1f);
+            var cart = root.AddComponent<GolfCart>();
+            cart.seat = seat;
+            var lights = new List<Light>();
+            foreach (float x in new[] { -0.4f, 0.4f })
+            {
+                var l = new GameObject("Headlight").AddComponent<Light>();
+                l.transform.SetParent(root.transform, false);
+                l.transform.localPosition = new Vector3(x, 0.75f, 1.3f);
+                l.type = LightType.Spot; l.range = 25f; l.spotAngle = 60f; l.intensity = 3f;
+                lights.Add(l);
+            }
+            cart.headlights = lights.ToArray();
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{Prefabs}/GolfCart.prefab");
+            UnityEngine.Object.DestroyImmediate(root);
+            return prefab;
+        }
+
         // ---------------------------------------------------------------- guests
 
         /// <summary>Hotel-local point (Blender x, y; floor index) to Unity world.</summary>
@@ -826,6 +910,7 @@ namespace RexMagnum.EditorTools
                         if (g < 0.45f) continue;
                         float wx = x * ti.size / dr - ti.size / 2, wy = z * ti.size / dr - ti.size / 2;
                         if (Mathf.Abs(wx - 40f) < 58f && wy > -315f && wy < -226f) continue;   // hotel + pool deck
+                        if ((wx + 280f) * (wx + 280f) + (wy + 40f) * (wy + 40f) < 115f * 115f) continue; // golf (mown)
                         int n = Mathf.RoundToInt(g * 3f);
                         for (int c = 0; c < n; c++) maps[rng.Next(maps.Length)][z, x] += 1;
                     }

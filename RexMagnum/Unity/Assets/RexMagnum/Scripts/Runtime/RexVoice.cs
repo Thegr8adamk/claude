@@ -37,6 +37,8 @@ namespace RexMagnum
             { "Idle", new[] { "Hello? I'm being heroic over here.", "Back in '86 I had a trailer. With a door.", "Is this thing on? Is anything on?" } },
             { "Rescue", new[] { "Did you film that? Tag me.", "You're welcome. Cash is fine.", "Tell your friends. Tell a casting director." } },
             { "FlirtFail", new[] { "She's into it.", "Playing hard to get. They all do. For decades.", "Still got it.", "That's a maybe." } },
+            { "CartDead", new[] { "I do my own stunts. I don't do my own walking.", "Dead battery. We have so much in common." } },
+            { "CartPush", new[] { "Pushing. Great. My heart doctor will hear about this. If I had one." } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };

@@ -53,7 +53,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
-ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
+ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
 
@@ -637,11 +637,22 @@ def rebuild_assets(names, res):
     m = IA.M()
     IA.weather_all(m)
     hb = hotel_base_height()
+    _, _, hm, _ = I.heightmap()
+    ha = lambda x, y: float(hm[int(np.clip((y + 500) / 1000 * 1024, 0, 1024)), int(np.clip((x + 500) / 1000 * 1024, 0, 1024))])
+    extra = {}
+
+    def golf_builder(m_):
+        c, mk = IA.golf(m_, ha)
+        extra["golf"] = mk
+        return c
     builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
-                    TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship)
+                    TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship,
+                    Golf=golf_builder, GolfCart=IA.golf_cart)
     for n in names:
         coll = builders[n](m)
-        if n in ("Hotel", "Room304"):
+        if n in ("Golf", "GolfCart"):
+            pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
+        elif n in ("Hotel", "Room304"):
             from mathutils import Matrix
             T = Matrix.Translation((40, -300, hb))
             for ob in coll.all_objects:
@@ -658,6 +669,8 @@ def rebuild_assets(names, res):
     have = {r["name"] for r in data["materials"]}
     new_rows = material_rows({n for n in mats_used if n not in have}, res, skip_bake=True)
     data["materials"] += new_rows
+    if "golf" in extra:
+        data["golf"] = {k: (list(v) if isinstance(v, tuple) else [list(p) for p in v]) for k, v in extra["golf"].items()}
     data["room304"] = world_markers(IA.room304_markers(), hb)
     data["hotel"] = world_markers(IA.hotel_markers(), hb)
     with open(path, "w") as f:
