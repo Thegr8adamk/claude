@@ -1348,6 +1348,18 @@
    ],
    "metallic": 0.0,
    "smoothness": 0.4
+  },
+  {
+   "name": "A_SofaWhite",
+   "kind": "lit",
+   "color": [
+    0.92,
+    0.9,
+    0.86,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.15
   }
  ],
  "assets": [
@@ -1402,14 +1414,14 @@
    "tris": 249
   },
   {
-   "name": "Hotel",
-   "fbx": "Buildings/Hotel.fbx",
-   "tris": 185488
-  },
-  {
    "name": "Room304",
    "fbx": "Buildings/Room304.fbx",
    "tris": 4808
+  },
+  {
+   "name": "Hotel",
+   "fbx": "Buildings/Hotel.fbx",
+   "tris": 187476
   }
  ],
  "vegetation": {
