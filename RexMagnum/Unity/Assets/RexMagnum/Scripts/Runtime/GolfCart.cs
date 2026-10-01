@@ -22,7 +22,6 @@ namespace RexMagnum
         RexCameraRig rig;
         float speed, nextUse, nextLine;
         bool lights;
-        Transform oldTarget;
 
         public static void RegisterCharger(Transform t) { if (!chargers.Contains(t)) chargers.Add(t); }
 
