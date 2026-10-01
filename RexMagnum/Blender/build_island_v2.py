@@ -49,6 +49,7 @@ def build(trees):
     place(cols["cave"], (-160, 228, ha(-160, 222) - 0.4))
     place(cols["ship"], (40, 305, ha(40, 305) + 6.0), rot_z=0.3, tilt=(math.radians(4), math.radians(-3)))
     slime_leak(ha, m, cols["ship"])
+    scorch_on_ground(ha, m, cols["ship"])
     # clear vegetation that would poke through buildings
     zones = [((40, -300), 60), ((40, -255), 62), ((-30, -345), 10), ((110, -345), 9), ((300, 70), 32),
              ((-160, 228), 18), ((40, 305), 40)]
@@ -187,6 +188,35 @@ def slime_leak(ha, m, ship_coll):
     for i in range(6):      # puddles along the way
         x, y = pts[4 + i * 3][:2]
         k.disc((x, y, ha(x, y) + 0.05), 2.2 + i * 0.2, 0.12, m["slimeglow"], segs=20, base="SlimePuddle")
+
+
+def scorch_on_ground(ha, m, ship_coll):
+    """Burn mark under the crashed ship: a disc mesh draped on the terrain (no floating plate)."""
+    import bmesh
+    for o in [o for o in ship_coll.objects if "Scorch" in o.name]:
+        bpy.data.objects.remove(o)
+    bm = bmesh.new()
+    rings, segs, R = 14, 48, 38.0
+    centre = bm.verts.new((40, 305, ha(40, 305) + 0.08))
+    prev = None
+    for r in range(1, rings + 1):
+        rr = R * r / rings
+        ring = []
+        for k in range(segs):
+            a = math.tau * k / segs
+            x, y = 40 + math.cos(a) * rr, 305 + math.sin(a) * rr
+            ring.append(bm.verts.new((x, y, ha(x, y) + 0.08)))
+        for k in range(segs):
+            if prev is None:
+                bm.faces.new((centre, ring[k], ring[(k + 1) % segs]))
+            else:
+                bm.faces.new((prev[k], ring[k], ring[(k + 1) % segs], prev[(k + 1) % segs]))
+        prev = ring
+    me = bpy.data.meshes.new("ScorchGround")
+    bm.to_mesh(me)
+    me.materials.append(m["scorch"])
+    ob = bpy.data.objects.new("Asset_Ship_ScorchGround", me)
+    ship_coll.objects.link(ob)
 
 
 def flatten_terrain(pb, hb):

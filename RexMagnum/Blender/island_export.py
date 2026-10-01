@@ -37,7 +37,7 @@ BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). B
     "A_Stucco": (4, 4, True), "A_Planks": (4, 3.6, True), "A_WeatheredWood": (4, 3.6, True),
     "A_Bamboo": (2, 2, True), "A_TempleStone": (6.2222, 5.3333, True), "A_Rock": (6, 6, True),
     "A_WetRock": (4, 4, True), "A_Terracotta": (2, 2, False), "A_DeckTiles": (5, 5, False),
-    "A_PoolTile": (2, 2, False), "A_ShipHull": (8, 8, False), "A_Teak": (4, 3.6, False),
+    "A_PoolTile": (2, 2, False), "A_ShipHull": (8, 8, False), "A_Teak": (4, 3.6, False), "A_Scorch": (8, 8, False),
     "A_Trim": (4, 4, True), "A_Aluminum": (2, 2, True), "A_Cushion": (2, 2, False), "A_SignBoard": (2, 2, True),
     "A_Thatch": (4, 4, False), "PalmBark": (2, 2, True), "JungleBark": (2, 2, True),
     "A_Carpet": (2, 2, False), "A_Wallpaper": (2, 2, True), "A_Sheets": (2, 2, False), "A_Duvet": (2, 2, False),
