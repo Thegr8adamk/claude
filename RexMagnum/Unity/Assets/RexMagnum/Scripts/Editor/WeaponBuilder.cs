@@ -18,7 +18,7 @@ namespace RexMagnum.EditorTools
         const string Mats = Dir + "/Materials";
         const string Prefabs = "Assets/RexMagnum/Prefabs/Weapons";
 
-        [Serializable] class Row { public string name, baseMap; public float[] color; public float metallic, smoothness, emission; public bool transparent, twoSided; }
+        [Serializable] class Row { public string name, baseMap, normalMap, maskMap; public float[] color; public float metallic, smoothness, emission; public bool transparent, twoSided; }
         [Serializable] class Table { public Row[] materials; }
 
         public class Result
@@ -44,6 +44,7 @@ namespace RexMagnum.EditorTools
             if (!AssetDatabase.IsValidFolder(Dir)) return res;
             Ensure(Mats);
             Ensure(Prefabs);
+            Textures();
             var mats = Materials();
             foreach (var kv in Ids)
             {
@@ -73,6 +74,32 @@ namespace RexMagnum.EditorTools
             AssetDatabase.CreateFolder(parent, Path.GetFileName(path));
         }
 
+        static void Textures()
+        {
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { Dir + "/Textures" }))
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                var ti = (TextureImporter)AssetImporter.GetAtPath(p);
+                string n = Path.GetFileNameWithoutExtension(p);
+                bool normal = n.EndsWith("_N"), mask = n.EndsWith("_MS");
+                ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                ti.sRGBTexture = !(normal || mask);
+                ti.alphaSource = mask ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
+                ti.mipmapEnabled = true;
+                ti.anisoLevel = 8;
+                ti.maxTextureSize = 2048;
+                ti.textureCompression = TextureImporterCompression.CompressedHQ;
+                var android = ti.GetPlatformTextureSettings("Android");
+                android.overridden = true;
+                android.maxTextureSize = 1024;
+                android.format = TextureImporterFormat.ASTC_6x6;
+                ti.SetPlatformTextureSettings(android);
+                ti.SaveAndReimport();
+            }
+        }
+
+        static Texture2D Tex(string file) => string.IsNullOrEmpty(file) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/Textures/{file}");
+
         static Dictionary<string, Material> Materials()
         {
             var t = JsonUtility.FromJson<Table>(File.ReadAllText(Dir + "/Weapons.json"));
@@ -90,6 +117,17 @@ namespace RexMagnum.EditorTools
                     m.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/Textures/{r.baseMap}"));
                 m.SetFloat("_Metallic", r.metallic);
                 m.SetFloat("_Smoothness", Mathf.Clamp01(r.smoothness));
+                if (Tex(r.normalMap) != null)
+                {
+                    m.SetTexture("_BumpMap", Tex(r.normalMap));
+                    m.EnableKeyword("_NORMALMAP");
+                }
+                if (Tex(r.maskMap) != null)
+                {
+                    m.SetTexture("_MetallicGlossMap", Tex(r.maskMap));
+                    m.EnableKeyword("_METALLICSPECGLOSSMAP");
+                    m.SetFloat("_Smoothness", 1f);
+                }
                 if (r.transparent)
                 {
                     m.SetFloat("_Surface", 1f);
