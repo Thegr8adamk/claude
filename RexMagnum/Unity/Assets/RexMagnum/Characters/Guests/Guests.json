@@ -580,6 +580,79 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Marge",
+   "fbx": "Marge.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Marge_Skin",
+     "baseMap": "Textures/Marge_Skin_BC.png",
+     "normalMap": "Textures/Marge_Skin_N.png",
+     "maskMap": "Textures/Marge_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Marge_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.5417372500000001,
+      0.5231866000000001,
+      0.49659640000000005,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_HairCap",
+     "color": [
+      0.5417372584342957,
+      0.5231866240501404,
+      0.49659639596939087,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_Sole",
+     "color": [
+      0.8500000238418579,
+      0.8500000238418579,
+      0.8199999928474426,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Marge_Top",
+     "color": [
+      0.8500000238418579,
+      0.30000001192092896,
+      0.44999998807907104,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
