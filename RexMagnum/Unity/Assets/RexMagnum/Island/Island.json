@@ -1444,6 +1444,64 @@
    ],
    "metallic": 0.0,
    "smoothness": 0.2
+  },
+  {
+   "name": "A_AlienFloor",
+   "kind": "lit",
+   "color": [
+    0.8,
+    0.8,
+    0.8,
+    1
+   ],
+   "metallic": 0.8,
+   "smoothness": 0.7
+  },
+  {
+   "name": "A_BlobEgg",
+   "kind": "lit",
+   "color": [
+    0.3,
+    0.9,
+    0.25,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.85,
+   "emission": [
+    0.21,
+    0.7,
+    0.14
+   ]
+  },
+  {
+   "name": "A_FactoryCore",
+   "kind": "lit",
+   "color": [
+    0.4,
+    1.0,
+    0.3,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.9,
+   "emission": [
+    7.2,
+    18.0,
+    4.5
+   ]
+  },
+  {
+   "name": "A_VatGlass",
+   "kind": "lit",
+   "color": [
+    0.5,
+    0.9,
+    0.6,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.95
   }
  ],
  "assets": [
@@ -1471,11 +1529,6 @@
    "name": "Pier",
    "fbx": "Buildings/Pier.fbx",
    "tris": 1488
-  },
-  {
-   "name": "Ruins",
-   "fbx": "Buildings/Ruins.fbx",
-   "tris": 6756
   },
   {
    "name": "Cave",
@@ -1516,6 +1569,11 @@
    "name": "GolfCart",
    "fbx": "Buildings/GolfCart.fbx",
    "tris": 3428
+  },
+  {
+   "name": "Ruins",
+   "fbx": "Buildings/Ruins.fbx",
+   "tris": 17068
   }
  ],
  "vegetation": {
@@ -113391,6 +113449,23 @@
     -127.5,
     7.446625087782599
    ]
+  ]
+ },
+ "factory": {
+  "core": [
+   300.0,
+   75.0,
+   37.85046190984114
+  ],
+  "door": [
+   291.0,
+   49.0,
+   34.650461909841134
+  ],
+  "hall": [
+   300.0,
+   73.5,
+   34.85046190984114
   ]
  }
 }
