@@ -1141,6 +1141,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Walter",
+   "fbx": "Walter.fbx",
+   "voice": "fGIZlgPQ75MMlvQ6WxgY",
+   "security": false,
+   "materials": [
+    {
+     "name": "Walter_Skin",
+     "baseMap": "Textures/Walter_Skin_BC.png",
+     "normalMap": "Textures/Walter_Skin_N.png",
+     "maskMap": "Textures/Walter_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Walter_Bottom",
+     "color": [
+      0.5,
+      0.44999998807907104,
+      0.33000001311302185,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Walter_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.55,
+      0.55,
+      0.55,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Walter_Sole",
+     "color": [
+      0.25,
+      0.15000000596046448,
+      0.07999999821186066,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Walter_Socks",
+     "color": [
+      0.9200000166893005,
+      0.9200000166893005,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.1
+    },
+    {
+     "name": "Walter_Top",
+     "color": [
+      0.3499999940395355,
+      0.6499999761581421,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
