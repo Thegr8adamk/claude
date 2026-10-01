@@ -1390,6 +1390,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Doris",
+   "fbx": "Doris.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Doris_Skin",
+     "baseMap": "Textures/Doris_Skin_BC.png",
+     "normalMap": "Textures/Doris_Skin_N.png",
+     "maskMap": "Textures/Doris_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Doris_Bottom",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8799999952316284,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Doris_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.5394,
+      0.5353399999999999,
+      0.52926,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Doris_HairCap",
+     "color": [
+      0.5393999814987183,
+      0.5353400111198425,
+      0.529259979724884,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Doris_Sole",
+     "color": [
+      0.8500000238418579,
+      0.8500000238418579,
+      0.8500000238418579,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Doris_Top",
+     "color": [
+      0.550000011920929,
+      0.3499999940395355,
+      0.699999988079071,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
