@@ -4,15 +4,19 @@ The full project brief is in [CLAUDE.md](CLAUDE.md). Claude Code reads it at the
 
 ## Build order status
 
+Progress pictures: [Renders/progress/LOG.md](Renders/progress/LOG.md) (one line per update; ask for changes by picture name).
+
+**Test in Unity:** open the Unity project, run **Rex Magnum > Build Island**, open `Scenes/Island.unity`, press Play. Make a game: **Rex Magnum > Make Windows Game (.exe)** or **Make Android Game (.apk)**.
+
 | # | Step | Status |
 |---|---|---|
-| 1 | PC specs check + safe settings | Waiting: run the command below and send the result |
+| 1 | PC specs check + safe settings | Skipped by owner: the game detects the hardware and picks Low / Medium / High / Ultra itself (QualityAuto) |
 | 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Done (v1). Ready to test in Unity |
 | 3 | Tourist blob → other 3 blobs | Done (v1): models, rigs, 13 animations each, Unity AI |
 | 4 | Bottle, towel, knife → other weapons | Done (v2, approved): 10 realistic connected models, 2K PBR textures, Unity weapon system |
-| 5 | Island rough map + 3 view pictures | v2 in progress: realistic terrain, jungle, ocean, detailed hotel, pool, beach, waterfall, cave, ruins, ship (Blender/build_island_v2.py). Unity island builder next |
-| 6 | First playable (room 304 + pool) | Not started |
-| 7 | Other zones, one at a time | Not started |
+| 5 | Island rough map + 3 view pictures | Done (v2): realistic island, 8 views (Renders/island), exported to Unity (Island/), menu Rex Magnum > Build Island |
+| 6 | First playable (room 304 + pool) | Built: title + content warning, wake-up in room 304, stuck door, kickable bottles, mirrors, beer + towel pickups, blobs at the pool, phone touch controls. Needs your test in Unity |
+| 7 | Other zones, one at a time | In progress: hotel inside (lobby, lounge bar, casino, buffet + freezer, gym, spa, corridors, stairs, elevator, roof). Next: guests, penthouse, golf + cart, jungle + night, ruins/factory, cave, ship + King Glorp |
 | 8 | Accomplishments, album, settings, remap, save | Not started |
 
 ## Step 1: PC specs check
