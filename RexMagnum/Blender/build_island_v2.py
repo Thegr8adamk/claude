@@ -338,7 +338,7 @@ SHOTS_V2 = [
     ("v2_waterfall.png", (15, 110, 30), (40, 252, 40), 30),
     ("v2_cave.png", (-152, 200, None), (-160, 230, 3), 26),
     ("v2_ruins.png", (300, 30, 3), (300, 70, 11), 20),
-    ("v2_ship.png", (85, 320, 4), (40, 303, 6), 22),
+    ("v2_ship.png", (-12, 324, 8), (40, 305, 5), 24),
 ]
 
 
@@ -369,10 +369,19 @@ if __name__ == "__main__":
     ap.add_argument("--only", default="")
     ap.add_argument("--no-render", action="store_true")
     ap.add_argument("--save", default=os.path.join(HERE, "Island_v02.blend"))
+    ap.add_argument("--from-blend", action="store_true", help="render the saved Island_v02.blend (no rebuild)")
     a = ap.parse_args()
-    ha = build(a.trees)
-    if a.save:
-        bpy.ops.wm.save_as_mainfile(filepath=a.save)
+    if a.from_blend:
+        import numpy as np
+        import island as I
+        bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, "Island_v02.blend"))
+        _, _, h, _ = I.heightmap()
+        ha = lambda x, y: float(h[int(np.clip((y + I.SIZE / 2) / I.SIZE * (h.shape[0] - 1), 0, h.shape[0] - 1)),
+                                  int(np.clip((x + I.SIZE / 2) / I.SIZE * (h.shape[1] - 1), 0, h.shape[1] - 1))])
+    else:
+        ha = build(a.trees)
+        if a.save:
+            bpy.ops.wm.save_as_mainfile(filepath=a.save)
     if not a.no_render:
         w, h = (int(v) for v in a.res.split("x"))
         render(ha, os.path.join(ROOT, "Renders", "island"), a.samples, (w, h), [o for o in a.only.split(",") if o])
