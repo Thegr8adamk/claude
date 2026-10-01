@@ -129,3 +129,37 @@ Reactions to Rex: **Taunt (T)** → blobs show the rude tentacle, then get angry
 
 Files: `Unity/Assets/RexMagnum/Characters/Blobs/Blob_<Type>.fbx` (+ `.glb`), sources `Blender/Blob_<Type>_v01.blend` (model) and `_v02_rig.blend` (rig + animations).
 In Unity, **Rex Magnum → Build Rex + Test Scene** also builds the blobs (or use **Rex Magnum → Build Blobs**). The test scene spawns Tourist, Lifeguard and Bouncer blobs.
+
+## Audio (ElevenLabs): where to put the files
+
+Claude can see your ElevenLabs flows, but it can't download the audio files. Download the **selected take** of each item from your flows. Rename it as shown, and put it in the folder shown. Unity finds the files by name. If a file is missing, the game runs without that sound.
+
+**Music** → `Unity/Assets/RexMagnum/Resources/Music/`
+
+| Item in your flow | File name |
+|---|---|
+| Title theme v2 | `title_theme.mp3` |
+| Day resort v2 | `day_resort.mp3` |
+| Night jungle v1 | `night_jungle.mp3` |
+| Fight v2 | `fight.mp3` |
+| King Glorp power ballad v1 | `glorp_ballad.mp3` |
+| Rex lounge act v1 | `lounge_act.mp3` |
+
+**Sound effects** → `Unity/Assets/RexMagnum/Resources/Sfx/`
+
+| Item | File name |
+|---|---|
+| Blob idle gurgle / slide / spit / angry / hit / pop (v2) | `blob_idle.mp3`, `blob_slide.mp3`, `blob_spit.mp3`, `blob_angry.mp3`, `blob_hit.mp3`, `blob_pop.mp3` |
+| Towel crack 1 | `towel_crack.mp3` |
+| Bottle break 1 | `bottle_break.mp3` |
+| Knife stab + leak 1 | `knife_stab.mp3` |
+| Golf swing 2 | `golf_swing.mp3` |
+| Swordfish freeze/break 2 | `swordfish.mp3` |
+| Pistol 1 | `pistol.mp3` |
+| Harpoon 2 | `harpoon.mp3` |
+| Sniper + slow bullet 1 | `sniper.mp3` |
+| Coconut fuse + boom 2 | `coconut.mp3` |
+
+**Rex voice lines** → `Unity/Assets/RexMagnum/Resources/Voice/Rex/`
+
+Use the line group in lower case and the line number in the group, for example `wake_01.mp3` = "Who put the floor so close to my face?". Groups: wake, fists, bottle, towel, knife, golfclub, swordfish, pistol, harpoon, sniper, coconut, taunt, photo, photoalone, slip, slime, hurt, death, respawn, mirror, door, idle, rescue, weaponfound, tourist.
