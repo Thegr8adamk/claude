@@ -84,89 +84,6 @@
    ]
   },
   {
-   "name": "Lucy",
-   "fbx": "Lucy.fbx",
-   "voice": "lcMyyd2HUfFzxdCaC4Ta",
-   "security": false,
-   "materials": [
-    {
-     "name": "Lucy_Skin",
-     "baseMap": "Textures/Lucy_Skin_BC.png",
-     "normalMap": "Textures/Lucy_Skin_N.png",
-     "maskMap": "Textures/Lucy_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Lucy_Bottom",
-     "color": [
-      0.9200000166893005,
-      0.9200000166893005,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Lucy_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.3304975,
-      0.163266,
-      0.076864,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_HairCap",
-     "color": [
-      0.33049750328063965,
-      0.16326600313186646,
-      0.07686399668455124,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_Sole",
-     "color": [
-      0.8999999761581421,
-      0.8999999761581421,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Lucy_Top",
-     "color": [
-      0.10000000149011612,
-      0.550000011920929,
-      0.550000011920929,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Fin",
    "fbx": "Fin.fbx",
    "voice": "MjEQaRiSe6jP1b0vagRU",
@@ -492,6 +409,89 @@
       0.949999988079071,
       0.75,
       0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Lucy",
+   "fbx": "Lucy.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Lucy_Skin",
+     "baseMap": "Textures/Lucy_Skin_BC.png",
+     "normalMap": "Textures/Lucy_Skin_N.png",
+     "maskMap": "Textures/Lucy_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Lucy_Bottom",
+     "color": [
+      0.9200000166893005,
+      0.9200000166893005,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Lucy_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.3304975,
+      0.163266,
+      0.076864,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_HairCap",
+     "color": [
+      0.33049750328063965,
+      0.16326600313186646,
+      0.07686399668455124,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_Sole",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Lucy_Top",
+     "color": [
+      0.10000000149011612,
+      0.550000011920929,
+      0.550000011920929,
       1
      ],
      "smoothness": 0.25
