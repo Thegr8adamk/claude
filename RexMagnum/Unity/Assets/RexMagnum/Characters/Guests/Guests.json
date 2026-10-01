@@ -1473,6 +1473,79 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Earl",
+   "fbx": "Earl.fbx",
+   "voice": "MjEQaRiSe6jP1b0vagRU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Earl_Skin",
+     "baseMap": "Textures/Earl_Skin_BC.png",
+     "normalMap": "Textures/Earl_Skin_N.png",
+     "maskMap": "Textures/Earl_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Earl_Bottom",
+     "color": [
+      0.07999999821186066,
+      0.20000000298023224,
+      0.07999999821186066,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Earl_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.39349,
+      0.359864,
+      0.319456,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Earl_Sole",
+     "color": [
+      0.10000000149011612,
+      0.07000000029802322,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Earl_Top",
+     "color": [
+      0.75,
+      0.75,
+      0.75,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
