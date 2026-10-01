@@ -10,3 +10,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-01 18:51 | Summary: room 304, hotel + pool, ruins, ship; textures now seamless | 2026-10-01_1851_summary.png, 2026-10-01_textures_seamless.png |
 | 2026-10-01 19:30 | Step 7 started: hotel inside. Ground floor = lobby + reception, Rex's lounge bar + stage, casino lounge, buffet + walk-in freezer, doors to the pool. Guest floors = corridors with room doors + numbers, stairs, elevator shaft, roof stair house | 2026-10-01_1930_hotel_interiors_test.png |
 | 2026-10-01 19:45 | Fixed: beds no longer stick into the corridor; lobby sign reads correctly. Unity: working elevator (landing doors open only when the cab is there), pistol / knife / swordfish / sniper pickups placed per the brief | 2026-10-01_1945_hotel_lobby_corridor.png |
+| 2026-10-01 19:35 | Baked Unity textures (seamless): 24 building/plant materials done, 6 ground layers baking | 2026-10-01_1935_baked_textures.png |
