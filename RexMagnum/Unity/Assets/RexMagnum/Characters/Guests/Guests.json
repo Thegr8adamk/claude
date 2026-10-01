@@ -1068,6 +1068,79 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Rosa",
+   "fbx": "Rosa.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Rosa_Skin",
+     "baseMap": "Textures/Rosa_Skin_BC.png",
+     "normalMap": "Textures/Rosa_Skin_N.png",
+     "maskMap": "Textures/Rosa_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Rosa_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.10709650000000004,
+      0.08581240000000002,
+      0.0718696,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Rosa_HairCap",
+     "color": [
+      0.10709650069475174,
+      0.08581239730119705,
+      0.07186959683895111,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Rosa_Sole",
+     "color": [
+      0.15000000596046448,
+      0.07999999821186066,
+      0.03999999910593033,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Rosa_Top",
+     "color": [
+      0.6000000238418579,
+      0.019999999552965164,
+      0.029999999329447746,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
