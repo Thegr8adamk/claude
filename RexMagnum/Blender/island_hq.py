@@ -661,7 +661,7 @@ def hotel_and_pool(height_at):
                                               height_at(110, -345) + 1.7), bamboo)
 
 
-def waterfall_ruins_ship(height_at, river):
+def waterfall_ruins_ship(height_at, river, structures=True):
     # waterfall sheet: stretched noise, white foam, slight green (slime runs down the waterfall)
     wf = bpy.data.materials.new("WaterfallHQ")
     n = N(wf)
@@ -754,6 +754,8 @@ def waterfall_ruins_ship(height_at, river):
             bm.faces.new((prev[0], prev[1], b, a))
         prev = (a, b)
     mesh_ob("SlimeRiver", bm, slime, smooth=False)
+    if not structures:
+        return
     # ruins: stone blocks + moss on top faces + vines
     stone = bpy.data.materials.new("TempleStoneHQ")
     n = N(stone)
@@ -833,7 +835,7 @@ def waterfall_ruins_ship(height_at, river):
 
 # ------------------------------------------------------------------ build + render
 
-def build(tree_scale=1.0):
+def build(tree_scale=1.0, v2=False):
     leaf_textures()
     X, Y, h, river = I.heightmap()
     ha = lambda x, y: float(h[int(np.clip((y + I.SIZE / 2) / I.SIZE * (h.shape[0] - 1), 0, h.shape[0] - 1)),
@@ -854,6 +856,8 @@ def build(tree_scale=1.0):
     rocks = [make_boulder(s, protos) for s in range(5)]
     rng = random.Random(11)
     clear = (("hotel", 70), ("pool", 62), ("golf", 115), ("ruins", 38), ("ship", 45), ("waterfall", 26))
+    if v2:
+        clear = clear + (("cave", 24),)
     n1 = scatter(ha, palms, int(900 * tree_scale), rng, 0.6, 9, clear, "Palm", (0.8, 1.15), 0.3)
     n2 = scatter(ha, jungle, int(3200 * tree_scale), rng, 6, 150, clear, "Jungle", (0.7, 1.3), 0.5)
     n3 = scatter(ha, ferns, int(14000 * tree_scale), rng, 2.5, 150, clear[:5], "Fern", (0.8, 1.8), 0.05, False)
@@ -868,8 +872,9 @@ def build(tree_scale=1.0):
         inst.location = (x + rng.uniform(-1.5, 1.5), y, ha(x, y))
         inst.rotation_euler = (0, 0, rng.uniform(0, math.tau))
         link(inst, "Vegetation")
-    hotel_and_pool(ha)
-    waterfall_ruins_ship(ha, river)
+    if not v2:
+        hotel_and_pool(ha)
+    waterfall_ruins_ship(ha, river, structures=not v2)
     print(f"[IslandHQ] palms {n1}, jungle trees {n2}, ferns {n3}, boulders {n4}")
     return ha
 

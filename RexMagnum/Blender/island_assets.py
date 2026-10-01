@@ -384,25 +384,28 @@ def falling_water(name):
     out = nt.nodes.new("ShaderNodeOutputMaterial")
     tc = nt.nodes.new("ShaderNodeTexCoord")
     mp = nt.nodes.new("ShaderNodeMapping")
-    mp.inputs["Scale"].default_value = (1.5, 1.5, 0.07)
+    mp.inputs["Scale"].default_value = (2.5, 2.5, 0.06)
     nt.links.new(tc.outputs["Object"], mp.inputs[0])
     nz = nt.nodes.new("ShaderNodeTexNoise")
     nz.inputs["Scale"].default_value = 3
     nz.inputs["Detail"].default_value = 8
     nt.links.new(mp.outputs[0], nz.inputs["Vector"])
     ramp = nt.nodes.new("ShaderNodeMapRange")
-    ramp.inputs["From Min"].default_value = 0.45
-    ramp.inputs["From Max"].default_value = 0.7
+    ramp.inputs["From Min"].default_value = 0.5
+    ramp.inputs["From Max"].default_value = 0.78
     nt.links.new(nz.outputs["Fac"], ramp.inputs["Value"])
     white = nt.nodes.new("ShaderNodeBsdfPrincipled")
     white.inputs["Base Color"].default_value = (0.92, 0.96, 0.97, 1)
     white.inputs["Roughness"].default_value = 0.35
     white.inputs["Subsurface Weight"].default_value = 0.3
-    clear = nt.nodes.new("ShaderNodeBsdfGlass")
-    clear.inputs["Roughness"].default_value = 0.05
-    clear.inputs["IOR"].default_value = 1.333
+    clear = nt.nodes.new("ShaderNodeBsdfTransparent")
     mix = nt.nodes.new("ShaderNodeMixShader")
-    nt.links.new(ramp.outputs[0], mix.inputs[0])
+    haze = nt.nodes.new("ShaderNodeMath")
+    haze.operation = "MULTIPLY_ADD"
+    haze.inputs[1].default_value = 0.75
+    haze.inputs[2].default_value = 0.12
+    nt.links.new(ramp.outputs[0], haze.inputs[0])
+    nt.links.new(haze.outputs[0], mix.inputs[0])
     nt.links.new(clear.outputs[0], mix.inputs[1])
     nt.links.new(white.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
@@ -1034,6 +1037,7 @@ def ruins(m):
     k = Kit("Asset_Ruins")
     rng = random.Random(4)
     tier_h = 3.5
+    k.box((-21, -23, -8), (21, 21, 0.02), m["stone"], "Foundation", bevel=0.1)
     for i in range(6):
         s = 40 - i * 6
         k.box((-s / 2, -s / 2, i * tier_h), (s / 2, s / 2, (i + 1) * tier_h), m["stone"], "Tier", bevel=0.12)
@@ -1059,10 +1063,10 @@ def ruins(m):
     # slime pipes: from the doorway along the ground to the jungle (clamped, resting on supports)
     for p_ in range(3):
         y = -22 - p_ * 1.0
-        pts = [(-9 + p_ * 0.8, -20.6, 0.6), (-9 + p_ * 0.8, y, 0.6), (-25, y - 3, 0.6), (-40, y - 10, 0.6)]
+        pts = [(-9 + p_ * 0.8, -20.6, 0.6), (-9 + p_ * 0.8, y, 0.6), (-16, y - 2, 0.6), (-21, y - 3.5, -2.5)]
         k.tube(pts, 0.28, m["slimeglow"], segs=12, base="Pipe")
-        for j in range(4):
-            q = Vector(pts[1]).lerp(Vector(pts[3]), j / 4)
+        for j in range(3):
+            q = Vector(pts[1]).lerp(Vector(pts[2]), j / 3)
             k.box((q.x - 0.15, q.y - 0.4, 0), (q.x + 0.15, q.y + 0.4, 0.35), m["darkmetal"], "PipeStand")
     # carved heads on the stair base, fallen + standing columns
     for sx in (-1, 1):
@@ -1149,7 +1153,13 @@ def cave(m):
     bpy.data.objects.remove(cut)
     # tunnel floor (wet dark rock) + darkness further in
     k.box((-2.6, -3, -0.2), (2.6, 14, 0.05), m["wetrock"], "TunnelFloor")
-    k.box((-3.5, 13, -0.5), (3.5, 14, 6), principled("A_Dark", (0, 0, 0), 1.0), "Darkness")
+    k.box((-3.5, 6, -0.5), (3.5, 7, 6), principled("A_Dark", (0, 0, 0), 1.0), "Darkness")
+    # dark opening right behind the curtain (same shape as the tunnel) so the mouth reads as a deep cave
+    dk = k.cyl((0, -0.7, 2.4), (0, 0.0, 2.4), 2.9, principled("A_Dark", (0, 0, 0), 1.0), segs=24, base="MouthDark")
+    dk.scale = (1, 1, 1)
+    for v in dk.data.vertices:
+        v.co.z = 2.4 + (v.co.z - 2.4) * 1.25
+        v.co.z = max(v.co.z, 0.0)
     # plunge pool + small waterfall curtain in front of the mouth (falls from the rock lip)
     k.box((-6, -6, -0.6), (6, -0.5, -0.1), m["slimewater"], "Pool")
     wf = falling_water("A_SmallFall")
@@ -1157,7 +1167,7 @@ def cave(m):
     rows = []
     for j in range(21):
         t = j / 20
-        rows.append([bm.verts.new(((i / 8 - 0.5) * 8, -1.2 - 1.5 * t * t, 9.5 * (1 - t))) for i in range(9)])
+        rows.append([bm.verts.new(((i / 8 - 0.5) * 6.2, -1.2 - 1.5 * t * t, 8.0 * (1 - t))) for i in range(9)])
     for j in range(20):
         for i in range(8):
             bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
@@ -1216,7 +1226,7 @@ def ship(m):
             continue
         d = k.boxc((x, y, -5.8), (rng.uniform(1, 4), rng.uniform(1, 3), 0.15), m["hull"], rot=rng.uniform(0, 3))
         d.rotation_euler = (rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), rng.uniform(0, 3))
-    k.disc((0, 0, -6.05), 48, 0.05, m["scorch"], segs=64, base="Scorch")
+    k.disc((0, 0, -7.0), 36, 0.6, m["scorch"], segs=64, base="Scorch")
     return k.c
 
 
