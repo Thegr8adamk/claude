@@ -1,0 +1,152 @@
+{
+ "blobs": [
+  {
+   "kind": "Tourist",
+   "colors": [
+    [
+     0.45,
+     0.95,
+     0.25
+    ],
+    [
+     0.16,
+     0.7,
+     0.12
+    ],
+    [
+     0.05,
+     0.35,
+     0.06
+    ]
+   ],
+   "height": 1.25,
+   "triangles": 14104,
+   "clips": [
+    "Idle",
+    "Slide",
+    "SlideFast",
+    "Whip",
+    "Spit",
+    "Throw",
+    "Hit",
+    "Stun",
+    "Angry",
+    "Rude",
+    "Photo",
+    "Pinned",
+    "Pop"
+   ]
+  },
+  {
+   "kind": "Lifeguard",
+   "colors": [
+    [
+     1.0,
+     0.35,
+     0.3
+    ],
+    [
+     0.85,
+     0.08,
+     0.06
+    ],
+    [
+     0.4,
+     0.02,
+     0.03
+    ]
+   ],
+   "height": 1.9,
+   "triangles": 10616,
+   "clips": [
+    "Idle",
+    "Slide",
+    "SlideFast",
+    "Whip",
+    "Spit",
+    "Throw",
+    "Hit",
+    "Stun",
+    "Angry",
+    "Rude",
+    "Photo",
+    "Pinned",
+    "Pop"
+   ]
+  },
+  {
+   "kind": "Bouncer",
+   "colors": [
+    [
+     0.7,
+     0.45,
+     1.0
+    ],
+    [
+     0.42,
+     0.15,
+     0.8
+    ],
+    [
+     0.18,
+     0.05,
+     0.38
+    ]
+   ],
+   "height": 2.15,
+   "triangles": 13128,
+   "clips": [
+    "Idle",
+    "Slide",
+    "SlideFast",
+    "Whip",
+    "Spit",
+    "Throw",
+    "Hit",
+    "Stun",
+    "Angry",
+    "Rude",
+    "Photo",
+    "Pinned",
+    "Pop"
+   ]
+  },
+  {
+   "kind": "KingGlorp",
+   "colors": [
+    [
+     1.0,
+     0.88,
+     0.35
+    ],
+    [
+     0.95,
+     0.66,
+     0.08
+    ],
+    [
+     0.55,
+     0.32,
+     0.02
+    ]
+   ],
+   "height": 4.2,
+   "triangles": 30080,
+   "clips": [
+    "Idle",
+    "Slide",
+    "SlideFast",
+    "Whip",
+    "Spit",
+    "Throw",
+    "Hit",
+    "Stun",
+    "Angry",
+    "Rude",
+    "Photo",
+    "Pinned",
+    "Pop"
+   ]
+  }
+ ]
+}
