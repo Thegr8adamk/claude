@@ -31,7 +31,7 @@ GUESTS = [
     dict(name="Callie", macro=dict(gender=0.0, age=0.47, muscle=0.45, weight=0.42, height=0.55, proportions=0.6,
                                    cupsize=0.55, firmness=0.6),
          skin=(0.58, 0.36, 0.25), hair=("long", 0.18, 0.0, 0.25), top=("bikini", (0.95, 0.35, 0.3)),
-         bottom=("shorts", (0.25, 0.4, 0.6)), feet=("sandals", (0.85, 0.75, 0.6)), voice="7YaUDeaStRuoYg3FKsmU"),
+         bottom=("shorts", (0.08, 0.15, 0.3)), feet=("sandals", (0.85, 0.75, 0.6)), voice="7YaUDeaStRuoYg3FKsmU"),
     dict(name="Heather", macro=dict(gender=0.0, age=0.58, muscle=0.4, weight=0.52, height=0.5, proportions=0.55,
                                     cupsize=0.6, firmness=0.5),
          skin=(0.33, 0.19, 0.11), hair=("bob", 0.95, 0.0, 0.1), top=("dress", (0.95, 0.75, 0.15)),
@@ -47,12 +47,12 @@ GUESTS = [
          skin=(0.5, 0.3, 0.2), hair=("short", 0.6, 0.0, 0.2), top=("tank", (0.95, 0.95, 0.95)),
          bottom=("trunks", (0.85, 0.15, 0.12)), feet=("sandals", (0.1, 0.1, 0.1)), voice="fV5vDeUO8ghvK7ntjiVC"),
     dict(name="Fin", macro=dict(gender=1.0, age=0.53, muscle=0.5, weight=0.5, height=0.55, proportions=0.5),
-         skin=(0.17, 0.09, 0.05), hair=("short", 0.98, 0.0, 0.05), top=("tshirt", (0.1, 0.15, 0.35)),
+         skin=(0.17, 0.09, 0.05), hair=("short", 0.98, 0.0, 0.05), top=("tshirt", (0.012, 0.02, 0.07)),
          bottom=("shorts", (0.35, 0.33, 0.25)), feet=("sandals", (0.2, 0.15, 0.1)), voice="MjEQaRiSe6jP1b0vagRU"),
     dict(name="Carmen", macro=dict(gender=0.0, age=0.54, muscle=0.6, weight=0.45, height=0.6, proportions=0.6,
                                    cupsize=0.5, firmness=0.6),
-         skin=(0.45, 0.27, 0.16), hair=("ponytail", 0.92, 0.0, 0.15), top=("polo", (0.06, 0.1, 0.22)),
-         bottom=("pants", (0.08, 0.08, 0.1)), feet=("boots", (0.05, 0.05, 0.05)), voice="y3CfH7z4dKrH4hDLOEQK",
+         skin=(0.45, 0.27, 0.16), hair=("ponytail", 0.92, 0.0, 0.15), top=("polo", (0.008, 0.012, 0.045)),
+         bottom=("pants", (0.02, 0.02, 0.025)), feet=("boots", (0.05, 0.05, 0.05)), voice="y3CfH7z4dKrH4hDLOEQK",
          security=True),
 ]
 
@@ -119,10 +119,48 @@ def is_leg(L, c):
     return c.z < L["crotch_z"] + 0.06 and abs(c.x) > 0.005
 
 
+def clean_hems(ob, thickness=0.003):
+    """Straighten jagged cut edges: every open edge loop is projected onto its best-fit plane, then the cloth
+    gets a little thickness so the hem reads as fabric, not a paper edge."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bnd = {v for e in bm.edges if e.is_boundary for v in e.verts}
+    seen = set()
+    for v0 in bnd:
+        if v0 in seen:
+            continue
+        loop, stack = [], [v0]
+        while stack:                       # connected boundary vertices = one hem loop
+            v = stack.pop()
+            if v in seen:
+                continue
+            seen.add(v)
+            loop.append(v)
+            for e in v.link_edges:
+                if e.is_boundary:
+                    o = e.other_vert(v)
+                    if o not in seen:
+                        stack.append(o)
+        if len(loop) < 4:
+            continue
+        pts = np.array([tuple(v.co) for v in loop])
+        c = pts.mean(axis=0)
+        _, _, vt = np.linalg.svd(pts - c)
+        nrm = Vector(vt[2])
+        cv = Vector(c)
+        for v in loop:
+            v.co -= nrm * (v.co - cv).dot(nrm)
+    bm.to_mesh(ob.data)
+    bm.free()
+    so = ob.modifiers.new("Thickness", "SOLIDIFY")
+    so.thickness = thickness
+    so.offset = 1.0
+
+
 def make_top(body, L, kind, colour, name, look):
     neck_z = float(L["neck"].z)
     hip, chest = L["hip_z"], L["chest_z"]
-    mat = look.fabric_material(f"{name}_Top", None, colour, rough=0.75, weave_scale=1200, bump=0.15, sheen=0.4)
+    mat = look.fabric_material(f"{name}_Top", None, colour, rough=0.75, weave_scale=1200, bump=0.15, sheen=0.08)
 
     def keep(c):
         t = arm_t(L, c)
@@ -155,6 +193,7 @@ def make_top(body, L, kind, colour, name, look):
         return 0.009 if kind == "tank" else 0.012
 
     ob = look.shell(body, f"{name}_Top", keep, off, mat)
+    clean_hems(ob)
     look.smooth_shell(ob, 6 if kind == "dress" else 3, 0.5)
     if kind == "dress":     # close the gap between the legs: pull inner skirt vertices to the middle line
         for v in ob.data.vertices:
@@ -167,7 +206,7 @@ def make_bottom(body, L, kind, colour, name, look):
     if not kind:
         return None
     hip = L["hip_z"]
-    mat = look.fabric_material(f"{name}_Bottom", None, colour, rough=0.8, weave_scale=900, bump=0.2, sheen=0.3)
+    mat = look.fabric_material(f"{name}_Bottom", None, colour, rough=0.8, weave_scale=900, bump=0.2, sheen=0.08)
     low = {"shorts": (L["knee_z"] + L["crotch_z"]) / 2 - 0.02, "trunks": L["crotch_z"] - 0.12,
            "pants": L["ankle_z"] + 0.03}[kind]
 
@@ -176,6 +215,7 @@ def make_bottom(body, L, kind, colour, name, look):
             (c.z < hip - 0.02 or abs(c.x) < abs(L["sh_l"].x))
 
     ob = look.shell(body, f"{name}_Bottom", keep, lambda c, n: 0.011 if kind != "pants" else 0.01, mat)
+    clean_hems(ob)
     look.smooth_shell(ob, 3, 0.5)
     return ob
 
@@ -184,7 +224,8 @@ def make_feet(body, L, kind, colour, name, look):
     a = L["ankle_z"]
     sole = look.mat_principled(f"{name}_Sole", colour, 0.7)
     if kind == "boots":
-        ob = look.shell(body, f"{name}_Boots", lambda c: c.z < a + 0.14, lambda c, n: 0.008, sole)
+        ob = look.shell(body, f"{name}_Boots", lambda c: c.z < a + 0.16, lambda c, n: 0.009, sole)
+        clean_hems(ob, 0.004)
     else:
         ob = look.shell(body, f"{name}_Sandals", lambda c: c.z < a - 0.035, lambda c, n: 0.004, sole)
         if kind == "socks_sandals":
