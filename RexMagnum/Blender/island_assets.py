@@ -1991,6 +1991,126 @@ def golf_cart(m):
     return k.c
 
 
+# ------------------------------------------------------------------ cave tunnels (underground zone)
+
+TUNNEL_Z = -60.0      # the tunnel network sits deep under the island; doors teleport Rex in and out
+TUNNEL_PATHS = {      # local x, y (m) along each tunnel; z offsets for slopes
+    "main": [(0, 0, 0), (20, 6, -1), (45, 2, -3), (70, 14, -4), (95, 10, -4), (120, 22, -3)],
+    "ruins": [(120, 22, -3), (140, 0, -2), (150, -25, 0)],
+    "ship": [(120, 22, -3), (130, 45, 4), (128, 70, 12), (140, 88, 22)],
+}
+
+
+def cave_rock_material():
+    m, nt = _mat("A_CaveRock")
+    if nt is None:
+        return m
+    p = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 0.8
+    nz.inputs["Detail"].default_value = 12
+    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (0.02, 0.022, 0.02, 1)
+    ramp.color_ramp.elements[1].color = (0.16, 0.15, 0.13, 1)
+    nt.links.new(nz.outputs["Fac"], ramp.inputs[0])
+    nt.links.new(ramp.outputs[0], p.inputs["Base Color"])
+    p.inputs["Roughness"].default_value = 0.55       # damp
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.8
+    nt.links.new(nz.outputs["Fac"], b.inputs["Height"])
+    nt.links.new(b.outputs[0], p.inputs["Normal"])
+    return m
+
+
+def cave_tunnels(m):
+    """Underground zone (local coords, origin = cave entrance end). Winding rock tunnels, seen from inside:
+    main tunnel from the cave mouth to a cavern with a slime lake, a branch to the ruins (factory back door) and
+    a climbing branch up to the ship. Glowing slime veins, crystals, stalactites, mushrooms, puddles."""
+    k = Kit("Asset_CaveTunnels")
+    rock = cave_rock_material()
+    crystal = principled("A_Crystal", (0.3, 0.9, 1.0), 0.05, **{"Transmission Weight": 0.6,
+                         "Emission Color": (0.3, 0.8, 1.0, 1), "Emission Strength": 4.0})
+    mush = principled("A_GlowMushroom", (0.9, 0.5, 0.1), 0.4, **{"Emission Color": (1.0, 0.5, 0.1, 1),
+                      "Emission Strength": 3.0})
+    rng = random.Random(42)
+    def spline(pts, step=1.5):
+        out = []
+        P = [Vector(p) for p in pts]
+        for i in range(len(P) - 1):
+            p0, p1, p2, p3 = P[max(i - 1, 0)], P[i], P[i + 1], P[min(i + 2, len(P) - 1)]
+            n = max(2, int((p2 - p1).length / step))
+            for j in range(n):
+                t = j / n
+                t2, t3 = t * t, t * t * t
+                out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+                                  (-p0 + 3 * p1 - 3 * p2 + p3) * t3))
+        out.append(P[-1])
+        return out
+    markers = {}
+    for name, pts in TUNNEL_PATHS.items():
+        path = spline(pts)
+        bm = bmesh.new()
+        segs = 18
+        rings = []
+        prev = None
+        for i, c in enumerate(path):
+            t = (path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]).normalized()
+            side = t.cross(Vector((0, 0, 1))).normalized()
+            up = side.cross(t).normalized()
+            w = 3.2 + 1.2 * noise.noise(c * 0.08) + (5.0 if name == "main" and i > len(path) * 0.75 else 0.0)
+            h = 3.6 + 1.0 * noise.noise(c * 0.07 + Vector((5, 5, 5)))
+            ring = []
+            for k_ in range(segs):
+                a = math.tau * k_ / segs
+                r = 1 + 0.18 * noise.noise(c * 0.4 + Vector((a, a, 0)))
+                ca, sa = math.cos(a), math.sin(a)
+                flat = max(sa, -0.55)                    # flat-ish floor
+                ring.append(bm.verts.new(c + side * ca * w * r + up * (flat * h * r + h * 0.55)))
+            rings.append(ring)
+        for i in range(len(rings) - 1):
+            for k_ in range(segs):
+                # winding reversed: normals point INTO the tunnel (we are inside)
+                bm.faces.new((rings[i][k_], rings[i + 1][k_], rings[i + 1][(k_ + 1) % segs], rings[i][(k_ + 1) % segs]))
+        ob = k._ob(f"Tunnel_{name}", bm, rock, smooth=True)
+        sub = ob.modifiers.new("Sub", "SUBSURF")
+        sub.levels = sub.render_levels = 1
+        tx = bpy.data.textures.get("T_CaveDisp") or bpy.data.textures.new("T_CaveDisp", "VORONOI")
+        tx.noise_scale = 1.6
+        d = ob.modifiers.new("Rough", "DISPLACE")
+        d.texture, d.strength, d.texture_coords = tx, 0.35, "GLOBAL"
+        # details along the path
+        for i in range(2, len(path) - 2, 3):
+            c = path[i]
+            t = (path[i + 1] - path[i - 1]).normalized()
+            side = t.cross(Vector((0, 0, 1))).normalized()
+            if rng.random() < 0.6:                   # stalactite
+                top = c + Vector((0, 0, 3.6 + 1.0)) + side * rng.uniform(-1.5, 1.5)
+                k.cyl(top, top - Vector((0, 0, rng.uniform(0.6, 1.6))), rng.uniform(0.12, 0.3), rock, segs=8,
+                      r1=0.01, base="Stalactite")
+            if rng.random() < 0.35:                  # crystal cluster on a wall
+                base = c + side * rng.choice((-1, 1)) * 2.6 + Vector((0, 0, 0.3))
+                for q in range(4):
+                    dir_ = Vector((rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5), 1)).normalized()
+                    k.cyl(base, base + dir_ * rng.uniform(0.4, 1.0), 0.08, crystal, segs=6, r1=0.0, base="Crystal")
+            if rng.random() < 0.4:                   # glowing mushrooms on the floor edge
+                fp = c + side * rng.choice((-1, 1)) * 2.2 - Vector((0, 0, 1.4))
+                for q in range(3):
+                    o = Vector((rng.uniform(-0.4, 0.4), rng.uniform(-0.4, 0.4), 0))
+                    k.cyl(fp + o, fp + o + Vector((0, 0, 0.18)), 0.02, mush, segs=6, base="MushStem")
+                    k.disc(fp + o + Vector((0, 0, 0.18)), 0.09, 0.04, mush, segs=10, r_top=0.02, base="MushCap")
+            if rng.random() < 0.25:                  # slime puddle
+                k.disc(c - Vector((0, 0, 1.45)), rng.uniform(0.6, 1.4), 0.03, m["slimeglow"], segs=16, base="Puddle")
+        markers[name] = [list(path[0]), list(path[-1])]
+    # cavern at the junction: slime lake + glowing vein on the ceiling
+    jc = Vector(TUNNEL_PATHS["main"][-1])
+    k.disc(jc - Vector((4, 0, 1.4)), 5.5, 0.05, m["slimewater"], segs=40, base="SlimeLake")
+    k.tube([jc + Vector((-8, -3, 5)), jc + Vector((-2, 1, 6)), jc + Vector((5, 3, 5.5))], 0.12, m["slimeglow"], base="Vein")
+    markers["lights"] = [list(path_pt) for path_pt in [Vector(p) + Vector((0, 0, 2.5)) for pts in TUNNEL_PATHS.values() for p in pts]]
+    return k.c, markers
+
+
 def build_all():
     m = M()
     weather_all(m)

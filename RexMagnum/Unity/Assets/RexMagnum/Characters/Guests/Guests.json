@@ -736,6 +736,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Priya",
+   "fbx": "Priya.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Priya_Skin",
+     "baseMap": "Textures/Priya_Skin_BC.png",
+     "normalMap": "Textures/Priya_Skin_N.png",
+     "maskMap": "Textures/Priya_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Priya_Bottom",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8799999952316284,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Priya_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.03135850000000001,
+      0.017415600000000003,
+      0.010422400000000002,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Priya_HairCap",
+     "color": [
+      0.0313584990799427,
+      0.017415599897503853,
+      0.010422400198876858,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Priya_Sole",
+     "color": [
+      0.6000000238418579,
+      0.3499999940395355,
+      0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Priya_Top",
+     "color": [
+      0.949999988079071,
+      0.699999988079071,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
