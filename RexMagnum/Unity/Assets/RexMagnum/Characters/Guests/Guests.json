@@ -1307,6 +1307,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Chad",
+   "fbx": "Chad.fbx",
+   "voice": "fV5vDeUO8ghvK7ntjiVC",
+   "security": false,
+   "materials": [
+    {
+     "name": "Chad_Skin",
+     "baseMap": "Textures/Chad_Skin_BC.png",
+     "normalMap": "Textures/Chad_Skin_N.png",
+     "maskMap": "Textures/Chad_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Chad_Bottom",
+     "color": [
+      0.949999988079071,
+      0.75,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Chad_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.2686625,
+      0.17930999999999997,
+      0.09223999999999999,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Chad_HairCap",
+     "color": [
+      0.2686625123023987,
+      0.17930999398231506,
+      0.09223999828100204,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Chad_Sole",
+     "color": [
+      0.20000000298023224,
+      0.20000000298023224,
+      0.20000000298023224,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Chad_Top",
+     "color": [
+      0.949999988079071,
+      0.3499999940395355,
+      0.550000011920929,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
