@@ -41,6 +41,8 @@ namespace RexMagnum
             { "CartPush", new[] { "Pushing. Great. My heart doctor will hear about this. If I had one." } },
             { "Night", new[] { "I can see fine. Who moved the wall?", "Sunglasses at night. It's a look. It's also a problem." } },
             { "Factory", new[] { "I've shut down bigger productions. By showing up drunk.", "Whoops. Was that important?" } },
+            { "Glorp", new[] { "You must be the big cheese. You smell like it.", "You don't know who I am? That hurts more than the slime.", "I've worked with bigger slimeballs. They ran studios.", "Nice crown. Compensating for something?" } },
+            { "GlorpWin", new[] { "Long live the king. Nah.", "And... cut. Print it. Somebody print it. Anybody?" } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };
@@ -57,7 +59,7 @@ namespace RexMagnum
             if (lines.Length > 1 && last.TryGetValue(group, out int prev) && prev == i) i = (i + 1) % lines.Length;
             last[group] = i;
             nextAllowed = Time.time + 2.5f;
-            Subtitle?.Invoke(lines[i]);
+            Subtitle?.Invoke("REX: " + lines[i]);
             var clip = Resources.Load<AudioClip>($"Voice/Rex/{group.ToLowerInvariant()}_{i + 1:00}");
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
             if (clip != null && src != null) src.PlayOneShot(clip);

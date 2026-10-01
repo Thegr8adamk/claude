@@ -29,7 +29,7 @@ namespace RexMagnum
             subtitle = MakeText(go.transform, font, new Vector2(0.5f, 0), new Vector2(0, 120), 34, TextAnchor.LowerCenter);
             subtitle.rectTransform.sizeDelta = new Vector2(1600, 200);
             hp = MakeText(go.transform, font, new Vector2(0, 0), new Vector2(40, 40), 36, TextAnchor.LowerLeft);
-            RexVoice.Subtitle = line => { subtitle.text = "REX: " + line; subtitleUntil = Time.time + 3f; };
+            RexVoice.Subtitle = line => { subtitle.text = line; subtitleUntil = Time.time + 3f; };
             prompt = MakeText(go.transform, font, new Vector2(0.5f, 0.5f), new Vector2(0, -80), 28, TextAnchor.MiddleCenter);
             prompt.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             scope = new GameObject("Scope", typeof(RectTransform), typeof(Image));

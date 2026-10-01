@@ -125,6 +125,7 @@ namespace RexMagnum.EditorTools
                 Golf(File.ReadAllText(json), pool);
                 Factory(File.ReadAllText(json));
                 Tunnels(File.ReadAllText(json), terrain);
+                Boss(terrain);
                 if (data.hotel != null && data.hotel.elevatorFloors != null)
                 {
                     Hotel(data.hotel);
@@ -784,6 +785,38 @@ namespace RexMagnum.EditorTools
                 nav.center = (main[0] + main[main.Count - 1]) * 0.5f;
                 nav.size = new Vector3(260f, 80f, 260f);
             }
+        }
+
+        static void Boss(Terrain terrain)
+        {
+            var blobs = BlobBuilder.Build();
+            if (!blobs.TryGetValue("KingGlorp", out var glorp)) return;
+            var at = U(55f, 278f, 0f);                         // in front of the crashed ship, on the plateau
+            if (terrain != null) at.y = terrain.SampleHeight(at) + terrain.transform.position.y;
+            var g = (Blob)PrefabUtility.InstantiatePrefab(glorp);
+            g.name = "KingGlorp";
+            g.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 200f, 0f));
+            var boss = g.gameObject.AddComponent<KingGlorpBoss>();
+            boss.crown = g.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.Contains("Crown") || t.name.Contains("Spike"));
+            boss.minionPrefabs = blobs.Where(kv => kv.Key == "Tourist").Select(kv => kv.Value).ToArray();
+            // props for him to absorb as armor: deck chairs, barrels, crates around the crash site
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_ShipHull.mat");
+            var rng = new System.Random(7);
+            for (int i = 0; i < 14; i++)
+            {
+                float a = i / 14f * Mathf.PI * 2f;
+                var p = at + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (10f + (float)rng.NextDouble() * 10f);
+                if (terrain != null) p.y = terrain.SampleHeight(p) + terrain.transform.position.y + 0.5f;
+                var c = GameObject.CreatePrimitive(i % 2 == 0 ? PrimitiveType.Cube : PrimitiveType.Cylinder);
+                c.name = "ShipDebris";
+                c.transform.position = p;
+                c.transform.localScale = new Vector3(0.9f, 0.6f, 0.9f) * (0.8f + (float)rng.NextDouble() * 0.6f);
+                if (mat != null) c.GetComponent<Renderer>().sharedMaterial = mat;
+                c.AddComponent<Rigidbody>().mass = 30f;
+            }
+            var nav = new GameObject("ShipNavMesh").AddComponent<RuntimeNavMesh>();
+            nav.center = at;
+            nav.size = new Vector3(120f, 60f, 120f);
         }
 
         static GameObject CartPrefab(GameObject fbx)
