@@ -7,7 +7,7 @@ The full project brief is in [CLAUDE.md](CLAUDE.md). Claude Code reads it at the
 | # | Step | Status |
 |---|---|---|
 | 1 | PC specs check + safe settings | Waiting: run the command below and send the result |
-| 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Pictures ready, waiting for approval |
+| 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Approved. Next: rig + animations |
 | 3 | Tourist blob → other 3 blobs | Not started |
 | 4 | Bottle, towel, knife → other weapons | Not started |
 | 5 | Island rough map + 3 view pictures | Not started |
@@ -67,6 +67,7 @@ Add `--preview` for fast, small test pictures.
 ### After approval (next steps for Rex)
 
 1. Hero pose and idle pose (chest out / belly out).
+   The game has first-person AND third-person modes, so the full body needs animations for every action.
 2. Mixamo-compatible humanoid rig, with the clothes and jewelry fitted to the rig.
 3. Face blend shapes: blink, talk (A/E/O/M), smile, smug grin.
 4. First-person arms: a separate, high-detail model with full finger bones.

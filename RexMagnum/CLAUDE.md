@@ -24,7 +24,7 @@
 4. Never run long jobs without telling owner how long and how to stop them.
 
 ## 2. Game summary
-First-person comedy shooter. Adult crude humor (Duke Nukem 3D + Leisure Suit Larry + Conker + Sniper Elite kill cam). Rex Magnum, 58, washed-up 1986 action star (film: *Maximum Justice*), lives free at a jungle island resort (room 304, floor 3) in exchange for a bad nightly lounge act. Owes big bar tab. Agent Marty ignores him. Blob aliens crash on the island by accident (need water + sugar to breed). Aliens do NOT know Rex. Rex fights only because: he dies, or he gets publicity and a job. One player. Content warning on title screen. Subtitles for all lines.
+First-person AND third-person comedy shooter (player can switch any time; see §7a). Adult crude humor (Duke Nukem 3D + Leisure Suit Larry + Conker + Sniper Elite kill cam). Rex Magnum, 58, washed-up 1986 action star (film: *Maximum Justice*), lives free at a jungle island resort (room 304, floor 3) in exchange for a bad nightly lounge act. Owes big bar tab. Agent Marty ignores him. Blob aliens crash on the island by accident (need water + sugar to breed). Aliens do NOT know Rex. Rex fights only because: he dies, or he gets publicity and a job. One player. Content warning on title screen. Subtitles for all lines.
 
 **Open free play.** No chapters, no required path, no fame meter. After leaving his room, whole island is open. Accomplishments list instead of chapters (groups: Fight, Sniper, Rescue, Explore, Big goals, Rex, Photos). Big goals: stop blob factory (ruins), pop King Glorp (ship; open from start, very hard early). Free play continues after boss.
 
@@ -107,8 +107,19 @@ Unity: terrain + zone streaming, LODs, instanced vegetation, water shader for se
 | Photo | Photo | P | D-pad right |
 | Use (pick up, open, cart in/out) | Use (shows near objects) | F | X |
 | Pause (map, album, accomplishments, settings) | Pause | Esc | Menu |
+| Camera: first ↔ third person | Camera | V | click R-stick |
+| Swap shoulder (third person) | — (setting) | C | D-pad left |
 Phone layout: move stick bottom-left; look stick + Action bottom-right; Jump above Action; Taunt, Photo, Hands, Weapon along top; Pause top corner. Landscape. Controller connected on phone → hide touch buttons.
 Remap: key/button lists per device (swap on conflict), drag/resize/opacity for touch buttons, swap sticks (left-hand), swap triggers/bumpers, separate look speed X/Y, invert Y, hold-or-tap for Run/Aim/Hands, aim assist toggle (phone/controller), reset per device. Save 3 sets (touch, KB/M, controller). Use Unity Input System package.
+
+## 7a. Camera modes (owner decision: game plays in BOTH)
+- Two modes: **First person (FP)** and **Third person (TP)**. Switch any time: keyboard **V**, controller **R-stick click**, touch **Camera** button (top row). Setting: default mode + remember last mode.
+- **FP:** separate high-detail arms model (full finger bones), weapon in view, head bob setting.
+- **TP:** over-the-shoulder camera behind Rex (right shoulder; swap shoulder: keyboard **C** / controller D-pad left). Camera collides with walls (no clipping), zooms in when aiming, crosshair in center, aim ray from camera. Full Rex body visible: needs full-body animations for every action (walk, run, jump, swim, drive cart, slip, all weapon attacks, taunt, photo, hit, death, idle belly-out / hero-pose) — same Mixamo-compatible rig.
+- Both modes share one gameplay system. Weapons: one world model with grip point; FP and TP use the same weapon data. Kill cam, photo/selfie and cutscenes work from both modes.
+- Mirror sunglasses, bald-spot glint, slime on shirt must look good up close in TP.
+- Sniper scope always switches to FP scope view, then back to the mode before.
+- Phone: TP default can be chosen in settings; same touch layout.
 
 ## 8. Rex rules
 - **Hands down:** no weapon shown, runs faster, guests talk, Action word = Talk.
@@ -172,6 +183,6 @@ Name files `group_##_takeN.mp3`. Format below: `take: line`.
 .blend (keep full-detail source) · .fbx (model+rig+anims) · Unity prefab · .glb · PNG approval renders. Game builds: Windows .exe + Android .apk.
 
 ## 11. Build order
-1. Specs check + settings (§1). 2. Rex: front/side renders → approve → rig, first-person arms, anims. 3. Tourist blob → approve → other 3 blobs. 4. Bottle, towel, knife → approve → other weapons. 5. Island rough map + 3 view renders (hotel/pool from beach, waterfall, ruins) → approve. 6. **First playable:** Rex's room + pool area with fists, bottle, towel, tourist blob, controls, kill cam, wake-up lines, title + day music. Test on PC and phone. 7. Add one zone at a time: hotel floors, beach, golf + cart, jungle + night, ruins/factory, cave, ship + King Glorp. 8. Accomplishments, photo album, settings, remap, save system.
+1. Specs check + settings (§1). 2. Rex: front/side renders → approve (DONE) → rig, first-person arms, full-body anims for third person. 3. Tourist blob → approve → other 3 blobs. 4. Bottle, towel, knife → approve → other weapons. 5. Island rough map + 3 view renders (hotel/pool from beach, waterfall, ruins) → approve. 6. **First playable:** Rex's room + pool area with fists, bottle, towel, tourist blob, controls, first/third-person camera switch, kill cam, wake-up lines, title + day music. Test on PC and phone. 7. Add one zone at a time: hotel floors, beach, golf + cart, jungle + night, ruins/factory, cave, ship + King Glorp. 8. Accomplishments, photo album, settings, remap, save system.
 
 Reference docs (owner's Claude Docs, optional — this file is complete without them): Rex 23121400-55c3-4730-b5eb-42fbfd6950f4 · Island feae6b9d-a159-4215-9ee5-211f34fc42f4 · Blobs 7ea0681d-7813-4895-b11f-6a1ee072afa2 · Weapons 85266f28-9b28-41ce-bae1-f3f971cab9f0 · Rules 55c80092-9280-4dec-9150-5742a6abc034 · Lines 8db38afa-3e89-411d-8992-bd29e24a4751 (claude.ai/code/artifact/<id>)

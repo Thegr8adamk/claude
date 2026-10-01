@@ -36,8 +36,10 @@ def main():
     import rex_body
     import rex_look
     import rex_render
+    import rex_rig
     ob, skin = rex_body.build_body("Rex")
     rex_look.dress(ob, skin)
+    arm = rex_rig.rig(ob)
     # Save before render (system-safety rule)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(o["save"]), compress=True)
     print("[Rex] saved", o["save"])

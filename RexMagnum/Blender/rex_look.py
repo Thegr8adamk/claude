@@ -930,4 +930,7 @@ def dress(ob, skin_mat, seed=304):
     make_sunglasses(body, eyes)
     clothes = make_clothes(body, rng)
     make_jewelry(body, clothes)
+    import rex_face
+    rex_face.add_teeth(body, link)
+    rex_face.add_face_keys(ob)
     return body
