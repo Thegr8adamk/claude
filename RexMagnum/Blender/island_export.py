@@ -411,6 +411,23 @@ def joined_mesh(objs, name, mats_out, lod1=False):
     return out
 
 
+def decimate(ob, max_tris):
+    """Far-distance LOD: collapse-decimate big meshes (cave rock, straw roofs) down to about max_tris."""
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    if tris <= max_tris:
+        return
+    md = ob.modifiers.new("Decimate", "DECIMATE")
+    md.ratio = max(0.05, max_tris / tris)
+    md.use_collapse_triangulate = True
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg), depsgraph=dg)
+    old = ob.data
+    ob.modifiers.clear()
+    ob.data = me
+    me.name = old.name
+    bpy.data.meshes.remove(old)
+
+
 def export_fbx(objs, path):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
@@ -452,6 +469,7 @@ def export_assets(mats_used):
         lod1 = bpy.data.objects.new(f"{name}_LOD1", joined_mesh(main, f"{name}_LOD1", mats_used, lod1=True))
         tmp.objects.link(lod0)
         tmp.objects.link(lod1)
+        decimate(lod1, 15000)
         extra = []
         for g, gobjs in groups.items():
             eo = bpy.data.objects.new(f"{name}_{g}", joined_mesh(gobjs, f"{name}_{g}", mats_used))
