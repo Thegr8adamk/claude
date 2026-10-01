@@ -480,8 +480,8 @@ def export_vegetation(mats_used):
         c = o.instance_collection
         if c is None or c.name not in index:
             continue
-        inst.append([index[c.name], round(o.location.x, 2), round(o.location.y, 2), round(o.location.z, 2),
-                     round(o.rotation_euler.z, 3), round(o.scale.x, 3)])
+        inst.extend([index[c.name], round(o.location.x, 2), round(o.location.y, 2), round(o.location.z, 2),
+                     round(o.rotation_euler.z, 3), round(o.scale.x, 3)])     # flat: 6 numbers per plant
     return protos, inst
 
 
@@ -537,7 +537,7 @@ def material_rows(mats_used, res, skip_bake):
         elif n in WATER:
             rows.append(dict(name=n, kind="water", water=WATER[n]))
         elif n in FALL:
-            rows.append(dict(name=n, kind="fall", baseMap="Textures/Fall_streaks.png"))
+            rows.append(dict(name=n, kind="fall", baseMap="Textures/Fall_streaks.png", flow=1 if n == "A_Fall" else -1))
         elif n in FOLIAGE_IMG:
             rows.append(dict(name=n, kind="foliage", baseMap=f"Textures/{FOLIAGE_IMG[n]}", color=[1, 1, 1, 1],
                              smoothness=0.35))
@@ -582,6 +582,9 @@ def main():
     mats_used.add("A_Thatch")
     axis_probe()
     straw_texture()
+    import shutil
+    for f in FOLIAGE_IMG.values():
+        shutil.copy(os.path.join(HERE, "textures", f), os.path.join(TEX, f))
     water_textures()
     rows = material_rows(mats_used, a.res, a.skip_bake)
     # terrain
@@ -609,7 +612,7 @@ def main():
     )
     with open(os.path.join(OUT, "Island.json"), "w") as f:
         json.dump(data, f, indent=1)
-    print(f"[Export] done: {len(assets)} buildings, {len(protos)} plant types, {len(inst)} plants, "
+    print(f"[Export] done: {len(assets)} buildings, {len(protos)} plant types, {len(inst) // 6} plants, "
           f"{len(rows)} materials", flush=True)
 
 
