@@ -35,6 +35,7 @@ def build(trees):
     place(cols["hotel"], (40, -300, hb))
     pb = max(ha(40, -255), hb) + 0.3
     place(cols["pool"], (40, -255, pb))
+    flatten_terrain(pb, hb)
     place(cols["dive"], (-30, -345, ha(-30, -345)))
     place(cols["tiki"], (110, -345, ha(110, -345)))
     place(cols["beach"], (40, -350, ha(40, -350)))
@@ -161,6 +162,20 @@ def grass(ha, zones):
             gcol.objects.link(inst)
             placed += 1
     print("[IslandV2] grass clumps", placed, flush=True)
+
+
+def flatten_terrain(pb, hb):
+    """Keep the ground below the pool deck and the hotel floor (no grass poking through the tiles)."""
+    t = bpy.data.objects.get("TerrainHQ")
+    if t is None:
+        return
+    for v in t.data.vertices:
+        x, y = v.co.x, v.co.y
+        if abs(x - 40) < 57 and -282 < y < -228:
+            v.co.z = min(v.co.z, pb - 0.45)
+        if abs(x - 40) < 47 and -313 < y < -287:
+            v.co.z = min(v.co.z, hb - 0.05)
+    t.data.update()
 
 
 def waterfall_v2(ha, m):

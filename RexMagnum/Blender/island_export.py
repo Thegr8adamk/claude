@@ -589,6 +589,18 @@ def main():
     rows = material_rows(mats_used, a.res, a.skip_bake)
     # terrain
     X, Y, h, river = I.heightmap()
+    # same flattening as build_island_v2.flatten_terrain: ground stays below the pool deck + hotel floor
+    def H(x, y):
+        return float(h[int((y + 500) / 1000 * 1024), int((x + 500) / 1000 * 1024)])
+    hb = H(40, -300)
+    pb0 = max(H(40, -255), hb) + 0.3
+    xs = np.linspace(-I.SIZE / 2, I.SIZE / 2, h.shape[1])
+    gx, gy = np.meshgrid(xs, xs)
+    deck = (np.abs(gx - 40) < 57) & (gy > -282) & (gy < -228)
+    h[deck] = np.minimum(h[deck], pb0 - 0.45)
+    hot = (np.abs(gx - 40) < 47) & (gy > -313) & (gy < -287)
+    h[hot] = np.minimum(h[hot], hb - 0.05)
+    I.save_unity_raw(h, os.path.join(OUT, "island_heightmap_1025.raw"))
     save_splat(splat_maps(h))
     layers = []
     for name, c0, c1, scale, bump, tile, opt in TERRAIN_LAYERS:
@@ -599,8 +611,7 @@ def main():
             files = bake_material(terrain_layer_material(name, c0, c1, scale, bump, **opt), tile, False, a.res, name)
         layers.append(dict(name=name, diffuse=f"Textures/{files['base']}", normal=f"Textures/{files['nrm']}",
                            mask=f"Textures/{files['mask']}", tile=tile))
-    pb = max(float(h[int((-255 + 500) / 1000 * 1024), int((40 + 500) / 1000 * 1024)]),
-             float(h[int((-300 + 500) / 1000 * 1024), int((40 + 500) / 1000 * 1024)])) + 0.3
+    pb = pb0
     data = dict(
         materials=rows, assets=assets,
         vegetation=dict(protos=protos, instances=inst),
