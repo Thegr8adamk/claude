@@ -902,6 +902,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Brenda",
+   "fbx": "Brenda.fbx",
+   "voice": "7YaUDeaStRuoYg3FKsmU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Brenda_Skin",
+     "baseMap": "Textures/Brenda_Skin_BC.png",
+     "normalMap": "Textures/Brenda_Skin_N.png",
+     "maskMap": "Textures/Brenda_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Brenda_Bottom",
+     "color": [
+      0.8500000238418579,
+      0.8199999928474426,
+      0.699999988079071,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Brenda_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.368145,
+      0.18097199999999997,
+      0.084888,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Brenda_HairCap",
+     "color": [
+      0.3681449890136719,
+      0.18097199499607086,
+      0.08488799631595612,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Brenda_Sole",
+     "color": [
+      0.8999999761581421,
+      0.20000000298023224,
+      0.30000001192092896,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Brenda_Top",
+     "color": [
+      0.05000000074505806,
+      0.4000000059604645,
+      0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
