@@ -452,10 +452,10 @@ def temp_collection():
     return c
 
 
-def export_assets(mats_used):
+def export_assets(mats_used, names=None):
     tmp = temp_collection()
     rows = []
-    for an in ASSETS:
+    for an in (names or ASSETS):
         coll = bpy.data.collections.get(an)
         if coll is None:
             continue
@@ -608,12 +608,75 @@ def material_rows(mats_used, res, skip_bake):
     return rows
 
 
+def world_markers(local, hb):
+    """Hotel-local marker points -> world (hotel placed at (40, -300, hb)). Tuples of 3 = points; the elevator
+    floor list holds heights."""
+    out = {}
+    for k, v in local.items():
+        if k == "elevatorFloors":
+            out[k] = [round(z + hb, 3) for z in v]
+        else:
+            out[k] = [round(v[0] + 40.0, 3), round(v[1] - 300.0, 3), round(v[2] + hb, 3)]
+    return out
+
+
+def hotel_base_height():
+    _, _, h, _ = I.heightmap()
+    return float(h[int((-300 + 500) / 1000 * 1024), int((40 + 500) / 1000 * 1024)])
+
+
+def rebuild_assets(names, res):
+    """Fast path: rebuild only some building assets from island_assets.py, export them, bake any new
+    materials, and update Island.json in place (terrain, plants and other buildings stay as they are)."""
+    import island_assets as IA
+    bpy.ops.wm.read_homefile(use_empty=True)
+    sc = bpy.context.scene
+    sc.render.engine = "CYCLES"
+    sc.cycles.device = "CPU"
+    sc.cycles.samples = 1
+    m = IA.M()
+    IA.weather_all(m)
+    hb = hotel_base_height()
+    builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
+                    TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship)
+    for n in names:
+        coll = builders[n](m)
+        if n in ("Hotel", "Room304"):
+            from mathutils import Matrix
+            T = Matrix.Translation((40, -300, hb))
+            for ob in coll.all_objects:
+                if ob.parent is None:
+                    ob.matrix_world = T @ ob.matrix_world
+        else:
+            print(f"[Export] note: {n} is exported at the origin; use the full export for placed zones", flush=True)
+    mats_used = set()
+    rows = export_assets(mats_used, [f"Asset_{n}" for n in names])
+    path = os.path.join(OUT, "Island.json")
+    with open(path) as f:
+        data = json.load(f)
+    data["assets"] = [a for a in data["assets"] if a["name"] not in names] + rows
+    have = {r["name"] for r in data["materials"]}
+    new_rows = material_rows({n for n in mats_used if n not in have}, res, skip_bake=True)
+    data["materials"] += new_rows
+    data["room304"] = world_markers(IA.room304_markers(), hb)
+    data["hotel"] = world_markers(IA.hotel_markers(), hb)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=1)
+    print(f"[Export] rebuilt {names}; {len(new_rows)} new materials", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--res", type=int, default=1024)
     ap.add_argument("--blend", default=os.path.join(HERE, "Island_v02.blend"))
     ap.add_argument("--skip-bake", action="store_true")
+    ap.add_argument("--rebuild", default="", help="only rebuild these assets, e.g. Hotel,Room304")
     a = ap.parse_args()
+    if a.rebuild:
+        for d in (OUT, TEX, BLD, VEG):
+            os.makedirs(d, exist_ok=True)
+        rebuild_assets([n for n in a.rebuild.split(",") if n], a.res)
+        return
     for d in (OUT, TEX, BLD, VEG):
         os.makedirs(d, exist_ok=True)
     bpy.ops.wm.open_mainfile(filepath=a.blend)
@@ -672,8 +735,8 @@ def main():
         terrain=dict(size=I.SIZE, minH=-8.0, maxH=I.MAX_H, res=I.RES, raw="island_heightmap_1025.raw",
                      splat=["island_splat0.png", "island_splat1.png"], layers=layers),
         spawn=dict(pos=[44.0, -262.0, pb + 0.05], yaw=0.0),
-        room304={k: [round(v[0] + 40.0, 3), round(v[1] - 300.0, 3), round(v[2] + hb, 3)]
-                 for k, v in IA.room304_markers().items()},
+        room304=world_markers(IA.room304_markers(), hb),
+        hotel=world_markers(IA.hotel_markers(), hb),
         pool=[40.0, -255.0, pb],
         zones={k: list(v) for k, v in I.Z.items()},
         note="Blender coordinates (x east, y north, z up). Unity = (x, z, y).",

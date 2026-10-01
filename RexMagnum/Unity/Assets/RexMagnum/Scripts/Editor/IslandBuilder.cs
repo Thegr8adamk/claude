@@ -47,7 +47,11 @@ namespace RexMagnum.EditorTools
         {
             public float[] doorHinge, bedLie, wake, fullBottle, towel, closetMirror, bathMirror, tv, lamp1, lamp2, ceiling, balcony;
         }
-        [Serializable] class Data { public MatRow[] materials; public AssetRow[] assets; public Veg vegetation; public TerrainInfo terrain; public Spawn spawn; public Room room304; public float[] pool; }
+        [Serializable] class HotelPts
+        {
+            public float[] pistol, knife, swordfish, sniper, elevatorX, elevatorFloors, stage, poolDoors;
+        }
+        [Serializable] class Data { public MatRow[] materials; public AssetRow[] assets; public Veg vegetation; public TerrainInfo terrain; public Spawn spawn; public Room room304; public HotelPts hotel; public float[] pool; }
 
         static Vector3 U(float[] p) => p == null || p.Length < 3 ? Vector3.zero : U(p[0], p[1], p[2]);
 
@@ -110,6 +114,7 @@ namespace RexMagnum.EditorTools
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
+                if (data.hotel != null && data.hotel.elevatorFloors != null) Hotel(data.hotel);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -517,6 +522,67 @@ namespace RexMagnum.EditorTools
             flow.bedPoint = bed.transform;
             flow.wakePoint = wake.transform;
             flow.disableDuringTitle = new Behaviour[] { rex.GetComponent<RexActions>(), rex.GetComponent<RexWeapons>(), rig };
+        }
+
+        // ---------------------------------------------------------------- hotel: pickups + elevator
+
+        static GameObject Pickup(string name, Vector3 at, Transform parent)
+        {
+            var pf = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/RexMagnum/Prefabs/Weapons/{name}.prefab");
+            if (pf == null) return null;
+            var p = (GameObject)PrefabUtility.InstantiatePrefab(pf, parent);
+            p.transform.position = at;
+            return p;
+        }
+
+        static GameObject Box(string name, Vector3 center, Vector3 size, Material m, Transform parent)
+        {
+            var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            b.name = name;
+            b.transform.SetParent(parent, false);
+            b.transform.position = center;
+            b.transform.localScale = size;
+            if (m != null) b.GetComponent<Renderer>().sharedMaterial = m;
+            return b;
+        }
+
+        static void Hotel(HotelPts h)
+        {
+            var root = new GameObject("Hotel_Gameplay").transform;
+            // brief: pistol in the casino lounge, knife at the buffet, swordfish in the freezer, sniper on the roof
+            Pickup("Pickup_Pistol", U(h.pistol) + Vector3.up * 0.05f, root);
+            Pickup("Pickup_Knife", U(h.knife) + Vector3.up * 0.05f, root);
+            Pickup("Pickup_Swordfish", U(h.swordfish) + Vector3.up * 0.1f, root);
+            Pickup("Pickup_Sniper", U(h.sniper) + Vector3.up * 0.1f, root);
+            Pickup("Ammo_Pistol", U(h.pistol) + new Vector3(0.6f, 0.05f, 0f), root);
+            Pickup("Ammo_Sniper", U(h.sniper) + new Vector3(0.8f, 0.1f, 0f), root);
+            // elevator: cab (floor, 3 walls, ceiling light) + a sliding landing door on every floor
+            var steel = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Aluminum.mat");
+            var wood = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Teak.mat");
+            Vector3 c = U(h.elevatorX[0], h.elevatorX[1], h.elevatorFloors[0]);
+            var cab = new GameObject("ElevatorCab").transform;
+            cab.SetParent(root, false);
+            cab.position = c;
+            Box("CabFloor", c + new Vector3(0, -0.05f, 0), new Vector3(2.9f, 0.1f, 3.2f), wood, cab);
+            Box("CabBack", c + new Vector3(1.45f, 1.2f, 0), new Vector3(0.06f, 2.4f, 3.2f), steel, cab);
+            Box("CabSideN", c + new Vector3(0, 1.2f, 1.6f), new Vector3(2.9f, 2.4f, 0.06f), steel, cab);
+            Box("CabSideS", c + new Vector3(0, 1.2f, -1.6f), new Vector3(2.9f, 2.4f, 0.06f), steel, cab);
+            Box("CabRoof", c + new Vector3(0, 2.42f, 0), new Vector3(2.9f, 0.06f, 3.2f), steel, cab);
+            var l = new GameObject("CabLight").AddComponent<Light>();
+            l.transform.SetParent(cab, false);
+            l.transform.position = c + Vector3.up * 2.2f;
+            l.type = LightType.Point; l.range = 4f; l.intensity = 1.5f; l.color = new Color(1f, 0.92f, 0.8f);
+            var doors = new List<Transform>();
+            float doorX = U(h.elevatorX[0], 0, 0).x - 1.6f - 0.22f;     // just outside the shaft's corridor wall
+            foreach (float y in h.elevatorFloors.Take(h.elevatorFloors.Length - 1))
+            {
+                var d = Box("LandingDoor", new Vector3(doorX, y + 1.1f, c.z), new Vector3(0.05f, 2.2f, 1.3f), steel, root);
+                doors.Add(d.transform);
+            }
+            var e = root.gameObject.AddComponent<Elevator>();
+            e.cab = cab;
+            e.floorHeights = h.elevatorFloors.Take(h.elevatorFloors.Length - 1).ToArray();
+            e.landingDoors = doors.ToArray();
         }
 
         // ---------------------------------------------------------------- vegetation

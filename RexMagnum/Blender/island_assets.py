@@ -843,7 +843,7 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
                 k.box((xc - 0.4, yc - 0.4, z + F - 0.04), (xc + 0.4, yc + 0.4, z + F - 0.02), m["roomlight"], "Lamp")
             # bed (seen through glass)
             yb = yback - side * 0.0
-            k.box((xa + 0.4, min(yb, yb - side * 2.1), z + 0.35), (xa + 2.0, max(yb, yb - side * 2.1), z + 0.85),
+            k.box((xa + 0.4, min(yb, yb + side * 2.1), z + 0.35), (xa + 2.0, max(yb, yb + side * 2.1), z + 0.85),
                   m["cushion"], "Bed", bevel=0.05)
             # curtains: two panels hanging from a rail 0.15 m inside the glass
             cy_ = ywin - side * 0.15
@@ -1023,7 +1023,7 @@ def ground_floor(k, m, z, F, x0, x1, y0, y1):
     k.box((-6, -1.0, zf), (2, 0.0, zf + 1.1), m["teak"], "Reception")
     k.box((-6.1, -1.1, zf + 1.1), (2.1, 0.1, zf + 1.16), m["darkmetal"], "ReceptionTop")
     k.box((-7, 2.6, zf), (3, 2.9, zc), m["teak"], "ReceptionWall")
-    k.text("ISLA GRANDE", 0.5, (-2, 2.58, zf + 2.2), gold, 0.03, rot=(math.pi / 2, 0, math.pi), base="LobbyName")
+    k.text("ISLA GRANDE", 0.5, (-2, 2.58, zf + 2.2), gold, 0.03, rot=(math.pi / 2, 0, 0), base="LobbyName")
     sofa = principled("A_Sofa", (0.55, 0.42, 0.3), 0.85)
     for sx_ in (-11, 5):
         k.box((sx_, -8.5, zf), (sx_ + 2.4, -7.6, zf + 0.45), sofa, "Sofa", bevel=0.06)
