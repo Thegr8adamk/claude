@@ -56,6 +56,50 @@ GUESTS = [
          security=True),
 ]
 
+# 12 extra guests (owner request). Voices reuse the brief's guest voices (women: Callie / Heather / Lucy,
+# men: Gerald / Justin / Fin); their flirt answers come from the shared list.
+AS = {"asian": 1.0, "caucasian": 0.0, "african": 0.0}
+AF = {"asian": 0.0, "caucasian": 0.0, "african": 1.0}
+MIX = {"asian": 0.2, "caucasian": 0.5, "african": 0.3}
+GUESTS += [
+    dict(name="Marge", macro=dict(gender=0.0, age=0.9, muscle=0.25, weight=0.8, height=0.4, proportions=0.4, cupsize=0.6, firmness=0.3),
+         skin=(0.7, 0.5, 0.42), hair=("bob", 0.1, 0.85, 0.05), top=("dress", (0.85, 0.3, 0.45)), bottom=(None, None),
+         feet=("sandals", (0.85, 0.85, 0.82)), voice="MnUw1cSnpiLoLhpd3Hqp"),
+    dict(name="Dwayne", macro=dict(gender=1.0, age=0.55, muscle=0.95, weight=0.7, height=0.75, proportions=0.6), race=AF,
+         skin=(0.14, 0.075, 0.045), hair=("short", 0.99, 0.0, 0.0), top=("tank", (0.02, 0.02, 0.02)),
+         bottom=("trunks", (0.05, 0.25, 0.6)), feet=("sandals", (0.05, 0.05, 0.05)), voice="MjEQaRiSe6jP1b0vagRU"),
+    dict(name="Priya", macro=dict(gender=0.0, age=0.52, muscle=0.4, weight=0.4, height=0.45, proportions=0.6, cupsize=0.5, firmness=0.6),
+         skin=(0.36, 0.2, 0.11), hair=("long", 0.99, 0.0, 0.05), top=("tank", (0.95, 0.7, 0.05)),
+         bottom=("shorts", (0.9, 0.9, 0.88)), feet=("sandals", (0.6, 0.35, 0.15)), voice="lcMyyd2HUfFzxdCaC4Ta"),
+    dict(name="Hiro", macro=dict(gender=1.0, age=0.6, muscle=0.45, weight=0.5, height=0.45, proportions=0.5), race=AS,
+         skin=(0.6, 0.45, 0.32), hair=("short", 0.97, 0.15, 0.0), top=("polo", (0.02, 0.3, 0.3)),
+         bottom=("shorts", (0.02, 0.03, 0.08)), feet=("sandals", (0.3, 0.2, 0.1)), voice="fGIZlgPQ75MMlvQ6WxgY"),
+    dict(name="Brenda", macro=dict(gender=0.0, age=0.68, muscle=0.35, weight=0.6, height=0.5, proportions=0.45, cupsize=0.65, firmness=0.4),
+         skin=(0.85, 0.48, 0.38), hair=("bob", 0.35, 0.0, 0.9), top=("bikini", (0.05, 0.4, 0.15)),
+         bottom=("shorts", (0.85, 0.82, 0.7)), feet=("sandals", (0.9, 0.2, 0.3)), voice="7YaUDeaStRuoYg3FKsmU"),
+    dict(name="Tyler", macro=dict(gender=1.0, age=0.44, muscle=0.3, weight=0.3, height=0.6, proportions=0.5),
+         skin=(0.75, 0.55, 0.45), hair=("short", 0.25, 0.0, 0.2), top=("tshirt", (0.9, 0.35, 0.02)),
+         bottom=("trunks", (0.05, 0.05, 0.05)), feet=("sandals", (0.9, 0.9, 0.9)), voice="fV5vDeUO8ghvK7ntjiVC"),
+    dict(name="Rosa", macro=dict(gender=0.0, age=0.62, muscle=0.4, weight=0.55, height=0.45, proportions=0.55, cupsize=0.6, firmness=0.5),
+         skin=(0.48, 0.29, 0.17), hair=("ponytail", 0.95, 0.1, 0.1), top=("dress", (0.6, 0.02, 0.03)), bottom=(None, None),
+         feet=("sandals", (0.15, 0.08, 0.04)), voice="MnUw1cSnpiLoLhpd3Hqp"),
+    dict(name="Walter", macro=dict(gender=1.0, age=0.95, muscle=0.2, weight=0.35, height=0.5, proportions=0.4),
+         skin=(0.72, 0.52, 0.45), hair=("fringe", 0.1, 1.0, 0.0), top=("polo", (0.35, 0.65, 0.05)),
+         bottom=("shorts", (0.5, 0.45, 0.33)), feet=("socks_sandals", (0.25, 0.15, 0.08)), voice="fGIZlgPQ75MMlvQ6WxgY"),
+    dict(name="Amara", macro=dict(gender=0.0, age=0.47, muscle=0.5, weight=0.45, height=0.6, proportions=0.65, cupsize=0.5, firmness=0.65), race=AF,
+         skin=(0.2, 0.1, 0.055), hair=("long", 0.99, 0.0, 0.0), top=("bikini", (0.0, 0.45, 0.45)),
+         bottom=("shorts", (0.95, 0.95, 0.95)), feet=("sandals", (0.85, 0.65, 0.1)), voice="7YaUDeaStRuoYg3FKsmU"),
+    dict(name="Chad", macro=dict(gender=1.0, age=0.47, muscle=0.8, weight=0.5, height=0.65, proportions=0.6),
+         skin=(0.62, 0.38, 0.25), hair=("short", 0.55, 0.0, 0.25), top=("tank", (0.95, 0.35, 0.55)),
+         bottom=("trunks", (0.95, 0.75, 0.05)), feet=("sandals", (0.2, 0.2, 0.2)), voice="fV5vDeUO8ghvK7ntjiVC"),
+    dict(name="Doris", macro=dict(gender=0.0, age=0.85, muscle=0.3, weight=0.5, height=0.35, proportions=0.45, cupsize=0.5, firmness=0.35), race=AS,
+         skin=(0.65, 0.48, 0.35), hair=("bob", 0.4, 0.95, 0.0), top=("tshirt", (0.55, 0.35, 0.7)),
+         bottom=("pants", (0.9, 0.9, 0.88)), feet=("sandals", (0.85, 0.85, 0.85)), voice="lcMyyd2HUfFzxdCaC4Ta"),
+    dict(name="Earl", macro=dict(gender=1.0, age=0.7, muscle=0.35, weight=0.9, height=0.55, proportions=0.4), race=MIX,
+         skin=(0.42, 0.25, 0.15), hair=("fringe", 0.6, 0.5, 0.1), top=("tshirt", (0.75, 0.75, 0.75)),
+         bottom=("shorts", (0.08, 0.2, 0.08)), feet=("sandals", (0.1, 0.07, 0.05)), voice="MjEQaRiSe6jP1b0vagRU"),
+]
+
 
 def setup_mpfb():
     addon_utils.enable("bl_ext.user_default.mpfb", default_set=True)
@@ -67,7 +111,7 @@ def build_body(g):
     macro = dict(g["macro"])
     macro.setdefault("cupsize", 0.5)
     macro.setdefault("firmness", 0.5)
-    macro["race"] = {"asian": 0.0, "caucasian": 1.0, "african": 0.0}
+    macro["race"] = g.get("race", {"asian": 0.0, "caucasian": 1.0, "african": 0.0})
     ob = HumanService.create_human(macro_detail_dict=macro)
     ob.name = g["name"]
     mat = MaterialService.create_v2_skin_material(f"{g['name']}_Skin", ob)

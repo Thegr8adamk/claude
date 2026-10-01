@@ -748,6 +748,19 @@ namespace RexMagnum.EditorTools
                 ("Lucy", HotelPt(h, -10f, 0.5f, 3), 90f),                    // 4th-floor corridor (hiding)
                 ("Callie", pool + new Vector3(-20f, 0f, 14.5f), 200f),       // pool lounger
                 ("Fin", pool + new Vector3(12f, 0f, -4f), 270f),             // by the swim-up bar
+                // 12 extra guests
+                ("Marge", HotelPt(h, -33f, -6f, 0), 0f),                     // lounge table, waiting for the show
+                ("Dwayne", HotelPt(h, 20f, 5f, 1), 0f),                      // gym
+                ("Priya", pool + new Vector3(-10f, 0f, 14.5f), 200f),        // pool lounger
+                ("Hiro", HotelPt(h, 17.5f, 2.5f, 0), 180f),                  // roulette table
+                ("Brenda", pool + new Vector3(5f, 0f, -14.5f), 20f),         // pool lounger (south row)
+                ("Tyler", pool + new Vector3(-38f, 7.2f, 14f), 160f),        // top of the water slide
+                ("Rosa", HotelPt(h, -30.5f, 4.9f, 0), 90f),                  // lounge bar stool
+                ("Walter", HotelPt(h, 14f, -4f, 0) + new Vector3(1.4f, 0f, 0f), 270f),   // card table
+                ("Amara", pool + new Vector3(30f, 0f, 12f), 180f),           // by the hot tubs
+                ("Chad", pool + new Vector3(30f, 0.8f, -18f), 0f),           // on the stage
+                ("Doris", HotelPt(h, 20f, -6f, 1), 0f),                      // spa
+                ("Earl", HotelPt(h, 31.5f, 2.5f, 0), 180f),                  // buffet (second counter)
             };
             var hides = new List<Transform>();
             foreach (var p in new[] { HotelPt(h, -13f, 9.5f, 0), HotelPt(h, 7f, 9f, 0), HotelPt(h, 25f, -9.5f, 0),
