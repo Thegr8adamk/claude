@@ -819,6 +819,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Hiro",
+   "fbx": "Hiro.fbx",
+   "voice": "fGIZlgPQ75MMlvQ6WxgY",
+   "security": false,
+   "materials": [
+    {
+     "name": "Hiro_Skin",
+     "baseMap": "Textures/Hiro_Skin_BC.png",
+     "normalMap": "Textures/Hiro_Skin_N.png",
+     "maskMap": "Textures/Hiro_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Hiro_Bottom",
+     "color": [
+      0.019999999552965164,
+      0.029999999329447746,
+      0.07999999821186066,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Hiro_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.11301500000000002,
+      0.10310400000000002,
+      0.09470600000000001,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Hiro_HairCap",
+     "color": [
+      0.11301500350236893,
+      0.10310400277376175,
+      0.09470599889755249,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Hiro_Sole",
+     "color": [
+      0.30000001192092896,
+      0.20000000298023224,
+      0.10000000149011612,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Hiro_Top",
+     "color": [
+      0.019999999552965164,
+      0.30000001192092896,
+      0.30000001192092896,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
