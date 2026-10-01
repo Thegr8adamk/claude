@@ -375,9 +375,9 @@ if __name__ == "__main__":
         import numpy as np
         import island as I
         bpy.ops.wm.open_mainfile(filepath=os.path.join(HERE, "Island_v02.blend"))
-        _, _, h, _ = I.heightmap()
-        ha = lambda x, y: float(h[int(np.clip((y + I.SIZE / 2) / I.SIZE * (h.shape[0] - 1), 0, h.shape[0] - 1)),
-                                  int(np.clip((x + I.SIZE / 2) / I.SIZE * (h.shape[1] - 1), 0, h.shape[1] - 1))])
+        _, _, hm, _ = I.heightmap()
+        ha = lambda x, y: float(hm[int(np.clip((y + I.SIZE / 2) / I.SIZE * (hm.shape[0] - 1), 0, hm.shape[0] - 1)),
+                                   int(np.clip((x + I.SIZE / 2) / I.SIZE * (hm.shape[1] - 1), 0, hm.shape[1] - 1))])
     else:
         ha = build(a.trees)
         if a.save:
