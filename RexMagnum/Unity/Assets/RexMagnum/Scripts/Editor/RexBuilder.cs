@@ -50,14 +50,22 @@ namespace RexMagnum.EditorTools
             foreach (var f in new[] { Mats, Prefabs, Scenes }) EnsureFolder(f);
             AssetDatabase.Refresh();
 
+            var (rex, controller) = BuildAssets();
+            BuildTestScene(rex, controller);
+            Debug.Log("[Rex Magnum] Done. Open " + Scenes + "/RexTest.unity and press Play. V = first/third person.");
+        }
+
+        /// <summary>Materials, models, animator controller and the Rex prefab (no scene).</summary>
+        public static (GameObject rex, AnimatorController controller) BuildAssets()
+        {
+            foreach (var f in new[] { Mats, Prefabs, Scenes }) EnsureFolder(f);
+            AssetDatabase.Refresh();
             ConfigureTextures();
             var mats = BuildMaterials();
             ImportModel(Char + "/Rex.fbx", mats);
             ImportModel(Char + "/Rex_FPArms.fbx", mats);
             var controller = BuildController();
-            var rex = BuildRexPrefab(controller);
-            BuildTestScene(rex, controller);
-            Debug.Log("[Rex Magnum] Done. Open " + Scenes + "/RexTest.unity and press Play. V = first/third person.");
+            return (BuildRexPrefab(controller), controller);
         }
 
         public static void BuildFromCommandLine()
@@ -340,16 +348,31 @@ namespace RexMagnum.EditorTools
                 sun.transform.rotation = Quaternion.Euler(45f, -30f, 0f);
             }
 
+            AddPlayer(rexPrefab, controller, Vector3.zero, 0f, new Vector3(-8f, 0f, -6f), 500f);
+
+            string path = Scenes + "/RexTest.unity";
+            EditorSceneManager.SaveScene(scene, path);
+            var list = EditorBuildSettings.scenes.Where(s => s.path != path).ToList();
+            list.Insert(0, new EditorBuildSettingsScene(path, true));
+            EditorBuildSettings.scenes = list.ToArray();
+        }
+
+
+        /// <summary>Rex + camera rig + FP arms + weapons + blob spawner + test HUD at a position.
+        /// pickupRow: where the row of weapon pickups starts (y is the ground height).</summary>
+        public static GameObject AddPlayer(GameObject rexPrefab, AnimatorController controller, Vector3 pos, float yaw,
+                                           Vector3 pickupRow, float farClip)
+        {
             // Rex
             var rex = (GameObject)PrefabUtility.InstantiatePrefab(rexPrefab);
-            rex.transform.position = Vector3.zero;
+            rex.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
             var ctrl = rex.GetComponent<RexController>();
 
             // Camera rig + first-person arms
             var camGo = new GameObject("RexCamera") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.03f;
-            cam.farClipPlane = 500f;
+            cam.farClipPlane = farClip;
             camGo.AddComponent<AudioListener>();
             var data = camGo.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = true;
@@ -397,21 +420,18 @@ namespace RexMagnum.EditorTools
             foreach (var kv in wprefabs.pickups)
             {
                 var p = (GameObject)PrefabUtility.InstantiatePrefab(kv.Value);
-                p.transform.position = new Vector3(-8f + slot * 1.6f, 0f, -6f);
+                p.transform.position = pickupRow + new Vector3(slot * 1.6f, 0f, 0f);
                 slot++;
             }
 
+            camGo.transform.position = pos + new Vector3(0f, 1.7f, -3f);
             var hudGo = new GameObject("TestHUD");
             var hud = hudGo.AddComponent<RexTestHUD>();
             hud.rexHealth = rex.GetComponent<Health>();
             hud.rig = rig;
             hud.actions = rex.GetComponent<RexActions>();
 
-            string path = Scenes + "/RexTest.unity";
-            EditorSceneManager.SaveScene(scene, path);
-            var list = EditorBuildSettings.scenes.Where(s => s.path != path).ToList();
-            list.Insert(0, new EditorBuildSettingsScene(path, true));
-            EditorBuildSettings.scenes = list.ToArray();
+            return rex;
         }
 
         static void Block(string name, Vector3 pos, Vector3 size, Quaternion rot, Material m)
