@@ -36,6 +36,7 @@ namespace RexMagnum
             { "Door", new[] { "Knock knock. Who's there? Me. Leaving.", "I've kicked down bigger doors. On a sound stage." } },
             { "Idle", new[] { "Hello? I'm being heroic over here.", "Back in '86 I had a trailer. With a door.", "Is this thing on? Is anything on?" } },
             { "Rescue", new[] { "Did you film that? Tag me.", "You're welcome. Cash is fine.", "Tell your friends. Tell a casting director." } },
+            { "FlirtFail", new[] { "She's into it.", "Playing hard to get. They all do. For decades.", "Still got it.", "That's a maybe." } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
         };

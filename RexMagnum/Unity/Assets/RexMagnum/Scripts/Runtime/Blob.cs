@@ -40,8 +40,10 @@ namespace RexMagnum
         public bool IsStunned => Time.time < stunUntil;
         static int alive;
         public static int AliveCount() => alive;
-        void OnEnable() => alive++;
-        void OnDisable() => alive--;
+        public static readonly System.Collections.Generic.List<Blob> All = new System.Collections.Generic.List<Blob>();
+        public bool IsDead => health != null && health.IsDead;
+        void OnEnable() { alive++; All.Add(this); }
+        void OnDisable() { alive--; All.Remove(this); }
 
         /// <summary>Harpoon: pinned (stuck in place, flailing) for a few seconds.</summary>
         public void Pin(float seconds)

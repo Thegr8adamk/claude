@@ -114,7 +114,11 @@ namespace RexMagnum.EditorTools
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
-                if (data.hotel != null && data.hotel.elevatorFloors != null) Hotel(data.hotel);
+                if (data.hotel != null && data.hotel.elevatorFloors != null)
+                {
+                    Hotel(data.hotel);
+                    Guests(data.hotel, pool);
+                }
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -583,6 +587,51 @@ namespace RexMagnum.EditorTools
             e.cab = cab;
             e.floorHeights = h.elevatorFloors.Take(h.elevatorFloors.Length - 1).ToArray();
             e.landingDoors = doors.ToArray();
+        }
+
+        // ---------------------------------------------------------------- guests
+
+        /// <summary>Hotel-local point (Blender x, y; floor index) to Unity world.</summary>
+        static Vector3 HotelPt(HotelPts h, float x, float y, int floor) => U(x + 40f, y - 300f, h.elevatorFloors[floor]);
+
+        static void Guests(HotelPts h, Vector3 pool)
+        {
+            var prefabs = GuestBuilder.Build();
+            if (prefabs.Count == 0) return;
+            var root = new GameObject("Guests").transform;
+            // where they are when the chaos starts (brief: hiding in rooms, closets, under chairs; at the pool)
+            var spots = new (string who, Vector3 at, float yaw)[]
+            {
+                ("Carmen", HotelPt(h, -2f, 0.8f, 0), 180f),                  // reception desk, facing the doors
+                ("Heather", HotelPt(h, -9.5f, -6.5f, 0), 30f),               // lobby sofas
+                ("Justin", HotelPt(h, 15f, -5.5f, 0), 0f),                   // casino card table
+                ("Gerald", HotelPt(h, 30f, -4.5f, 0), 0f),                   // buffet
+                ("Lucy", HotelPt(h, -10f, 0.5f, 3), 90f),                    // 4th-floor corridor (hiding)
+                ("Callie", pool + new Vector3(-20f, 0f, 14.5f), 200f),       // pool lounger
+                ("Fin", pool + new Vector3(12f, 0f, -4f), 270f),             // by the swim-up bar
+            };
+            var hides = new List<Transform>();
+            foreach (var p in new[] { HotelPt(h, -13f, 9.5f, 0), HotelPt(h, 7f, 9f, 0), HotelPt(h, 25f, -9.5f, 0),
+                                      HotelPt(h, -20f, -8f, 0), HotelPt(h, 36.5f, 8f, 0), HotelPt(h, -30f, 0f, 3),
+                                      HotelPt(h, 20f, 0f, 1) })
+            {
+                var g = new GameObject("HideSpot").transform;
+                g.SetParent(root, false);
+                g.position = p;
+                hides.Add(g);
+            }
+            var rewards = new[] { "Ammo_Pistol", "Ammo_Sniper", "Ammo_Harpoon", "Pickup_Coconut" }
+                .Select(n => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/RexMagnum/Prefabs/Weapons/{n}.prefab"))
+                .Where(x => x != null).ToArray();
+            foreach (var (who, at, yaw) in spots)
+            {
+                if (!prefabs.TryGetValue(who, out var pf)) continue;
+                var g = (GameObject)PrefabUtility.InstantiatePrefab(pf, root);
+                g.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
+                var guest = g.GetComponent<Guest>();
+                guest.hideSpots = hides.ToArray();
+                guest.rewardPrefabs = rewards;
+            }
         }
 
         // ---------------------------------------------------------------- vegetation
