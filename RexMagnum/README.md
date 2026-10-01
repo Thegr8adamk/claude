@@ -16,8 +16,8 @@ Progress pictures: [Renders/progress/LOG.md](Renders/progress/LOG.md) (one line 
 | 4 | Bottle, towel, knife → other weapons | Done (v2, approved): 10 realistic connected models, 2K PBR textures, Unity weapon system |
 | 5 | Island rough map + 3 view pictures | Done (v2): realistic island, 8 views (Renders/island), exported to Unity (Island/), menu Rex Magnum > Build Island |
 | 6 | First playable (room 304 + pool) | Built: title + content warning, wake-up in room 304, stuck door, kickable bottles, mirrors, beer + towel pickups, blobs at the pool, phone touch controls. Needs your test in Unity |
-| 7 | Other zones, one at a time | In progress: hotel inside (lobby, lounge bar, casino, buffet + freezer, gym, spa, corridors, stairs, elevator, roof). Next: guests, penthouse, golf + cart, jungle + night, ruins/factory, cave, ship + King Glorp |
-| 8 | Accomplishments, album, settings, remap, save | Not started |
+| 7 | Other zones, one at a time | Built: hotel inside (lobby, lounge bar, casino, buffet + freezer, gym, spa, corridors, stairs, elevator, penthouse, roof), 19 guests + Carmen (+ outfit copies, ~60 guests), golf course + drivable cart, day/night, blob factory in the ruins, cave tunnels, King Glorp boss + ending. Needs your test in Unity |
+| 8 | Accomplishments, album, settings, remap, save | Built: 29 accomplishments, photo album, pause menu (map, settings, keyboard remap), save file. Needs your test in Unity |
 
 ## Step 1: PC specs check
 
