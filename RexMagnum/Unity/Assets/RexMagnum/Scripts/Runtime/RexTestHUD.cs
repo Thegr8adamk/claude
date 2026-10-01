@@ -81,7 +81,7 @@ namespace RexMagnum
 
         void Update()
         {
-            if (RMInput.Pause)
+            if (false && RMInput.Pause)   // PauseMenu handles pause now
             {
                 paused = !paused;
                 Cursor.lockState = paused ? CursorLockMode.None : CursorLockMode.Locked;

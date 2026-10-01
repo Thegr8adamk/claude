@@ -128,6 +128,7 @@ namespace RexMagnum
         {
             state = State.Rescued;
             agent.speed = 2.2f;
+            Progress.Add("rescues");
             if (rex != null) RexVoice.Say(rex.gameObject, "Rescue", true);
             if (rewardPrefabs != null && rewardPrefabs.Length > 0)
                 Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], transform.position + transform.forward * 0.8f, Quaternion.identity);
@@ -137,6 +138,7 @@ namespace RexMagnum
         IEnumerator Flirt()
         {
             var pair = security ? GuestLines.Carmen() : GuestLines.FlirtFor(guestName);
+            if (security) Progress.Add("carmen_flirts");
             RexVoice.Subtitle?.Invoke("REX: " + pair.rex);
             yield return new WaitForSeconds(2.2f);
             Say(pair.answer, pair.index);

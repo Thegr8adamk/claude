@@ -43,6 +43,7 @@ namespace RexMagnum
         public void Slip()
         {
             if (Time.time < lockedUntil) return;
+            Progress.Add("slips");
             SetTrigger(SlipHash);
             lockedUntil = Time.time + 1.7f;
             velocity.x *= 0.3f;

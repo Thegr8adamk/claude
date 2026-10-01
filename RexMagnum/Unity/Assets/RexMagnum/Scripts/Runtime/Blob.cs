@@ -213,6 +213,13 @@ namespace RexMagnum
 
         void OnDied(GameObject killer)
         {
+            if (killer != null && killer.GetComponent<RexController>() != null)
+            {
+                Progress.Add("kills");
+                var w = killer.GetComponent<RexWeapons>();
+                if (w != null) Progress.Add("kills_" + w.Current.id);
+                if (kind == Kind.KingGlorp) Progress.Set("glorp", 1);
+            }
             agent.enabled = false;
             foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
             Play("Pop", 0.02f);

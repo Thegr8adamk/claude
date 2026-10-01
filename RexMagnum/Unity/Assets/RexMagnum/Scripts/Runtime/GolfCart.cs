@@ -80,9 +80,11 @@ namespace RexMagnum
                 float uphill = Mathf.Max(0f, Vector3.Dot(transform.forward * Mathf.Sign(speed), Vector3.up)) * 3f;
                 float drain = 0.05f * dist * (1f + (Mathf.Abs(speed) > 6f ? 0.6f : 0f) + uphill);
                 if (lights) drain += 0.6f / 60f * Time.fixedDeltaTime;
+                Progress.Add("cart_m_frac", Mathf.RoundToInt(dist * 100f));
+                if (Progress.Value("cart_m_frac") >= 100) { Progress.Add("cart_m", Progress.Value("cart_m_frac") / 100); Progress.Set("cart_m_frac", Progress.Value("cart_m_frac") % 100); }
                 float before = battery;
                 battery = Mathf.Max(0f, battery - drain);
-                if (before > 0f && battery <= 0f) RexVoice.Say(rex.gameObject, "CartDead", true);
+                if (before > 0f && battery <= 0f) { RexVoice.Say(rex.gameObject, "CartDead", true); Progress.Set("cart_dead", 1); }
             }
             if (driving && battery <= 0f && Mathf.Abs(speed) > 0.3f && Time.time > nextLine)
             {

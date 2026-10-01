@@ -53,6 +53,7 @@ namespace RexMagnum
             KillCam.Show(transform, by != null ? by.transform.position : transform.position - transform.forward * 5f, false);
             Dead(false);
             PlayerPrefs.SetInt(SaveKey, 1);
+            Progress.Set("factory", 1);
             PlayerPrefs.Save();
         }
 

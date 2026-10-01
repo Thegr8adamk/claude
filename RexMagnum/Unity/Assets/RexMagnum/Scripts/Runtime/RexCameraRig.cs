@@ -73,7 +73,9 @@ namespace RexMagnum
                 if (armsHead != null) armsHeadLocal = fpArms.transform.InverseTransformPoint(armsHead.position);
                 foreach (var r in fpArms.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off;
             }
-            SetMode(PlayerPrefs.GetInt(PrefKey, 1) == 0 ? CameraMode.FirstPerson : CameraMode.ThirdPerson, true);
+            int def = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);     // settings: 0 FP, 1 TP, 2 remember last
+            bool fp = def == 0 || (def == 2 && PlayerPrefs.GetInt(PrefKey, 1) == 0);
+            SetMode(fp ? CameraMode.FirstPerson : CameraMode.ThirdPerson, true);
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }

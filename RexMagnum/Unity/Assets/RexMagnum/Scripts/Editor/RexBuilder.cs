@@ -429,6 +429,8 @@ namespace RexMagnum.EditorTools
             var hudGo = new GameObject("TestHUD");
             var hud = hudGo.AddComponent<RexTestHUD>();
             hudGo.AddComponent<TouchControls>();
+            hudGo.AddComponent<PauseMenu>();
+            hudGo.AddComponent<ProgressTracker>();
             hud.rexHealth = rex.GetComponent<Health>();
             hud.rig = rig;
             hud.actions = rex.GetComponent<RexActions>();

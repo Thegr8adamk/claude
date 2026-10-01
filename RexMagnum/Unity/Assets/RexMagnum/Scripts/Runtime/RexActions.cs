@@ -64,6 +64,7 @@ namespace RexMagnum
                 Do(Taunt, 1.6f);
                 if (face) face.Expression("SmugGrin", 1.6f);
                 RexVoice.Say(gameObject, "Taunt");
+                Progress.Add("taunts");
                 // Blobs that see it get angry and answer with a rude tentacle
                 foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
                     if (Vector3.Distance(b.transform.position, transform.position) < 30f) b.OnTaunted();
@@ -81,6 +82,7 @@ namespace RexMagnum
                 }
                 if (nearest != null) nearest.OnPhoto();
                 RexVoice.Say(gameObject, nearest != null ? "Photo" : "PhotoAlone");
+                PhotoAlbum.Take(this, nearest == null ? "" : nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString());
             }
             controller.FaceAim = Time.time < faceAimUntil;
         }

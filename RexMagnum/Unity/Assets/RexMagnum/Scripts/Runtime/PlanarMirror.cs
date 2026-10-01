@@ -50,6 +50,7 @@ namespace RexMagnum
             {
                 nextLine = Time.time + 4f;
                 RexVoice.Say(player.gameObject, "Mirror", true);
+                Progress.Set("mirror", 1);
             }
         }
 

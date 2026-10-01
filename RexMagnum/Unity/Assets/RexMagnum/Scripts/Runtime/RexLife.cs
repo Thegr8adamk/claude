@@ -30,6 +30,7 @@ namespace RexMagnum
         IEnumerator DieRoutine()
         {
             ctrl.Die();
+            Progress.Add("deaths");
             RexVoice.Say(gameObject, "Death", true);
             yield return new WaitForSeconds(3.5f);
             Vector3 p = respawnPoint != null ? respawnPoint.position : startPos;
