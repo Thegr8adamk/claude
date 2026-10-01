@@ -1,89 +1,6 @@
 {
  "guests": [
   {
-   "name": "Gerald",
-   "fbx": "Gerald.fbx",
-   "voice": "fGIZlgPQ75MMlvQ6WxgY",
-   "security": false,
-   "materials": [
-    {
-     "name": "Gerald_Skin",
-     "baseMap": "Textures/Gerald_Skin_BC.png",
-     "normalMap": "Textures/Gerald_Skin_N.png",
-     "maskMap": "Textures/Gerald_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Gerald_Bottom",
-     "color": [
-      0.550000011920929,
-      0.5,
-      0.3799999952316284,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Gerald_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.539166,
-      0.5274576000000001,
-      0.5119104000000001,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Gerald_Sole",
-     "color": [
-      0.3499999940395355,
-      0.2199999988079071,
-      0.11999999731779099,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Gerald_Socks",
-     "color": [
-      0.9200000166893005,
-      0.9200000166893005,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.1
-    },
-    {
-     "name": "Gerald_Top",
-     "color": [
-      0.8500000238418579,
-      0.800000011920929,
-      0.6499999761581421,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Fin",
    "fbx": "Fin.fbx",
    "voice": "MjEQaRiSe6jP1b0vagRU",
@@ -492,6 +409,89 @@
       0.10000000149011612,
       0.550000011920929,
       0.550000011920929,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Gerald",
+   "fbx": "Gerald.fbx",
+   "voice": "fGIZlgPQ75MMlvQ6WxgY",
+   "security": false,
+   "materials": [
+    {
+     "name": "Gerald_Skin",
+     "baseMap": "Textures/Gerald_Skin_BC.png",
+     "normalMap": "Textures/Gerald_Skin_N.png",
+     "maskMap": "Textures/Gerald_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Gerald_Bottom",
+     "color": [
+      0.550000011920929,
+      0.5,
+      0.3799999952316284,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Gerald_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.539166,
+      0.5274576000000001,
+      0.5119104000000001,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Gerald_Sole",
+     "color": [
+      0.3499999940395355,
+      0.2199999988079071,
+      0.11999999731779099,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Gerald_Socks",
+     "color": [
+      0.9200000166893005,
+      0.9200000166893005,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.1
+    },
+    {
+     "name": "Gerald_Top",
+     "color": [
+      0.8500000238418579,
+      0.800000011920929,
+      0.6499999761581421,
       1
      ],
      "smoothness": 0.25
