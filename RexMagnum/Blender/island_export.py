@@ -32,15 +32,16 @@ TEX = os.path.join(OUT, "Textures")
 BLD = os.path.join(OUT, "Buildings")
 VEG = os.path.join(OUT, "Vegetation")
 
-# material -> (tile size m, bake on a wall (vertical) plane?)
-BAKE = {
-    "A_Stucco": (4, True), "A_Planks": (4, True), "A_WeatheredWood": (4, True), "A_Bamboo": (2, True),
-    "A_TempleStone": (4, True), "A_Rock": (6, True), "A_WetRock": (4, True), "A_Terracotta": (2, False),
-    "A_DeckTiles": (4, False), "A_PoolTile": (2, False), "A_ShipHull": (8, False), "A_Teak": (2, False),
-    "A_Trim": (4, True), "A_Aluminum": (2, True), "A_Cushion": (2, False), "A_SignBoard": (2, True),
-    "A_Thatch": (4, False), "PalmBark": (2, True), "JungleBark": (2, True),
-    "A_Carpet": (2, False), "A_Wallpaper": (2, True), "A_Sheets": (2, False), "A_Duvet": (2, False),
-    "A_DoorWood": (2, True),
+BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). Brick-based tiles are whole
+           # numbers of the pattern period (u and v), so the tile repeats with no seam.
+    "A_Stucco": (4, 4, True), "A_Planks": (4, 3.6, True), "A_WeatheredWood": (4, 3.6, True),
+    "A_Bamboo": (2, 2, True), "A_TempleStone": (6.2222, 5.3333, True), "A_Rock": (6, 6, True),
+    "A_WetRock": (4, 4, True), "A_Terracotta": (2, 2, False), "A_DeckTiles": (5, 5, False),
+    "A_PoolTile": (2, 2, False), "A_ShipHull": (8, 8, False), "A_Teak": (4, 3.6, False),
+    "A_Trim": (4, 4, True), "A_Aluminum": (2, 2, True), "A_Cushion": (2, 2, False), "A_SignBoard": (2, 2, True),
+    "A_Thatch": (4, 4, False), "PalmBark": (2, 2, True), "JungleBark": (2, 2, True),
+    "A_Carpet": (2, 2, False), "A_Wallpaper": (2, 2, True), "A_Sheets": (2, 2, False), "A_Duvet": (2, 2, False),
+    "A_DoorWood": (4, 3.6, True),
 }
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
 WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime"}
@@ -68,12 +69,12 @@ def _img(name, res, non_color=False):
     return im
 
 
-def _bake_plane(size, wall):
+def _bake_plane(su, sv, wall):
     bm = bmesh.new()
     if wall:
-        co = [(0, 0, 10), (size, 0, 10), (size, 0, 10 + size), (0, 0, 10 + size)]
+        co = [(0, 0, 10), (su, 0, 10), (su, 0, 10 + sv), (0, 0, 10 + sv)]
     else:
-        co = [(0, 0, 10), (size, 0, 10), (size, size, 10), (0, size, 10)]
+        co = [(0, 0, 10), (su, 0, 10), (su, sv, 10), (0, sv, 10)]
     vs = [bm.verts.new(c) for c in co]
     f = bm.faces.new(vs)
     uv = bm.loops.layers.uv.new("UVMap")
@@ -96,12 +97,15 @@ def _to_np(im):
 
 
 def _tileable(a):
-    """Cross-fade with a half-shifted copy: edges come from the copy (continuous), centre from the original."""
+    """Separable seam removal: cross-fade with a copy shifted half a tile in x, then the same in y. The copy's
+    edges are continuous; its own seam sits in the middle where the original is used. Brick tiles are sized so
+    half a tile is a whole number of pattern periods, so the patterns line up."""
     n = a.shape[0]
-    win = np.sin(np.pi * (np.arange(n) + 0.5) / n) ** 2
-    w = np.outer(win, win)[..., None]
-    b = np.roll(np.roll(a, n // 2, 0), n // 2, 1)
-    return a * w + b * (1 - w)
+    win = (np.sin(np.pi * (np.arange(n) + 0.5) / n) ** 2)
+    wx = win[None, :, None]
+    a = a * wx + np.roll(a, n // 2, 1) * (1 - wx)
+    wy = win[:, None, None]
+    return a * wy + np.roll(a, n // 2, 0) * (1 - wy)
 
 
 def _save_png(a, path, srgb=True):
@@ -116,7 +120,8 @@ def _save_png(a, path, srgb=True):
 def bake_material(mat, size, wall, res, name=None):
     name = name or mat.name
     sc = bpy.context.scene
-    ob = _bake_plane(size, wall)
+    su, sv = size if isinstance(size, tuple) else (size, size)
+    ob = _bake_plane(su, sv, wall)
     ob.data.materials.append(mat)
     nt = mat.node_tree
     out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output) \
@@ -338,7 +343,7 @@ def box_uv(me, tiles):
     uv = me.uv_layers.new(name="UVMap").data
     for poly in me.polygons:
         n = poly.normal
-        s = tiles[poly.material_index] if poly.material_index < len(tiles) else 2.0
+        su, sv = tiles[poly.material_index] if poly.material_index < len(tiles) else (2.0, 2.0)
         ax = max(range(3), key=lambda i: abs(n[i]))
         for li in poly.loop_indices:
             co = me.vertices[me.loops[li].vertex_index].co
@@ -348,7 +353,7 @@ def box_uv(me, tiles):
                 u, v = co.y, co.z
             else:
                 u, v = co.x, co.z
-            uv[li].uv = (u / s, v / s)
+            uv[li].uv = (u / su, v / sv)
     return True
 
 
@@ -391,7 +396,7 @@ def joined_mesh(objs, name, mats_out, lod1=False):
             continue
         if "Straw" in ob.name:
             straw_uv(me)
-        tiles = [BAKE.get(n, (2.0, True))[0] for n in names]
+        tiles = [BAKE.get(n, (2.0, 2.0, True))[:2] for n in names]
         box_uv(me, tiles)
         idx = []
         for n in names:
@@ -557,17 +562,18 @@ def material_rows(mats_used, res, skip_bake):
     for n in sorted(mats_used):
         m = bpy.data.materials.get(n)
         if n in BAKE:
-            size, wall = BAKE[n]
+            su, sv, wall = BAKE[n]
+            size = (su, sv)
             if skip_bake and os.path.exists(os.path.join(TEX, f"{n}_base.png")):
                 files = dict(base=f"{n}_base.png", nrm=f"{n}_nrm.png", mask=f"{n}_mask.png")
             else:
-                print(f"[Export] baking {n} ({size} m tile)", flush=True)
+                print(f"[Export] baking {n} ({su} x {sv} m tile)", flush=True)
                 files = bake_material(m, size, wall, res)
             p = next(x for x in m.node_tree.nodes if x.type == "BSDF_PRINCIPLED")
             rows.append(dict(name=n, kind="lit", baseMap=f"Textures/{files['base']}",
                              normalMap=f"Textures/{files['nrm']}", maskMap=f"Textures/{files['mask']}",
                              color=[1, 1, 1, 1], metallic=round(p.inputs["Metallic"].default_value, 3),
-                             smoothness=1.0, tile=size))
+                             smoothness=1.0, tile=su))
         elif n in GLASS:
             r = principled_row(m)
             r.update(kind="glass", alpha=GLASS[n], smoothness=0.95)
