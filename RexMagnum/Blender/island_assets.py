@@ -833,6 +833,8 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
         for side, ywin, yback in ((-1, y0 + 0.27, -1.6), (1, y1 - 0.27, 1.6)):
             if fl == 2 and i == ROOM304_BAY and side == 1:
                 continue                  # Rex's room is built in detail by room304()
+            if fl == 1 and i in WELLNESS_BAYS:
+                continue                  # gym (pool side) + spa (south side) on floor 2
             tint = principled(f"A_RoomTint{rng.randrange(5)}", tints[rng.randrange(5)], 0.9)
             k.box((xa, min(yback, yback - side * 0.02), z + 0.35), (xb, max(yback, yback - side * 0.02), z + F),
                   tint, "RoomBack")
@@ -960,6 +962,18 @@ def corridor(k, m, fl, z, F, x0, x1, bay, B):
             continue
         k.box((xc - 0.5, -0.4, zc - 0.05), (xc + 0.5, 0.4, zc - 0.02), m["roomlight"], "CorridorLight")
         dxa, dxb = xc + 0.3, xc + 1.3                     # door opening (matches room 304's door)
+        if fl == 1 and i in WELLNESS_BAYS:
+            if i == WELLNESS_BAYS[1]:                     # one wide double door into the gym and the spa
+                for side in (-1, 1):
+                    y = side * 1.59
+                    ya, yb = min(y, y - side * 0.02), max(y, y - side * 0.02)
+                    wa, wb = x0 + WELLNESS_BAYS[0] * bay + 0.35, x0 + (WELLNESS_BAYS[-1] + 1) * bay - 0.35
+                    k.box((wa, ya, zf), (xc - 1.0, yb, zc), paper, "CorrWall")
+                    k.box((xc + 1.0, ya, zf), (wb, yb, zc), paper, "CorrWall")
+                    k.box((xc - 1.0, ya, zf + 2.3), (xc + 1.0, yb, zc), paper, "CorrWall")
+                    k.text("GYM" if side == 1 else "SPA", 0.3, (xc, side * 1.565, zf + 2.5), m["sign_board"], 0.01,
+                           rot=(math.pi / 2, 0, math.pi if side == 1 else 0), base="WellSign")
+            continue
         ba, bb = x0 + i * bay + 0.35, x0 + (i + 1) * bay - 0.35
         for side in (-1, 1):
             y = side * 1.59
@@ -1081,6 +1095,55 @@ def hotel_markers():
     )
 
 
+WELLNESS_BAYS = (9, 10, 11)     # floor 2: gym on the pool side, spa on the south side (3 bays each)
+
+
+def gym_and_spa(k, m, z, F, x0, y0, y1, bay):
+    """Floor 2 wellness: open gym (treadmills, weights, benches, mirror wall) facing the pool; spa (hot tub,
+    massage tables, sauna, plants) on the south side."""
+    zf, zc = z + 0.35, z + F
+    xa, xb = x0 + WELLNESS_BAYS[0] * bay + 0.35, x0 + (WELLNESS_BAYS[-1] + 1) * bay - 0.35
+    rubber = principled("A_GymFloor", (0.06, 0.06, 0.07), 0.8)
+    oak = textured("A_SpaWood", "planks", (0.62, 0.45, 0.28), (0.7, 0.52, 0.32), 0.6, 2.0, 0.15)
+    mirror = principled("A_Mirror", (0.95, 0.95, 0.95), 0.02, 1.0)
+    black = principled("A_GymBlack", (0.03, 0.03, 0.03), 0.4)
+    # floors + ceilings
+    k.box((xa, 1.6, zf), (xb, y1 - 0.27, zf + 0.02), rubber, "GymFloor")
+    k.box((xa, y0 + 0.27, zf), (xb, -1.6, zf + 0.02), oak, "SpaFloor")
+    k.box((xa, y0 + 0.27, zc - 0.02), (xb, y1 - 0.27, zc), m["trim"], "WellCeiling")
+    # gym: mirror wall on the corridor side, treadmills facing the pool, weight rack, benches
+    k.box((xa + 0.5, 1.62, zf + 0.3), (xb - 0.5, 1.64, zf + 2.3), mirror, "GymMirror")
+    for j in range(5):
+        x = xa + 1.5 + j * 3.2
+        k.box((x - 0.4, 8.8, zf + 0.02), (x + 0.4, 10.5, zf + 0.22), black, "Treadmill", bevel=0.03)
+        k.box((x - 0.4, 8.8, zf + 0.22), (x + 0.4, 9.0, zf + 1.3), black, "TreadmillPost")
+        k.box((x - 0.45, 8.75, zf + 1.2), (x + 0.45, 9.1, zf + 1.35), m["alu"], "TreadmillConsole")
+    k.box((xa + 1.0, 2.3, zf), (xa + 4.0, 2.8, zf + 1.2), black, "WeightRack")
+    for j in range(8):
+        k.cyl((xa + 1.2 + j * 0.36, 2.3, zf + 0.5), (xa + 1.2 + j * 0.36, 2.8, zf + 0.5), 0.08 + j * 0.008, m["darkmetal"],
+              segs=12, base="Dumbbell")
+    for j in range(3):
+        x = xa + 6 + j * 3.5
+        k.box((x, 4.5, zf + 0.02), (x + 0.4, 5.8, zf + 0.45), black, "Bench", bevel=0.03)
+        k.cyl((x - 0.8, 5.6, zf + 1.1), (x + 1.2, 5.6, zf + 1.1), 0.015, m["alu"], segs=8, base="Barbell")
+        for e_ in (-0.7, 1.1):
+            k.cyl((x + e_, 5.5, zf + 1.1), (x + e_ + 0.08, 5.5, zf + 1.1), 0.22, black, segs=20, base="Plate")
+    # spa: hot tub, massage tables, sauna, plants, towels
+    k.disc(((xa + xb) / 2, -6.0, zf), 1.8, 0.7, m["pooltile"], base="SpaTub")
+    k.disc(((xa + xb) / 2, -6.0, zf + 0.2), 1.6, 0.45, m["poolwater"], base="SpaWater")
+    for j in range(3):
+        x = xa + 1.5 + j * 2.0
+        k.box((x, -3.3, zf), (x + 0.7, -2.3, zf + 0.75), oak, "MassageBase")
+        k.box((x - 0.05, -3.4, zf + 0.75), (x + 0.75, -1.7, zf + 0.85), m["cushion"], "MassagePad", bevel=0.04)
+    k.box((xb - 4.0, y0 + 0.4, zf), (xb - 0.5, -6.5, zc - 0.4), oak, "Sauna")
+    k.box((xb - 4.02, -8.5, zf), (xb - 4.0, -7.5, zf + 2.0), principled("A_SaunaGlass", (0.6, 0.45, 0.3), 0.05,
+          **{"Transmission Weight": 0.7}), "SaunaDoor")
+    leaf = principled("A_PlantLeaf", (0.08, 0.3, 0.06), 0.6)
+    for px, py in ((xa + 0.6, y0 + 0.9), (xa + 0.6, -2.2), ((xa + xb) / 2 + 3, -9.5)):
+        k.cyl((px, py, zf), (px, py, zf + 0.5), 0.28, m["terracotta"], segs=14, r1=0.2, base="Pot")
+        k.rock((px, py, zf + 1.1), (0.5, 0.5, 0.7), leaf, seed=int(px * 7 + py), base="Plant", detail=2)
+
+
 def hotel(m):
     """Resort hotel: 90 m x 22 m, 5 floors (3.6 m), lobby on floor 1, balconies on the pool (north) side,
     penthouse + roof terrace + sniper spot. Rex's room 304 = floor 3, bay 4 (marked)."""
@@ -1112,6 +1175,8 @@ def hotel(m):
         if fl > 0:
             rooms(k, m, fl, z, F, x0, y0, y1, bay, B)
             corridor(k, m, fl, z, F, x0, x1, bay, B)
+            if fl == 1:
+                gym_and_spa(k, m, z, F, x0, y0, y1, bay)
         else:
             ground_floor(k, m, z, F, x0, x1, y0, y1)
         stairs(k, m, z + 0.35, F)
@@ -1119,8 +1184,13 @@ def hotel(m):
         for i in range(B + 1):        # piers between rooms (stand on the slab, touch the slab above)
             x = x0 + i * bay
             if fl > 0:                # rooms: piers stop at the corridor walls
-                k.box((x - 0.35, y0, z + 0.35), (x + 0.35, -1.6, z + F), m["stucco"], "Pier")
-                k.box((x - 0.35, 1.6, z + 0.35), (x + 0.35, y1, z + F), m["stucco"], "Pier")
+                inner = fl == 1 and WELLNESS_BAYS[0] < i <= WELLNESS_BAYS[-1]
+                if inner:             # open gym / spa: slim columns at the facades instead of room walls
+                    k.box((x - 0.35, y0, z + 0.35), (x + 0.35, y0 + 0.7, z + F), m["stucco"], "Pier")
+                    k.box((x - 0.35, y1 - 0.7, z + 0.35), (x + 0.35, y1, z + F), m["stucco"], "Pier")
+                else:
+                    k.box((x - 0.35, y0, z + 0.35), (x + 0.35, -1.6, z + F), m["stucco"], "Pier")
+                    k.box((x - 0.35, 1.6, z + 0.35), (x + 0.35, y1, z + F), m["stucco"], "Pier")
             else:                     # lobby level: columns at the facades only (open plan)
                 for yy in (y0, y1 - 0.7):
                     k.box((x - 0.35, yy, z + 0.35), (x + 0.35, yy + 0.7, z + F), m["stucco"], "Pier")
