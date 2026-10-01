@@ -1300,6 +1300,54 @@
    ],
    "metallic": 0.0,
    "smoothness": 0.4
+  },
+  {
+   "name": "A_GymBlack",
+   "kind": "lit",
+   "color": [
+    0.03,
+    0.03,
+    0.03,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.6
+  },
+  {
+   "name": "A_GymFloor",
+   "kind": "lit",
+   "color": [
+    0.06,
+    0.06,
+    0.07,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.2
+  },
+  {
+   "name": "A_SaunaGlass",
+   "kind": "lit",
+   "color": [
+    0.6,
+    0.45,
+    0.3,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.95
+  },
+  {
+   "name": "A_SpaWood",
+   "kind": "lit",
+   "color": [
+    0.8,
+    0.8,
+    0.8,
+    1
+   ],
+   "metallic": 0.0,
+   "smoothness": 0.4
   }
  ],
  "assets": [
@@ -1356,7 +1404,7 @@
   {
    "name": "Hotel",
    "fbx": "Buildings/Hotel.fbx",
-   "tris": 188404
+   "tris": 185488
   },
   {
    "name": "Room304",
