@@ -13,6 +13,19 @@ namespace RexMagnum
     {
         public float lookSpeed = 0.12f;          // degrees per pixel
         public float opacity = 0.45f;
+        // ---- layout editor (brief: drag / resize / opacity per button, saved, reset)
+        public static bool EditMode;
+        static readonly string[] AllButtons = { "Action", "Jump", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera", "Move" };
+        string selected = "Action";
+        bool dragging;
+        Vector2 lastPointer;
+        static Vector2 Offset(string n) => new Vector2(PlayerPrefs.GetFloat($"RexMagnum_Touch_{n}_x", 0f), PlayerPrefs.GetFloat($"RexMagnum_Touch_{n}_y", 0f));
+        static float Scale(string n) => PlayerPrefs.GetFloat($"RexMagnum_Touch_{n}_s", 1f);
+        public static void ResetLayout()
+        {
+            foreach (var n in AllButtons) foreach (var k in new[] { "x", "y", "s" }) PlayerPrefs.DeleteKey($"RexMagnum_Touch_{n}_{k}");
+            PlayerPrefs.DeleteKey("RexMagnum_TouchOpacity");
+        }
         Texture2D circle;
         int moveId = -1, lookId = -1;
         Vector2 moveStart, movePos, lookLast;
@@ -37,7 +50,9 @@ namespace RexMagnum
         float H => Screen.height;
         float W => Screen.width;
         // button centres in screen pixels (origin bottom-left) and radius
-        Vector2 Btn(string n)
+        Vector2 Btn(string n) => BaseBtn(n) + Offset(n) * H;          // offsets are saved in screen heights
+
+        Vector2 BaseBtn(string n)
         {
             switch (n)
             {
@@ -45,12 +60,13 @@ namespace RexMagnum
                 case "Jump": return new Vector2(W - H * 0.17f, H * 0.45f);
                 case "Use": return new Vector2(W - H * 0.42f, H * 0.14f);
                 case "Pause": return new Vector2(W - H * 0.08f, H * 0.92f);
+                case "Move": return new Vector2(H * 0.22f, H * 0.22f);
                 default:
                     int i = System.Array.IndexOf(top, n);
                     return new Vector2(W * 0.5f + (i - 2) * H * 0.2f, H * 0.9f);
             }
         }
-        float Rad(string n) => n == "Action" ? H * 0.12f : n == "Pause" ? H * 0.055f : H * 0.075f;
+        float Rad(string n) => (n == "Action" || n == "Move" ? H * 0.12f : n == "Pause" ? H * 0.055f : H * 0.075f) * Scale(n);
 
         string HitButton(Vector2 p)
         {
@@ -59,8 +75,37 @@ namespace RexMagnum
             return null;
         }
 
+        void EditUpdate()
+        {
+            // one pointer (finger or mouse): press on a button selects it, drag moves it
+            Vector2 p; bool down, held;
+            var ts = Touchscreen.current;
+            if (ts != null && ts.primaryTouch.press.isPressed || (ts != null && ts.primaryTouch.press.wasReleasedThisFrame))
+            { p = ts.primaryTouch.position.ReadValue(); down = ts.primaryTouch.press.wasPressedThisFrame; held = ts.primaryTouch.press.isPressed; }
+            else if (Mouse.current != null)
+            { p = Mouse.current.position.ReadValue(); down = Mouse.current.leftButton.wasPressedThisFrame; held = Mouse.current.leftButton.isPressed; }
+            else return;
+            if (p.y > H * 0.82f && p.x > W * 0.25f && p.x < W * 0.75f) { dragging = false; return; }   // edit toolbar area
+            if (down)
+            {
+                foreach (var n in AllButtons)
+                    if (Vector2.Distance(p, Btn(n)) < Rad(n) * 1.2f) { selected = n; dragging = true; break; }
+                lastPointer = p;
+            }
+            if (held && dragging)
+            {
+                var o = Offset(selected) + (p - lastPointer) / H;
+                PlayerPrefs.SetFloat($"RexMagnum_Touch_{selected}_x", o.x);
+                PlayerPrefs.SetFloat($"RexMagnum_Touch_{selected}_y", o.y);
+                lastPointer = p;
+            }
+            if (!held) dragging = false;
+        }
+
         void Update()
         {
+            opacity = PlayerPrefs.GetFloat("RexMagnum_TouchOpacity", 0.45f);
+            if (EditMode) { TouchState.Active = false; EditUpdate(); return; }
             var ts = Touchscreen.current;
             TouchState.Active = ts != null && Gamepad.current == null;
             TouchState.AnyTap = false;
@@ -115,7 +160,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (!TouchState.Active) return;
+            if (!TouchState.Active && !EditMode) return;
             var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
                 fontSize = Mathf.RoundToInt(H * 0.028f) };
             style.normal.textColor = Color.white;
@@ -141,7 +186,24 @@ namespace RexMagnum
                 Draw(moveStart, H * 0.12f, null, opacity * 0.6f);
                 Draw(movePos, H * 0.05f, null, opacity * 1.4f);
             }
-            else Draw(new Vector2(H * 0.22f, H * 0.22f), H * 0.12f, "Move", opacity * 0.5f);
+            else Draw(Btn("Move"), Rad("Move"), "Move", opacity * 0.5f);
+            if (EditMode)
+            {
+                var sel = Btn(selected);
+                GUI.color = new Color(1f, 0.8f, 0.2f, 0.9f);
+                GUI.DrawTexture(new Rect(sel.x - Rad(selected) * 1.15f, H - sel.y - Rad(selected) * 1.15f, Rad(selected) * 2.3f, Rad(selected) * 2.3f), circle);
+                GUI.color = Color.white;
+                float bw = W * 0.08f, bh = H * 0.07f, x0 = W * 0.5f - bw * 3f, y0 = H * 0.03f;
+                var bs = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(H * 0.025f) };
+                void S(float k) => PlayerPrefs.SetFloat($"RexMagnum_Touch_{selected}_s", Mathf.Clamp(Scale(selected) * k, 0.5f, 2f));
+                if (GUI.Button(new Rect(x0, y0, bw, bh), "SIZE -", bs)) S(0.9f);
+                if (GUI.Button(new Rect(x0 + bw, y0, bw, bh), "SIZE +", bs)) S(1.1f);
+                if (GUI.Button(new Rect(x0 + bw * 2, y0, bw, bh), "FADE -", bs)) PlayerPrefs.SetFloat("RexMagnum_TouchOpacity", Mathf.Max(0.1f, opacity - 0.1f));
+                if (GUI.Button(new Rect(x0 + bw * 3, y0, bw, bh), "FADE +", bs)) PlayerPrefs.SetFloat("RexMagnum_TouchOpacity", Mathf.Min(1f, opacity + 0.1f));
+                if (GUI.Button(new Rect(x0 + bw * 4, y0, bw, bh), "RESET", bs)) ResetLayout();
+                if (GUI.Button(new Rect(x0 + bw * 5, y0, bw, bh), "DONE", bs)) { EditMode = false; PlayerPrefs.Save(); }
+                GUI.Label(new Rect(x0, y0 + bh, bw * 6, bh), $"Drag a button to move it. Selected: {selected}", style);
+            }
         }
     }
 }

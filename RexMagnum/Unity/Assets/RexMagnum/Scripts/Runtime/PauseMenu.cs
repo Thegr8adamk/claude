@@ -25,6 +25,7 @@ namespace RexMagnum
 
         public static void ApplySettings()
         {
+            RMInput.LoadOptions();
             RMInput.MouseSensitivity = PlayerPrefs.GetFloat("RexMagnum_LookSpeed", 0.08f);
             RMInput.LookScaleX = PlayerPrefs.GetFloat("RexMagnum_LookX", 1f);
             RMInput.LookScaleY = PlayerPrefs.GetFloat("RexMagnum_LookY", 1f);
@@ -164,6 +165,13 @@ namespace RexMagnum
             }
         }
 
+        void Toggle(string text, string key, int def)
+        {
+            bool v = PlayerPrefs.GetInt(key, def) == 1;
+            bool n = GUILayout.Toggle(v, text, label);
+            if (n != v) { PlayerPrefs.SetInt(key, n ? 1 : 0); ApplySettings(); }
+        }
+
         static float Slider(string name, string key, float def, float min, float max, GUIStyle st)
         {
             float v = PlayerPrefs.GetFloat(key, def);
@@ -221,7 +229,26 @@ namespace RexMagnum
             GUILayout.Space(10);
             if (GUILayout.Button("RESET KEYBOARD", button, GUILayout.Width(300))) RMInput.ResetKeys();
             GUILayout.Space(10);
-            GUILayout.Label("Controller and touch use the layout from the brief. Mouse: left = Action, right = Aim, wheel = weapons.", small);
+            GUILayout.Space(16);
+            GUILayout.Label("CONTROLLER + TOUCH", title);
+            Toggle(" Swap sticks (left-handed)", "RexMagnum_SwapSticks", 0);
+            Toggle(" Swap triggers and bumpers", "RexMagnum_SwapTriggers", 0);
+            Toggle(" Aim assist (phone + controller)", "RexMagnum_AimAssist", 1);
+            GUILayout.Space(10);
+            GUILayout.Label("HOLD OR TAP", title);
+            Toggle(" Run: tap to toggle (off = hold)", "RexMagnum_RunToggle", 0);
+            Toggle(" Aim: tap to toggle (off = hold)", "RexMagnum_AimToggle", 0);
+            Toggle(" Hands down: hold (off = tap to toggle)", "RexMagnum_HandsHold", 0);
+            GUILayout.Space(10);
+            GUILayout.Label("TOUCH BUTTONS", title);
+            if (GUILayout.Button("EDIT TOUCH LAYOUT (drag buttons, resize, opacity)", button, GUILayout.Width(620))) { TouchControls.EditMode = true; SetOpen(false); }
+            if (GUILayout.Button("RESET TOUCH LAYOUT", button, GUILayout.Width(300))) TouchControls.ResetLayout();
+            GUILayout.Space(10);
+            if (GUILayout.Button("RESET CONTROLLER + TOUCH OPTIONS", button, GUILayout.Width(460)))
+            {
+                foreach (var k in new[] { "SwapSticks", "SwapTriggers", "AimAssist", "RunToggle", "AimToggle", "HandsHold" }) PlayerPrefs.DeleteKey("RexMagnum_" + k);
+                ApplySettings();
+            }
         }
     }
 }

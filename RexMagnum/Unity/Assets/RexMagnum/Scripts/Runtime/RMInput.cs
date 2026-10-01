@@ -73,6 +73,32 @@ namespace RexMagnum
         static bool KHeld(string a) { var k = KeyFor(a); return K != null && k != Key.None && K[k].isPressed; }
         static bool KDown(string a) { var k = KeyFor(a); return K != null && k != Key.None && K[k].wasPressedThisFrame; }
 
+        // ---- controller + general options (brief section 7), loaded from PlayerPrefs by LoadOptions()
+        public static bool SwapSticks, SwapTriggers, AimAssist = true, RunToggle, AimToggle, HandsHold;
+        public static void LoadOptions()
+        {
+            SwapSticks = PlayerPrefs.GetInt("RexMagnum_SwapSticks", 0) == 1;
+            SwapTriggers = PlayerPrefs.GetInt("RexMagnum_SwapTriggers", 0) == 1;
+            AimAssist = PlayerPrefs.GetInt("RexMagnum_AimAssist", 1) == 1;
+            RunToggle = PlayerPrefs.GetInt("RexMagnum_RunToggle", 0) == 1;
+            AimToggle = PlayerPrefs.GetInt("RexMagnum_AimToggle", 0) == 1;
+            HandsHold = PlayerPrefs.GetInt("RexMagnum_HandsHold", 0) == 1;
+        }
+        static Vector2 MoveStick => G == null ? Vector2.zero : (SwapSticks ? G.rightStick.ReadValue() : G.leftStick.ReadValue());
+        static Vector2 LookStick => G == null ? Vector2.zero : (SwapSticks ? G.leftStick.ReadValue() : G.rightStick.ReadValue());
+        static UnityEngine.InputSystem.Controls.ButtonControl ActTrig => SwapTriggers ? G.rightShoulder : G.rightTrigger;
+        static UnityEngine.InputSystem.Controls.ButtonControl AimTrig => SwapTriggers ? G.leftShoulder : G.leftTrigger;
+        static UnityEngine.InputSystem.Controls.ButtonControl NextBtn => SwapTriggers ? G.rightTrigger : G.rightShoulder;
+        static UnityEngine.InputSystem.Controls.ButtonControl PrevBtn => SwapTriggers ? G.leftTrigger : G.leftShoulder;
+        // toggle states (tap once = on, tap again = off)
+        static bool runOn, aimOn;
+        static int runFrame = -1, aimFrame = -1;
+        static bool RunRaw => KHeld("Run") || (TouchState.Active && TouchState.Move.magnitude > 0.95f) ||
+                              (G != null && (G.leftStickButton.isPressed || MoveStick.magnitude > 0.95f));
+        static bool RunPressed => KDown("Run") || (G != null && G.leftStickButton.wasPressedThisFrame);
+        static bool AimRaw => TouchState.Held("Aim") || (M != null && M.rightButton.isPressed) || (G != null && AimTrig.isPressed);
+        static bool AimPressed => (M != null && M.rightButton.wasPressedThisFrame) || (G != null && AimTrig.wasPressedThisFrame);
+
         public static float MouseSensitivity = 0.08f;   // degrees per pixel
         public static float StickSensitivity = 180f;    // degrees per second
         public static bool InvertY;
@@ -88,7 +114,7 @@ namespace RexMagnum
                     v.x = (KHeld("Right") ? 1 : 0) - (KHeld("Left") ? 1 : 0);
                     v.y = (KHeld("Forward") ? 1 : 0) - (KHeld("Back") ? 1 : 0);
                 }
-                if (G != null) v += G.leftStick.ReadValue();
+                if (G != null) v += MoveStick;
                 if (TouchState.Active) v += TouchState.Move;
                 return Vector2.ClampMagnitude(v, 1f);
             }
@@ -101,7 +127,7 @@ namespace RexMagnum
             {
                 Vector2 v = Vector2.zero;
                 if (M != null) v += M.delta.ReadValue() * MouseSensitivity;
-                if (G != null) v += G.rightStick.ReadValue() * StickSensitivity * Time.unscaledDeltaTime;
+                if (G != null) v += LookStick * StickSensitivity * Time.unscaledDeltaTime;
                 if (TouchState.Active) v += TouchState.LookDelta;
                 v.x *= LookScaleX; v.y *= LookScaleY;
                 if (InvertY) v.y = -v.y;
@@ -109,28 +135,48 @@ namespace RexMagnum
             }
         }
 
-        public static bool Run => (KHeld("Run")) || (TouchState.Active && TouchState.Move.magnitude > 0.95f) ||
-                                  (G != null && (G.leftStickButton.isPressed || G.leftStick.ReadValue().magnitude > 0.95f));
+        public static bool Run
+        {
+            get
+            {
+                if (!RunToggle) return RunRaw;
+                if (runFrame != Time.frameCount) { runFrame = Time.frameCount; if (RunPressed) runOn = !runOn; if (Move.sqrMagnitude < 0.01f) runOn = false; }
+                return runOn || (TouchState.Active && TouchState.Move.magnitude > 0.95f);
+            }
+        }
         public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && G.buttonSouth.wasPressedThisFrame);
         public static bool ActionDown => TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
-                                         (G != null && G.rightTrigger.wasPressedThisFrame);
-        public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && G.rightTrigger.isPressed);
+                                         (G != null && ActTrig.wasPressedThisFrame);
+        public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
         public static bool ActionUp => TouchState.Up("Action") || (M != null && M.leftButton.wasReleasedThisFrame) ||
-                                       (G != null && G.rightTrigger.wasReleasedThisFrame);
-        public static bool Aim => TouchState.Held("Aim") || (M != null && M.rightButton.isPressed) || (G != null && G.leftTrigger.isPressed);
+                                       (G != null && ActTrig.wasReleasedThisFrame);
+        public static bool Aim
+        {
+            get
+            {
+                if (!AimToggle) return AimRaw;
+                if (aimFrame != Time.frameCount) { aimFrame = Time.frameCount; if (AimPressed) aimOn = !aimOn; }
+                return aimOn || TouchState.Held("Aim");
+            }
+        }
         public static bool CameraToggle => TouchState.Down("Camera") || (KDown("Camera")) ||
                                            (G != null && G.rightStickButton.wasPressedThisFrame);
         public static bool SwapShoulder => (KDown("Shoulder")) ||
                                            (G != null && G.dpad.left.wasPressedThisFrame);
         public static bool Taunt => TouchState.Down("Taunt") || (KDown("Taunt")) || (G != null && G.dpad.up.wasPressedThisFrame);
         public static bool Photo => TouchState.Down("Photo") || (KDown("Photo")) || (G != null && G.dpad.right.wasPressedThisFrame);
-        public static bool Hands => TouchState.Down("Hands") || (KDown("Hands")) || (G != null && G.dpad.down.wasPressedThisFrame);
+        /// <summary>Hands down/up: tap toggles (default); with "hold" the hands stay down only while the key is held
+        /// (the controller reads it as press and release events).</summary>
+        public static bool Hands => HandsHold
+            ? (KDown("Hands") || (K != null && KeyFor("Hands") != Key.None && K[KeyFor("Hands")].wasReleasedThisFrame) ||
+               (G != null && (G.dpad.down.wasPressedThisFrame || G.dpad.down.wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
+            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && G.dpad.down.wasPressedThisFrame));
         public static bool Use => TouchState.Down("Use") || (KDown("Use")) || (G != null && G.buttonWest.wasPressedThisFrame);
         public static bool Pause => TouchState.Down("Pause") || (KDown("Pause")) || (G != null && G.startButton.wasPressedThisFrame);
         public static bool NextWeapon => TouchState.Down("Weapon") || (KDown("NextWeapon")) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
-                                         (G != null && G.rightShoulder.wasPressedThisFrame);
+                                         (G != null && NextBtn.wasPressedThisFrame);
         public static bool PrevWeapon => (KDown("PrevWeapon")) || (M != null && M.scroll.ReadValue().y > 0.1f) ||
-                                         (G != null && G.leftShoulder.wasPressedThisFrame);
+                                         (G != null && PrevBtn.wasPressedThisFrame);
         public static bool AnyKey => TouchState.AnyTap || (K != null && K.anyKey.wasPressedThisFrame) || AnyClick ||
                                      (G != null && G.buttonSouth.wasPressedThisFrame);
         public static bool AnyClick => M != null && M.leftButton.wasPressedThisFrame;

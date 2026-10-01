@@ -151,6 +151,22 @@ namespace RexMagnum
         public Vector3 AimPoint(float range = 200f)
         {
             Ray ray = new Ray(transform.position, transform.forward);
+            // aim assist (phone + controller, setting): pull the aim to the nearest blob within 4 degrees
+            if (RMInput.AimAssist && (TouchState.Active || UnityEngine.InputSystem.Gamepad.current != null))
+            {
+                Blob best = null;
+                float bestAng = 4f;
+                foreach (var b in Blob.All)
+                {
+                    if (b == null || b.IsDead) continue;
+                    Vector3 c = b.transform.position + Vector3.up * 1.0f;
+                    float d = Vector3.Distance(c, transform.position);
+                    if (d > range) continue;
+                    float ang = Vector3.Angle(transform.forward, c - transform.position);
+                    if (ang < bestAng) { bestAng = ang; best = b; }
+                }
+                if (best != null) return best.transform.position + Vector3.up * 1.0f;
+            }
             if (Physics.Raycast(ray, out RaycastHit hit, range, collisionMask, QueryTriggerInteraction.Ignore) &&
                 !hit.transform.IsChildOf(target))
                 return hit.point;
