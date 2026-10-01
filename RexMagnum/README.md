@@ -7,7 +7,7 @@ The full project brief is in [CLAUDE.md](CLAUDE.md). Claude Code reads it at the
 | # | Step | Status |
 |---|---|---|
 | 1 | PC specs check + safe settings | Waiting: run the command below and send the result |
-| 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Approved. Next: rig + animations |
+| 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Done (v1). Ready to test in Unity |
 | 3 | Tourist blob → other 3 blobs | Not started |
 | 4 | Bottle, towel, knife → other weapons | Not started |
 | 5 | Island rough map + 3 view pictures | Not started |
@@ -72,3 +72,40 @@ Add `--preview` for fast, small test pictures.
 3. Face blend shapes: blink, talk (A/E/O/M), smile, smug grin.
 4. First-person arms: a separate, high-detail model with full finger bones.
 5. Export: FBX, GLB, Unity prefab.
+
+## Try Rex in Unity (first person + third person)
+
+![game version](Renders/preview/rex_game_version.png)
+
+### What is ready
+
+| Item | Details |
+|---|---|
+| `Unity/Assets/RexMagnum/Characters/Rex/Rex.fbx` | Third-person Rex: 67k triangles, rig with 64 bones, 8 face shapes, 14 animations |
+| `.../Rex_FPArms.fbx` | First-person arms: high detail (subdivided), same rig and animations |
+| `.../Textures/` | Baked skin (2K), hair cards, shirt print. Phones get 1K (ASTC). |
+| `Export/Rex.glb` | Web/phone copy |
+| `Blender/Rex_v01.blend` | Full-detail source |
+| Scripts | `RexController` (move), `RexCameraRig` (first/third person), `RexActions` (punch, taunt, photo, hands), `RexFace` (blink, smile, talk) |
+
+### Steps
+
+1. Your Unity project must use **URP** and the **Input System** package (Unity 6 templates have both).
+2. Copy the folder `RexMagnum/Unity/Assets/RexMagnum` into your Unity project's `Assets` folder.
+3. In Unity, click **Rex Magnum → Build Rex + Test Scene**. Wait until it finishes.
+4. Open `Assets/RexMagnum/Scenes/RexTest.unity`. Click **Play**.
+
+### Test controls
+
+| Key | Action |
+|---|---|
+| **V** (controller: R-stick click) | Switch first person ↔ third person |
+| C (controller: D-pad left) | Swap shoulder (third person) |
+| WASD + mouse | Move + look |
+| Shift / Space | Run / jump |
+| Left click | Tap = jab, hold = heavy punch |
+| Right click | Aim (third-person camera zooms in) |
+| T / P / H | Taunt / selfie photo / hands down-up |
+| Esc | Pause (frees the mouse) |
+
+Animations are version 1 (made by hand in code). The rig uses Mixamo bone names, so better Mixamo animations can replace them later.

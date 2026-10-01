@@ -145,13 +145,13 @@ def bake_skin(body, tex_dir, size):
     rng = np.random.default_rng(58)
     c = _px(bc)
     r = _px(rough)
-    speck = (rng.random((size, size)) > 0.55).astype(np.float32)
+    speck = (rng.random((size, size)) > 0.7).astype(np.float32)
     speck = 0.6 * speck + 0.4 * np.roll(speck, 1, axis=1)
-    stub = np.clip(m[..., 0] * 1.3, 0, 1) * speck
+    stub = np.clip(m[..., 0], 0, 1) * speck
     hair_col = np.array([0.09, 0.075, 0.06])
     gray = np.array([0.35, 0.33, 0.31])
     mixc = np.where((rng.random((size, size)) > 0.6)[..., None], gray, hair_col)
-    c[..., :3] = c[..., :3] * (1 - 0.65 * stub[..., None]) + mixc * 0.65 * stub[..., None]
+    c[..., :3] = c[..., :3] * (1 - 0.4 * stub[..., None]) + mixc * 0.4 * stub[..., None]
     brow = np.clip(m[..., 1] * 1.5, 0, 1) * (0.6 + 0.4 * rng.random((size, size)))
     c[..., :3] = c[..., :3] * (1 - 0.7 * brow[..., None]) + np.array([0.16, 0.11, 0.06]) * 0.7 * brow[..., None]
     r[..., :3] = np.clip(r[..., :3] + 0.15 * stub[..., None], 0, 1)
@@ -201,6 +201,7 @@ def body_to_game(body):
     for k in FACE_KEYS:
         sk = body.shape_key_add(name=k)
         sk.data.foreach_set("co", mix + deltas[k])
+        sk.value = 0.0
     # delete helpers (not in the 'body' group)
     gi = body.vertex_groups["body"].index
     keep = np.zeros(n, dtype=bool)
@@ -294,7 +295,7 @@ def join_children(root, name):
     return ob
 
 
-def hair_cards(hair_ob, tex_dir, keep_every=4, width=0.0045):
+def hair_cards(hair_ob, tex_dir, keep_every=8, width=0.006, max_segs=4):
     """Hair curves -> flat ribbon cards (game hair). Card texture: strands with alpha."""
     hc = hair_ob.data
     pos = np.empty(len(hc.points) * 3, dtype=np.float32)
@@ -303,10 +304,17 @@ def hair_cards(hair_ob, tex_dir, keep_every=4, width=0.0045):
     offs = [c.first_point_index for c in hc.curves] + [len(hc.points)]
     mw = hair_ob.matrix_world
     head_c = Vector(pos.mean(axis=0))
+    roots_z = pos[offs[:-1], 2]
+    z_cut = roots_z.min() + (roots_z.max() - roots_z.min()) * 0.62   # no cards on the bald top
     verts, faces, uvs = [], [], []
     for ci in range(0, len(hc.curves), keep_every):
         a, b = offs[ci], offs[ci + 1]
+        if pos[a, 2] > z_cut:
+            continue
         pts = [Vector(p) for p in pos[a:b]]
+        if len(pts) - 1 > max_segs:                     # fewer points per card
+            step = (len(pts) - 1) / max_segs
+            pts = [pts[round(i * step)] for i in range(max_segs + 1)]
         n = len(pts)
         u0 = (ci // keep_every % 8) / 8.0
         base = len(verts)
@@ -440,6 +448,14 @@ def export(o):
         if ob.name.startswith(("R_", "RM_")) or ob.type in ("CAMERA", "LIGHT"):
             bpy.data.objects.remove(ob)
     arms = fp_arms(body, bpy.data.objects["Rex_Shirt"], arm)
+    # Lighter game meshes (third person). The .blend source keeps full detail.
+    for name, ratio in (("Rex_Chain", 0.3), ("Rex_TeethUpper", 0.25), ("Rex_TeethLower", 0.25),
+                        ("Rex_Glasses", 0.5), ("Rex_Socks", 0.4), ("Rex_Strap", 0.4), ("Rex_WatchBand", 0.5),
+                        ("Rex_PinkyRing", 0.5)):
+        for ob in [x for x in bpy.data.objects if x.type == "MESH" and x.name.startswith(name)]:
+            md = ob.modifiers.new("Decimate", "DECIMATE")
+            md.ratio = ratio
+            apply_non_armature(ob)
 
     acts = [a for a in bpy.data.actions if a.name.startswith("Rex_")]
 
@@ -495,7 +511,14 @@ def export(o):
         json.dump({"materials": rows,
                    "faceKeys": list(FACE_KEYS),
                    "animations": [a.name for a in acts]}, f, indent=1)
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(o["out"], "Rex_game.blend"), compress=True)
+    for key in list(bpy.data.shape_keys):
+        if key.user is None or key.users == 0:
+            bpy.data.shape_keys.remove(key) if hasattr(bpy.data.shape_keys, "remove") else None
+    bpy.data.orphans_purge(do_recursive=True)
+    try:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(o["out"], "Rex_game.blend"), compress=True)
+    except RuntimeError as e:
+        print("[Rex] note: game .blend not saved:", e)
     print("[Rex] DONE")
 
 
