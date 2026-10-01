@@ -1144,6 +1144,43 @@ def gym_and_spa(k, m, z, F, x0, y0, y1, bay):
         k.rock((px, py, zf + 1.1), (0.5, 0.5, 0.7), leaf, seed=int(px * 7 + py), base="Plant", detail=2)
 
 
+def penthouse(k, m, top):
+    """Penthouse on the roof: corner columns + floor-to-ceiling glass, sliding door to the terrace (east), inside:
+    lounge (L sofa, coffee table, TV), bar, king bed; terrace: loungers, umbrellas, a roof hot tub."""
+    zf, zc = top + 0.35, top + 3.6
+    x0, x1, y0, y1 = -15.0, 15.0, -6.0, 6.0
+    k.box((x0, y0, zc - 0.25), (x1, y1, zc), m["stucco"], "PHRoofSlab")
+    for x in (x0, -5.0, 5.0, x1 - 0.4):
+        for y in (y0, y1 - 0.4):
+            k.box((x, y, zf), (x + 0.4, y + 0.4, zc - 0.25), m["stucco"], "PHColumn")
+    k.box((x0 + 0.4, y0 + 0.15, zf), (x1 - 0.4, y0 + 0.17, zc - 0.25), m["glass"], "PHGlass")
+    k.box((x0 + 0.4, y1 - 0.17, zf), (x1 - 0.4, y1 - 0.15, zc - 0.25), m["glass"], "PHGlass")
+    k.box((x0 + 0.15, y0 + 0.4, zf), (x0 + 0.17, y1 - 0.4, zc - 0.25), m["glass"], "PHGlass")
+    k.box((x1 - 0.17, y0 + 0.4, zf), (x1 - 0.15, -1.0, zc - 0.25), m["glass"], "PHGlass")     # door gap -1..1
+    k.box((x1 - 0.17, 1.0, zf), (x1 - 0.15, y1 - 0.4, zc - 0.25), m["glass"], "PHGlass")
+    k.box((x1 - 0.23, -2.5, zf), (x1 - 0.21, -0.95, zc - 0.3), m["glass"], "PHSlidDoor")
+    k.box((x0, y0, zf - 0.0), (x1, y1, zf + 0.02), textured("A_Marble", "tiles", (0.88, 0.86, 0.82),
+          (0.8, 0.78, 0.74), 0.2, 1.0, 0.05), "PHFloor")
+    sofa = principled("A_SofaWhite", (0.92, 0.9, 0.86), 0.85)
+    k.box((-12, -4.5, zf), (-6, -3.6, zf + 0.42), sofa, "PHSofa", bevel=0.06)
+    k.box((-12, -4.5, zf + 0.42), (-6, -4.2, zf + 0.85), sofa, "PHSofaBack", bevel=0.06)
+    k.box((-12, -3.6, zf), (-11.1, 0.5, zf + 0.42), sofa, "PHSofa", bevel=0.06)
+    k.box((-10, -2.6, zf), (-7.5, -1.4, zf + 0.38), m["teak"], "PHCoffeeTable")
+    k.box((-8.6, 5.3, zf + 0.8), (-6.0, 5.4, zf + 2.2), principled("A_TVBody", (0.03, 0.03, 0.03), 0.4), "PHTV")
+    k.box((-1.5, 3.5, zf), (2.5, 4.3, zf + 1.1), m["teak"], "PHBar")
+    k.box((-1.6, 3.4, zf + 1.1), (2.6, 4.4, zf + 1.16), principled("A_Gold", (1.0, 0.75, 0.3), 0.25, 1.0), "PHBarTop")
+    k.box((7, -3.5, zf), (9.2, -1.4, zf + 0.5), m["cushion"], "PHBed", bevel=0.06)
+    k.box((9.2, -3.6, zf), (9.4, -1.3, zf + 1.3), m["teak"], "PHHeadboard")
+    # roof terrace east of the penthouse (under the pergola): loungers, umbrellas, hot tub
+    for j in range(5):
+        x = 20 + j * 3.2
+        for s_ in (-1, 1):
+            k.box((x - 0.35 + s_ * 0.6, -4.8, zf), (x + 0.35 + s_ * 0.6, -2.9, zf + 0.42), m["cushion"],
+                  "RoofLounger", bevel=0.04)
+    k.disc((30, 2.5, zf), 1.9, 0.75, m["pooltile"], base="RoofTub")
+    k.disc((30, 2.5, zf + 0.2), 1.7, 0.5, m["poolwater"], base="RoofTubWater")
+
+
 def hotel(m):
     """Resort hotel: 90 m x 22 m, 5 floors (3.6 m), lobby on floor 1, balconies on the pool (north) side,
     penthouse + roof terrace + sniper spot. Rex's room 304 = floor 3, bay 4 (marked)."""
@@ -1245,8 +1282,7 @@ def hotel(m):
                    ((x0 - 0.3, y0), (x0, y1)), ((x1, y0), (x1 + 0.3, y1))):
         k.box((a[0], a[1], top + 0.35), (b[0], b[1], top + 1.35), m["stucco"], "Parapet")
     # penthouse + terracotta hip roof + terrace pergola
-    k.box((-15, -6, top + 0.35), (15, 6, top + 3.6), m["stucco"], "Penthouse")
-    k.box((-14.8, -6.25, top + 0.6), (14.8, 6.25, top + 3.0), m["glass"], "PenthouseGlass")
+    penthouse(k, m, top)
     bm = bmesh.new()
     pts = [(-16, -7, 0), (16, -7, 0), (16, 7, 0), (-16, 7, 0), (-9, 0, 3.2), (9, 0, 3.2)]
     vs = [bm.verts.new((x, y, z + top + 3.6)) for x, y, z in pts]
