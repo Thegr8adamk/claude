@@ -124,6 +124,7 @@ namespace RexMagnum.EditorTools
                 if (hasRoom) Room304(room, rex, game);
                 Golf(File.ReadAllText(json), pool);
                 Factory(File.ReadAllText(json));
+                Tunnels(File.ReadAllText(json), terrain);
                 if (data.hotel != null && data.hotel.elevatorFloors != null)
                 {
                     Hotel(data.hotel);
@@ -695,6 +696,93 @@ namespace RexMagnum.EditorTools
                 sp.transform.position = core[0] + new Vector3(0, -3f, -6f);
                 sp.radius = 6f;
                 sp.maxAlive = 4;
+            }
+        }
+
+        static Transform DoorPair(string name, Vector3 a, Vector3 aOut, Vector3 b, Vector3 bOut, Transform root)
+        {
+            ZoneDoor Make(string n, Vector3 at)
+            {
+                var g = new GameObject(n);
+                g.transform.SetParent(root, false);
+                g.transform.position = at + Vector3.up * 1.2f;
+                var bc = g.AddComponent<BoxCollider>();
+                bc.isTrigger = true;
+                bc.size = new Vector3(3f, 2.6f, 1.2f);
+                return g.AddComponent<ZoneDoor>();
+            }
+            Transform Exit(string n, Vector3 at, Vector3 lookFrom)
+            {
+                var t = new GameObject(n).transform;
+                t.SetParent(root, false);
+                t.position = at;
+                var d = at - lookFrom; d.y = 0;
+                if (d.sqrMagnitude > 0.01f) t.rotation = Quaternion.LookRotation(d.normalized);
+                return t;
+            }
+            var da = Make(name + "_DoorA", a);
+            var db = Make(name + "_DoorB", b);
+            da.exit = Exit(name + "_ExitB", bOut, b);
+            db.exit = Exit(name + "_ExitA", aOut, a);
+            return da.transform;
+        }
+
+        static void Tunnels(string json, Terrain terrain)
+        {
+            int f = json.IndexOf("\"tunnels\"", StringComparison.Ordinal);
+            if (f < 0) return;
+            string tj = json.Substring(f);
+            var main = Pts(tj, "main");
+            var ruins = Pts(tj, "ruins");
+            var ship = Pts(tj, "ship");
+            if (main.Count < 2) return;
+            var root = new GameObject("Tunnels_Gameplay").transform;
+            float H(Vector3 p) => terrain != null ? terrain.SampleHeight(p) + terrain.transform.position.y : p.y;
+            // cave mouth (behind the small waterfall) <-> start of the main tunnel
+            var mouth = U(-160f, 232f, 0f); mouth.y = H(mouth);
+            var mouthOut = U(-160f, 222f, 0f); mouthOut.y = H(mouthOut) + 0.1f;
+            DoorPair("Cave", mouth, mouthOut, main[0], main[0] + (main[1] - main[0]).normalized * 4f, root);
+            // ruins branch end <-> the factory's back corner (inside the temple hall)
+            int fac = json.IndexOf("\"factory\"", StringComparison.Ordinal);
+            if (ruins.Count >= 2 && fac >= 0)
+            {
+                var hall = Pts(json.Substring(fac, Math.Min(600, json.Length - fac)), "hall");
+                if (hall.Count > 0)
+                    DoorPair("RuinsTunnel", ruins[1], ruins[1] + (ruins[0] - ruins[1]).normalized * 4f,
+                             hall[0] + new Vector3(-10f, 0f, 8f), hall[0] + new Vector3(-8f, 0f, 6f), root);
+            }
+            // ship branch end <-> a rock crack beside the crash site
+            if (ship.Count >= 2)
+            {
+                var top = U(10f, 290f, 0f); top.y = H(top);
+                var topOut = U(14f, 296f, 0f); topOut.y = H(topOut) + 0.1f;
+                DoorPair("ShipTunnel", ship[1], ship[1] + (ship[0] - ship[1]).normalized * 4f, top, topOut, root);
+            }
+            // warm work lights along the tunnels (old miners' lamps), the cavern glows green
+            var lights = Pts(tj, "lights");
+            for (int i = 0; i < lights.Count; i++)
+            {
+                var l = new GameObject("TunnelLamp").AddComponent<Light>();
+                l.transform.SetParent(root, false);
+                l.transform.position = lights[i];
+                l.type = LightType.Point;
+                l.range = 14f;
+                l.intensity = 2.2f;
+                l.color = i % 5 == 4 ? new Color(0.4f, 1f, 0.35f) : new Color(1f, 0.75f, 0.45f);
+                l.shadows = i % 3 == 0 ? LightShadows.Soft : LightShadows.None;
+            }
+            var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+            if (spawner != null && main.Count >= 2)
+            {
+                var sp = new GameObject("TunnelBlobs").AddComponent<BlobSpawner>();
+                sp.transform.SetParent(root, false);
+                sp.transform.position = main[1];
+                sp.prefabs = spawner.prefabs;
+                sp.maxAlive = 3;
+                sp.radius = 10f;
+                var nav = sp.gameObject.AddComponent<RuntimeNavMesh>();      // blobs need a NavMesh down here too
+                nav.center = (main[0] + main[main.Count - 1]) * 0.5f;
+                nav.size = new Vector3(260f, 80f, 260f);
             }
         }
 

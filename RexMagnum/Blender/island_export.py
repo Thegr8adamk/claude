@@ -648,9 +648,19 @@ def rebuild_assets(names, res):
         c, mk = IA.golf(m_, ha)
         extra["golf"] = mk
         return c
+    def tunnel_builder(m_):
+        from mathutils import Matrix
+        c, mk = IA.cave_tunnels(m_)
+        T = Matrix.Translation((-160.0, 228.0, IA.TUNNEL_Z))       # under the cave mouth
+        for ob in c.all_objects:
+            if ob.parent is None:
+                ob.matrix_world = T @ ob.matrix_world
+        off = (-160.0, 228.0, IA.TUNNEL_Z)
+        extra["tunnels"] = {k: [[p[0] + off[0], p[1] + off[1], p[2] + off[2]] for p in v] for k, v in mk.items()}
+        return c
     builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
                     TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship,
-                    Golf=golf_builder, GolfCart=IA.golf_cart)
+                    Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder)
     for n in names:
         coll = builders[n](m)
         if n in ("Golf", "GolfCart"):
@@ -680,6 +690,8 @@ def rebuild_assets(names, res):
     have = {r["name"] for r in data["materials"]}
     new_rows = material_rows({n for n in mats_used if n not in have}, res, skip_bake=True)
     data["materials"] += new_rows
+    if "tunnels" in extra:
+        data["tunnels"] = extra["tunnels"]
     if "factory" in extra:
         data["factory"] = extra["factory"]
     if "golf" in extra:
