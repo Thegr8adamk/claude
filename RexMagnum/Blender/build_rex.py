@@ -25,6 +25,8 @@ def args():
             o["save"] = a[i + 1]; i += 1
         elif a[i] == "--preview":
             o["preview"] = True
+        elif a[i] == "--no-render":
+            o["no_render"] = True
         i += 1
     return o
 
@@ -40,9 +42,16 @@ def main():
     ob, skin = rex_body.build_body("Rex")
     rex_look.dress(ob, skin)
     arm = rex_rig.rig(ob)
+    import rex_anim
+    rex_anim.make_all(arm)
     # Save before render (system-safety rule)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(o["save"]), compress=True)
     print("[Rex] saved", o["save"])
+    if o.get("no_render"):
+        return
+    arm.animation_data.action = None
+    import rex_rig as _r
+    _r.reset_pose(arm)
     if o["preview"]:
         rex_render.setup(samples=64, res=(450, 600))
     else:

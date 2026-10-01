@@ -82,7 +82,7 @@ def aim_bone(arm, bone, direction):
     from mathutils import Matrix, Vector
     pb = arm.pose.bones[B + bone]
     bpy.context.view_layer.update()
-    mw3 = arm.matrix_world.to_3x3()
+    mw3 = arm.matrix_world.to_3x3().normalized()
     cur = (mw3 @ (pb.tail - pb.head)).normalized()
     q = cur.rotation_difference(Vector(direction).normalized())
     # rotation in armature space
@@ -90,6 +90,7 @@ def aim_bone(arm, bone, direction):
     m = pb.matrix.copy()
     t = m.translation.copy()
     pb.matrix = Matrix.Translation(t) @ q_arm.to_4x4() @ Matrix.Translation(-t) @ m
+    pb.scale = (1, 1, 1)
     bpy.context.view_layer.update()
 
 
@@ -120,3 +121,52 @@ def hero_pose(arm):
         aim_bone(arm, side + "Arm", (0.28 * sx, 0.05, -1.0))
         aim_bone(arm, side + "ForeArm", (0.18 * sx, -0.25, -1.0))
         aim_bone(arm, side + "Hand", (0.1 * sx, -0.15, -1.0))
+
+
+def rotate_world(arm, bone, axis, degrees):
+    """Rotate a pose bone around a world-space axis through its head."""
+    import math
+    from mathutils import Matrix, Quaternion, Vector
+    pb = arm.pose.bones[B + bone]
+    bpy.context.view_layer.update()
+    mw3 = arm.matrix_world.to_3x3().normalized()
+    ax = (mw3.inverted() @ Vector(axis)).normalized()
+    q = Quaternion(ax, math.radians(degrees)).to_matrix().to_4x4()
+    m = pb.matrix.copy()
+    t = m.translation.copy()
+    pb.matrix = Matrix.Translation(t) @ q @ Matrix.Translation(-t) @ m
+    pb.scale = (1, 1, 1)
+    bpy.context.view_layer.update()
+
+
+def bone_world(arm, bone, tail=False):
+    pb = arm.pose.bones[B + bone]
+    return arm.matrix_world @ (pb.tail if tail else pb.head)
+
+
+def hand_frame(arm, side):
+    """(hand direction, side axis index->pinky, palm normal) in world space, from the current pose."""
+    h0 = bone_world(arm, side + "Hand")
+    i1 = bone_world(arm, side + "HandIndex1")
+    p1 = bone_world(arm, side + "HandPinky1")
+    m1 = bone_world(arm, side + "HandMiddle1")
+    d = (m1 - h0).normalized()
+    s = (p1 - i1).normalized()
+    s = (s - d * s.dot(d)).normalized()
+    n = d.cross(s) if side == "Left" else s.cross(d)
+    return d, s, n
+
+
+def fist(arm, side, amount=1.0, thumb=1.0):
+    """Close the hand. amount 0 = open, 1 = tight fist."""
+    for f in ("Index", "Middle", "Ring", "Pinky"):
+        for seg, ang in ((1, 75), (2, 95), (3, 60)):
+            _, s, _ = hand_frame(arm, side)
+            rotate_world(arm, f"{side}Hand{f}{seg}", s, ang * amount * (1 if side == "Left" else -1) * FIST_SIGN)
+    if thumb:
+        _, s, n = hand_frame(arm, side)
+        for seg, ang in ((1, 25), (2, 30), (3, 30)):
+            rotate_world(arm, f"{side}HandThumb{seg}", n, ang * amount * thumb * (1 if side == "Left" else -1) * FIST_SIGN)
+
+
+FIST_SIGN = 1

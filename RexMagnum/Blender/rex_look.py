@@ -481,6 +481,17 @@ def make_stubble_and_brows(body, rng):
                 return 1.0
         return 0.0
 
+    # Save a per-vertex mask (R = stubble, G = eyebrows) for the game texture bake
+    me = body.ob.data
+    attr = me.color_attributes.get("Rex_FaceHairMask") or me.color_attributes.new("Rex_FaceHairMask", "FLOAT_COLOR",
+                                                                                   "POINT")
+    vals = np.zeros((len(me.vertices), 4), dtype=np.float32)
+    vals[:, 3] = 1.0
+    for i in body.body_set:
+        vals[i, 0] = beard(body.co[i], body.nrm[i])
+        vals[i, 1] = brow(body.co[i], body.nrm[i])
+    attr.data.foreach_set("color", vals.ravel())
+
     pts = sample_surface(body, face_faces, 1600, brow, rng)
     strands = []
     for p, n in pts:
