@@ -985,6 +985,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Tyler",
+   "fbx": "Tyler.fbx",
+   "voice": "fV5vDeUO8ghvK7ntjiVC",
+   "security": false,
+   "materials": [
+    {
+     "name": "Tyler_Skin",
+     "baseMap": "Textures/Tyler_Skin_BC.png",
+     "normalMap": "Textures/Tyler_Skin_N.png",
+     "maskMap": "Textures/Tyler_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Tyler_Bottom",
+     "color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Tyler_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.4146500000000001,
+      0.29244000000000003,
+      0.15116000000000002,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Tyler_HairCap",
+     "color": [
+      0.41464999318122864,
+      0.2924399971961975,
+      0.15116000175476074,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Tyler_Sole",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Tyler_Top",
+     "color": [
+      0.8999999761581421,
+      0.3499999940395355,
+      0.019999999552965164,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
