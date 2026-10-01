@@ -653,6 +653,89 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Dwayne",
+   "fbx": "Dwayne.fbx",
+   "voice": "MjEQaRiSe6jP1b0vagRU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Dwayne_Skin",
+     "baseMap": "Textures/Dwayne_Skin_BC.png",
+     "normalMap": "Textures/Dwayne_Skin_N.png",
+     "maskMap": "Textures/Dwayne_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Dwayne_Bottom",
+     "color": [
+      0.05000000074505806,
+      0.25,
+      0.6000000238418579,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Dwayne_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.025300000000000007,
+      0.016080000000000004,
+      0.010120000000000002,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Dwayne_HairCap",
+     "color": [
+      0.025299999862909317,
+      0.01607999950647354,
+      0.010119999758899212,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Dwayne_Sole",
+     "color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Dwayne_Top",
+     "color": [
+      0.019999999552965164,
+      0.019999999552965164,
+      0.019999999552965164,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
