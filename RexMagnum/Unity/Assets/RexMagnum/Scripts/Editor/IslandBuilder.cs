@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -775,14 +776,31 @@ namespace RexMagnum.EditorTools
             var rewards = new[] { "Ammo_Pistol", "Ammo_Sniper", "Ammo_Harpoon", "Pickup_Coconut" }
                 .Select(n => AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/RexMagnum/Prefabs/Weapons/{n}.prefab"))
                 .Where(x => x != null).ToArray();
-            foreach (var (who, at, yaw) in spots)
+            void Place(string who, Vector3 at, float yaw, int outfit)
             {
-                if (!prefabs.TryGetValue(who, out var pf)) continue;
+                if (!prefabs.TryGetValue(who, out var pf)) return;
                 var g = (GameObject)PrefabUtility.InstantiatePrefab(pf, root);
                 g.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, yaw, 0f));
                 var guest = g.GetComponent<Guest>();
                 guest.hideSpots = hides.ToArray();
                 guest.rewardPrefabs = rewards;
+                if (outfit != 0) g.AddComponent<GuestOutfit>().seed = outfit;
+            }
+            foreach (var (who, at, yaw) in spots) Place(who, at, yaw, 0);
+            // owner request: reuse the bodies around the island with new outfits (not Carmen: one security chief)
+            var bodies = prefabs.Keys.Where(n => n != "Carmen").OrderBy(n => n).ToArray();
+            var extra = new List<Vector3>();
+            for (int fl = 1; fl <= 4; fl++)                       // hotel corridors, every floor
+                foreach (float x in new[] { -25f, 5f, 28f }) extra.Add(HotelPt(h, x, 0.4f, fl));
+            for (int i = 0; i < 10; i++) extra.Add(pool + new Vector3(-30f + i * 6.5f, 0f, i % 2 == 0 ? 15f : -15f));
+            for (int i = 0; i < 8; i++) extra.Add(pool + new Vector3(-40f + i * 12f, -3.5f, -95f));     // beach
+            extra.Add(HotelPt(h, -6f, -8f, 0)); extra.Add(HotelPt(h, 12f, 7.5f, 0)); extra.Add(HotelPt(h, 22f, 7.5f, 0));
+            var rngE = new System.Random(304);
+            for (int i = 0; i < extra.Count; i++)
+            {
+                var p = extra[i];
+                if (NavMesh.SamplePosition(p, out NavMeshHit hit, 3f, NavMesh.AllAreas)) p = hit.position;
+                Place(bodies[rngE.Next(bodies.Length)], p, rngE.Next(360), 1000 + i);
             }
         }
 
