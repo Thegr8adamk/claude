@@ -1,89 +1,6 @@
 {
  "guests": [
   {
-   "name": "Fin",
-   "fbx": "Fin.fbx",
-   "voice": "MjEQaRiSe6jP1b0vagRU",
-   "security": false,
-   "materials": [
-    {
-     "name": "Fin_Skin",
-     "baseMap": "Textures/Fin_Skin_BC.png",
-     "normalMap": "Textures/Fin_Skin_N.png",
-     "maskMap": "Textures/Fin_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Fin_Bottom",
-     "color": [
-      0.3499999940395355,
-      0.33000001311302185,
-      0.25,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Fin_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.03656700000000001,
-      0.021391200000000006,
-      0.012484800000000004,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Fin_HairCap",
-     "color": [
-      0.036566998809576035,
-      0.02139119990170002,
-      0.012484800070524216,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Fin_Sole",
-     "color": [
-      0.20000000298023224,
-      0.15000000596046448,
-      0.10000000149011612,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Fin_Top",
-     "color": [
-      0.10000000149011612,
-      0.15000000596046448,
-      0.3499999940395355,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Carmen",
    "fbx": "Carmen.fbx",
    "voice": "y3CfH7z4dKrH4hDLOEQK",
@@ -575,6 +492,89 @@
       0.949999988079071,
       0.949999988079071,
       0.949999988079071,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Fin",
+   "fbx": "Fin.fbx",
+   "voice": "MjEQaRiSe6jP1b0vagRU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Fin_Skin",
+     "baseMap": "Textures/Fin_Skin_BC.png",
+     "normalMap": "Textures/Fin_Skin_N.png",
+     "maskMap": "Textures/Fin_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Fin_Bottom",
+     "color": [
+      0.3499999940395355,
+      0.33000001311302185,
+      0.25,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Fin_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.03656700000000001,
+      0.021391200000000006,
+      0.012484800000000004,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Fin_HairCap",
+     "color": [
+      0.036566998809576035,
+      0.02139119990170002,
+      0.012484800070524216,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Fin_Sole",
+     "color": [
+      0.20000000298023224,
+      0.15000000596046448,
+      0.10000000149011612,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Fin_Top",
+     "color": [
+      0.012000000104308128,
+      0.019999999552965164,
+      0.07000000029802322,
       1
      ],
      "smoothness": 0.25
