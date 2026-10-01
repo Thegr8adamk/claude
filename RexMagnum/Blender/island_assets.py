@@ -644,6 +644,170 @@ def M():
 
 # ------------------------------------------------------------------ hotel
 
+ROOM304_BAY = 3                    # 4th bay from the west end, floor 3 (index 2), pool side
+ROOM304_DOOR = (-23.9, -22.4)     # balcony door gap (hotel-local x)
+
+
+def image_material(name, file, emission=0.0, rough=0.5):
+    m, nt = _mat(name)
+    if nt is None:
+        return m
+    p = nt.nodes["Principled BSDF"]
+    t = nt.nodes.new("ShaderNodeTexImage")
+    path = os.path.join(HERE, "textures", file)
+    t.image = bpy.data.images.load(path, check_existing=True)
+    nt.links.new(t.outputs["Color"], p.inputs["Base Color"])
+    p.inputs["Roughness"].default_value = rough
+    if emission:
+        nt.links.new(t.outputs["Color"], p.inputs["Emission Color"])
+        p.inputs["Emission Strength"].default_value = emission
+    m["image"] = file
+    return m
+
+
+def uv_plane(k, corners, mat, base):
+    """Quad with 0..1 UVs (for posters, screens): corners = bottom-left, bottom-right, top-right, top-left."""
+    bm = bmesh.new()
+    vs = [bm.verts.new(c) for c in corners]
+    f = bm.faces.new(vs)
+    uv = bm.loops.layers.uv.new("UVMap")
+    for lp, t in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
+        lp[uv].uv = t
+    return k._ob(base, bm, mat)
+
+
+def bottle(k, x, y, z, mat, lying=0.0, rot=0.0):
+    """Brown long-neck beer bottle (0.23 m), standing or lying on its side."""
+    parts = [((0, 0, 0), (0, 0, 0.15), 0.033, 0.033), ((0, 0, 0.15), (0, 0, 0.19), 0.033, 0.013),
+             ((0, 0, 0.19), (0, 0, 0.235), 0.013, 0.014)]
+    obs = []
+    for a, b, r0, r1 in parts:
+        obs.append(k.cyl(a, b, r0, mat, segs=14, r1=r1, base="Bottle"))
+    for o in obs:
+        o.rotation_euler = (0, lying, rot)
+        o.location = (x, y, z + (0.033 if lying else 0))
+    return obs
+
+
+def room304(m):
+    """Rex's room 304 (hotel-local coordinates, same transform as the hotel). Morning after: bed, empty beer
+    bottles, pizza box, shirt on the floor, TV playing Maximum Justice, the film poster, bathroom with
+    mirror, closet with a mirror door, stuck entry door, balcony door open (towel on the balcony rail)."""
+    k = Kit("Asset_Room304")
+    F = 3.6
+    z0 = 2 * F + 0.35                                   # floor top
+    zc = 3 * F                                          # ceiling (underside of the slab above)
+    bay = 6.0
+    xa, xb = -45 + ROOM304_BAY * bay + 0.35, -45 + (ROOM304_BAY + 1) * bay - 0.35
+    yb, yw = 1.6, 11.0 - 0.27                           # corridor wall / window glass
+    carpet = textured("A_Carpet", "sand", (0.2, 0.24, 0.3), (0.28, 0.32, 0.38), 0.95, 3.0, 0.15)
+    paper = textured("A_Wallpaper", "stucco", (0.78, 0.74, 0.62), (0.86, 0.83, 0.72), 0.8, 2.0, 0.05)
+    weather(paper, streaks=0.15, crevice=0.4, base_dirt=0.15, grime=(0.55, 0.5, 0.42))
+    sheets = textured("A_Sheets", "stucco", (0.86, 0.86, 0.84), (0.96, 0.96, 0.95), 0.85, 6.0, 0.5)
+    duvet = textured("A_Duvet", "stucco", (0.1, 0.22, 0.4), (0.16, 0.3, 0.5), 0.9, 4.0, 0.6)
+    mirror = principled("A_Mirror", (0.95, 0.95, 0.95), 0.02, 1.0)
+    porcelain = principled("A_Porcelain", (0.92, 0.92, 0.9), 0.15)
+    brown = principled("A_BeerGlass", (0.18, 0.07, 0.01), 0.05, **{"Transmission Weight": 0.85})
+    tvm = image_material("A_TVScreen", "tv_maximum_justice.png", emission=2.5, rough=0.2)
+    poster = image_material("A_Poster", "poster_maximum_justice.png", rough=0.6)
+    pizza = principled("A_Cardboard", (0.55, 0.42, 0.28), 0.9)
+    shirt = principled("A_ShirtOnFloor", (0.15, 0.3, 0.6), 0.9)
+    door = textured("A_DoorWood", "planks", (0.32, 0.2, 0.1), (0.38, 0.24, 0.12), 0.6, 1.0, 0.2)
+
+    # floor, ceiling, wall finishes (sit on / against the hotel slab and piers)
+    k.box((xa, yb, z0), (xb, yw, z0 + 0.02), carpet, "Carpet")
+    k.box((xa, yb, zc - 0.02), (xb, yw, zc), m["trim"], "Ceiling")
+    k.box((xa, yb, z0), (xa + 0.02, yw, zc), paper, "WallW")
+    k.box((xb - 0.02, yb, z0), (xb, yw, zc), paper, "WallE")
+    dx0, dx1 = -23.7, -22.7                             # entry door opening in the corridor wall
+    k.box((xa, yb, z0), (dx0, yb + 0.02, zc), paper, "WallN")
+    k.box((dx1, yb, z0), (xb, yb + 0.02, zc), paper, "WallN")
+    k.box((dx0, yb, z0 + 2.1), (dx1, yb + 0.02, zc), paper, "WallN")
+    for x in (dx0 - 0.06, dx1):
+        k.box((x, yb, z0), (x + 0.06, yb + 0.06, z0 + 2.16), m["trim"], "DoorFrame")
+    k.box((dx0 - 0.06, yb, z0 + 2.1), (dx1 + 0.06, yb + 0.06, z0 + 2.16), m["trim"], "DoorFrame")
+    k.box((dx0 + 0.01, yb + 0.02, z0 + 0.01), (dx1 - 0.01, yb + 0.06, z0 + 2.09), door, "EntryDoor")
+    k.cyl((dx1 - 0.12, yb + 0.06, z0 + 1.0), (dx1 - 0.12, yb + 0.12, z0 + 1.0), 0.025, m["alu"], base="DoorKnob")
+    k.box((dx0 + 0.2, yb + 0.061, z0 + 1.3), (dx0 + 0.45, yb + 0.07, z0 + 1.45), m["sign_board"], "DoNotDisturb")
+    for yy in (yb + 0.02, yw - 0.02):                    # skirting boards
+        k.box((xa, min(yy, yy + 0.02), z0), (xb, max(yy, yy + 0.02) + 0.0, z0 + 0.1), m["trim"], "Skirting")
+
+    # bathroom (south-west corner): partition walls, sink, mirror, toilet, tub
+    bx1, by1 = -24.2, 4.2
+    k.box((xa, by1, z0), (bx1, by1 + 0.1, zc), paper, "BathWall")
+    k.box((bx1, yb, z0), (bx1 + 0.1, 1.95, zc), paper, "BathWall")
+    k.box((bx1, 2.85, z0), (bx1 + 0.1, by1 + 0.1, zc), paper, "BathWall")
+    k.box((bx1, 1.95, z0 + 2.1), (bx1 + 0.1, 2.85, zc), paper, "BathWall")
+    tile = m["pooltile"]
+    k.box((xa, yb, z0 + 0.02), (bx1, by1, z0 + 0.03), principled("A_BathTile", (0.85, 0.85, 0.82), 0.3), "BathFloor")
+    k.box((xa + 0.02, 2.3, z0), (xa + 0.6, 3.7, z0 + 0.85), m["teak"], "Vanity")
+    k.box((xa + 0.02, 2.25, z0 + 0.85), (xa + 0.62, 3.75, z0 + 0.88), porcelain, "Counter")
+    k.disc((xa + 0.32, 3.0, z0 + 0.8), 0.2, 0.08, porcelain, base="Sink")
+    uv_plane(k, [(xa + 0.025, 3.7, z0 + 1.05), (xa + 0.025, 2.3, z0 + 1.05), (xa + 0.025, 2.3, z0 + 2.1),
+                 (xa + 0.025, 3.7, z0 + 2.1)], mirror, "BathMirror")
+    k.box((-25.4, yb + 0.02, z0), (-24.7, yb + 0.6, z0 + 0.4), porcelain, "Toilet", bevel=0.05)
+    k.box((-25.4, yb + 0.02, z0 + 0.4), (-24.7, yb + 0.2, z0 + 0.8), porcelain, "Cistern", bevel=0.03)
+    k.box((xa + 0.02, by1 - 0.8, z0), (bx1 - 0.6, by1 - 0.02, z0 + 0.55), porcelain, "Tub", bevel=0.05)
+
+    # closet with a full-length mirror door (taunt practice)
+    k.box((-22.3, yb + 0.02, z0), (xb - 0.02, 3.2, z0 + 2.3), m["teak"], "Closet")
+    uv_plane(k, [(-22.31, yb + 0.15, z0 + 0.1), (-22.31, 3.05, z0 + 0.1), (-22.31, 3.05, z0 + 2.2),
+                 (-22.31, yb + 0.15, z0 + 2.2)], mirror, "ClosetMirror")
+
+    # king bed against the east wall, rumpled duvet, pillows; nightstands + lamps
+    bx0 = xb - 2.15
+    k.box((bx0, 5.2, z0), (xb - 0.05, 7.3, z0 + 0.3), m["teak"], "BedBase")
+    k.box((bx0 + 0.03, 5.23, z0 + 0.3), (xb - 0.08, 7.27, z0 + 0.58), sheets, "Mattress", bevel=0.06)
+    k.box((xb - 0.08, 5.15, z0), (xb - 0.02, 7.35, z0 + 1.3), m["teak"], "Headboard")
+    duv = k.box((bx0, 5.15, z0 + 0.5), (xb - 0.6, 7.35, z0 + 0.66), duvet, "Duvet", bevel=0.05)
+    sub = duv.modifiers.new("Sub", "SUBSURF")
+    sub.levels = sub.render_levels = 2
+    tx = bpy.data.textures.get("T_Rumple") or bpy.data.textures.new("T_Rumple", "CLOUDS")
+    tx.noise_scale = 0.35
+    dsp = duv.modifiers.new("Rumple", "DISPLACE")
+    dsp.texture, dsp.strength, dsp.texture_coords = tx, 0.12, "GLOBAL"
+    for py in (5.6, 6.8):
+        k.box((xb - 0.6, py - 0.35, z0 + 0.58), (xb - 0.15, py + 0.35, z0 + 0.74), sheets, "Pillow", bevel=0.06)
+    for ny in (4.65, 7.35):
+        k.box((xb - 0.55, ny, z0), (xb - 0.05, ny + 0.5, z0 + 0.55), m["teak"], "Nightstand")
+        k.cyl((xb - 0.3, ny + 0.25, z0 + 0.55), (xb - 0.3, ny + 0.25, z0 + 0.95), 0.02, m["alu"], base="LampStem")
+        k.cyl((xb - 0.3, ny + 0.25, z0 + 0.9), (xb - 0.3, ny + 0.25, z0 + 1.15), 0.17, m["roomlight"], r1=0.11,
+              base="LampShade")
+    # dresser + TV (playing the film) on the west wall, poster above the desk
+    k.box((xa + 0.02, 5.4, z0), (xa + 0.55, 7.1, z0 + 0.8), m["teak"], "Dresser")
+    k.box((xa + 0.15, 5.65, z0 + 0.8), (xa + 0.25, 6.85, z0 + 1.55), principled("A_TVBody", (0.03, 0.03, 0.03), 0.4),
+          "TV")
+    uv_plane(k, [(xa + 0.26, 5.7, z0 + 0.85), (xa + 0.26, 6.8, z0 + 0.85), (xa + 0.26, 6.8, z0 + 1.5),
+                 (xa + 0.26, 5.7, z0 + 1.5)], tvm, "TVScreen")
+    k.box((xa + 0.02, 7.95, z0 + 1.15), (xa + 0.05, 8.95, z0 + 2.65), m["darkmetal"], "PosterFrame")
+    uv_plane(k, [(xa + 0.055, 8.0, z0 + 1.2), (xa + 0.055, 8.9, z0 + 1.2), (xa + 0.055, 8.9, z0 + 2.6),
+                 (xa + 0.055, 8.0, z0 + 2.6)], poster, "Poster")
+    # table + 2 chairs by the window, bottles, pizza box, shirt
+    tx_, ty_ = -25.3, 9.6
+    k.disc((tx_, ty_, z0), 0.25, 0.03, m["darkmetal"], base="TableBase")
+    k.cyl((tx_, ty_, z0), (tx_, ty_, z0 + 0.72), 0.03, m["darkmetal"], base="TableStem")
+    k.disc((tx_, ty_, z0 + 0.72), 0.45, 0.03, m["teak"], base="TableTop")
+    for cx_, cy_ in ((tx_ - 0.7, ty_), (tx_ + 0.7, ty_ - 0.3)):
+        for lx in (-0.2, 0.2):
+            for ly in (-0.2, 0.2):
+                k.cyl((cx_ + lx, cy_ + ly, z0), (cx_ + lx, cy_ + ly, z0 + 0.45), 0.015, m["alu"], base="ChairLeg")
+        k.box((cx_ - 0.23, cy_ - 0.23, z0 + 0.45), (cx_ + 0.23, cy_ + 0.23, z0 + 0.5), m["teak"], "ChairSeat")
+    rng = random.Random(304)
+    for i in range(5):                                   # empties on the table
+        a = i / 5 * math.tau
+        bottle(k, tx_ + math.cos(a) * 0.25, ty_ + math.sin(a) * 0.25, z0 + 0.75, brown)
+    for i in range(9):                                   # empties on the floor (some lying down)
+        x, y = rng.uniform(xa + 0.8, xb - 2.4), rng.uniform(4.6, 9.8)
+        bottle(k, x, y, z0 + 0.02, brown, lying=(math.pi / 2 if rng.random() < 0.6 else 0.0), rot=rng.uniform(0, 6.3))
+    k.box((-24.0, 8.0, z0 + 0.02), (-23.6, 8.4, z0 + 0.07), pizza, "PizzaBox")
+    pz = k.box((-24.3, 8.5, z0 + 0.02), (-23.9, 8.9, z0 + 0.06), pizza, "PizzaBox")
+    pz.rotation_euler = (0, 0, 0.4)
+    sh = k.box((-23.8, 4.8, z0 + 0.02), (-23.2, 5.5, z0 + 0.06), shirt, "Shirt", bevel=0.02)
+    sh.rotation_euler = (0, 0, -0.3)
+    k.box((xa + 0.6, 4.4, z0), (xa + 1.1, 4.9, z0 + 0.85), principled("A_Fridge", (0.85, 0.85, 0.83), 0.3), "MiniFridge")
+    return k.c
+
+
 def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
     """Each guest room: back wall tint, two curtain panels drawn by a random amount, ceiling, light on/off,
     bed edge seen through the glass. Balconies: chairs, small table, towels over the rail."""
@@ -653,7 +817,8 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
     for i in range(B):
         xa, xb = x0 + i * bay + 0.35, x0 + (i + 1) * bay - 0.35
         for side, ywin, yback in ((-1, y0 + 0.27, -1.6), (1, y1 - 0.27, 1.6)):
-            inner = ywin - side * 0.0   # glass inner face
+            if fl == 2 and i == ROOM304_BAY and side == 1:
+                continue                  # Rex's room is built in detail by room304()
             tint = principled(f"A_RoomTint{rng.randrange(5)}", tints[rng.randrange(5)], 0.9)
             k.box((xa, min(yback, yback - side * 0.02), z + 0.35), (xb, max(yback, yback - side * 0.02), z + F),
                   tint, "RoomBack")
@@ -720,7 +885,14 @@ def hotel(m):
         k.box((x0 - 0.3, y0 - 0.3, z), (x1 + 0.3, y1 + 0.3, z + 0.35), m["trim"], "Slab")
         # thin glazing behind the piers (set back 0.25 m); corridor core in the middle; rooms between
         k.box((x0 + 0.1, y0 + 0.25, z + 0.35), (x1 - 0.1, y0 + 0.27, z + F), m["glass"], "Glass")
-        k.box((x0 + 0.1, y1 - 0.27, z + 0.35), (x1 - 0.1, y1 - 0.25, z + F), m["glass"], "Glass")
+        if fl == 2:   # room 304: sliding door stands open (gap), the door panel is slid behind the fixed pane
+            gx0, gx1 = ROOM304_DOOR
+            k.box((x0 + 0.1, y1 - 0.27, z + 0.35), (gx0, y1 - 0.25, z + F), m["glass"], "Glass")
+            k.box((gx1, y1 - 0.27, z + 0.35), (x1 - 0.1, y1 - 0.25, z + F), m["glass"], "Glass")
+            k.box((gx0 - 1.5, y1 - 0.33, z + 0.37), (gx0 + 0.05, y1 - 0.29, z + F - 0.4), m["glass"], "SlidDoor")
+            k.box((gx1 - 0.04, y1 - 0.29, z + 0.35), (gx1, y1 - 0.23, z + F), m["alu"], "DoorJamb")
+        else:
+            k.box((x0 + 0.1, y1 - 0.27, z + 0.35), (x1 - 0.1, y1 - 0.25, z + F), m["glass"], "Glass")
         k.box((x0 + 0.1, -1.6, z + 0.35), (x1 - 0.1, 1.6, z + F), m["roomwall"], "Core")
         if fl > 0:
             rooms(k, m, fl, z, F, x0, y0, y1, bay, B)
@@ -1248,5 +1420,5 @@ def weather_all(m):
 def build_all():
     m = M()
     weather_all(m)
-    return dict(hotel=hotel(m), pool=pool_area(m), dive=dive_shop(m), tiki=tiki_bar(m), beach=beach_props(m),
+    return dict(hotel=hotel(m), room304=room304(m), pool=pool_area(m), dive=dive_shop(m), tiki=tiki_bar(m), beach=beach_props(m),
                 pier=pier(m), ruins=ruins(m), cave=cave(m), ship=ship(m)), m

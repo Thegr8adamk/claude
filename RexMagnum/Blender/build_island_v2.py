@@ -33,6 +33,7 @@ def build(trees):
     cols, m = IA.build_all()
     hb = ha(40, -300)
     place(cols["hotel"], (40, -300, hb))
+    place(cols["room304"], (40, -300, hb))
     pb = max(ha(40, -255), hb) + 0.3
     place(cols["pool"], (40, -255, pb))
     flatten_terrain(pb, hb)
@@ -47,6 +48,7 @@ def build(trees):
     place(cols["ruins"], (300, 70, rz))
     place(cols["cave"], (-160, 228, ha(-160, 222) - 0.4))
     place(cols["ship"], (40, 305, ha(40, 305) + 6.0), rot_z=0.3, tilt=(math.radians(4), math.radians(-3)))
+    slime_leak(ha, m, cols["ship"])
     # clear vegetation that would poke through buildings
     zones = [((40, -300), 60), ((40, -255), 62), ((-30, -345), 10), ((110, -345), 9), ((300, 70), 32),
              ((-160, 228), 18), ((40, 305), 40)]
@@ -164,6 +166,29 @@ def grass(ha, zones):
     print("[IslandV2] grass clumps", placed, flush=True)
 
 
+def slime_leak(ha, m, ship_coll):
+    """Glowing slime from the hull breach runs over the ground to the top of the big waterfall."""
+    old = [o for o in ship_coll.objects if "SlimeLeak" in o.name]
+    for o in old:
+        bpy.data.objects.remove(o)
+    k = IA.Kit.__new__(IA.Kit)
+    k.name, k.c, k.n = "Asset_Ship", ship_coll, 900
+    pts = []
+    for i in range(24):
+        t = i / 23
+        x = 40 + math.sin(t * 5) * 1.5
+        y = 278 - t * 16
+        z = ha(x, y) + 0.35
+        if i == 0:
+            z = ha(40, 305) + 2.0
+        pts.append((x, y, z))
+    pts.insert(1, (40, 279, ha(40, 279) + 1.0))
+    k.tube(pts, 1.1, m["slimeglow"], segs=12, base="SlimeLeak")
+    for i in range(6):      # puddles along the way
+        x, y = pts[4 + i * 3][:2]
+        k.disc((x, y, ha(x, y) + 0.05), 2.2 + i * 0.2, 0.12, m["slimeglow"], segs=20, base="SlimePuddle")
+
+
 def flatten_terrain(pb, hb):
     """Keep the ground below the pool deck and the hotel floor (no grass poking through the tiles)."""
     t = bpy.data.objects.get("TerrainHQ")
@@ -207,7 +232,8 @@ def waterfall_v2(ha, m):
                     y = 275.0
                     while y > 215 and ha(x, y) > z:
                         y -= 0.4
-                    row.append(bm.verts.new((x, y - 1.2 - layer * 0.7 - 2.5 * t * t, z)))
+                    bulge = 0.5 * math.sin(u * 9 + j * 0.35 + seed) * math.sin(t * 3.1)
+                    row.append(bm.verts.new((x, y - 1.2 - layer * 0.9 - 2.5 * t * t - bulge, z)))
                 rows.append(row)
             for j in range(nj):
                 for i in range(ni):
@@ -272,7 +298,7 @@ def fall_material():
     lo = nt.nodes.new("ShaderNodeMapRange")
     lo.inputs["From Min"].default_value = 0.0
     lo.inputs["From Max"].default_value = 12.0
-    lo.inputs["To Min"].default_value = 0.52
+    lo.inputs["To Min"].default_value = 0.58
     lo.inputs["To Max"].default_value = 0.36
     nt.links.new(sep.outputs[1], lo.inputs["Value"])
     mr = nt.nodes.new("ShaderNodeMapRange")
@@ -293,7 +319,7 @@ def fall_material():
     haze = nt.nodes.new("ShaderNodeMath")
     haze.operation = "MULTIPLY_ADD"
     haze.inputs[1].default_value = 0.85
-    haze.inputs[2].default_value = 0.1
+    haze.inputs[2].default_value = 0.03
     nt.links.new(mr.outputs[0], haze.inputs[0])
     mix = nt.nodes.new("ShaderNodeMixShader")
     nt.links.new(haze.outputs[0], mix.inputs[0])
@@ -311,8 +337,8 @@ SHOTS_V2 = [
     ("v2_hotel_from_beach.png", (75, -420, 28), (40, -268, 4), 24),
     ("v2_waterfall.png", (15, 110, 30), (40, 252, 40), 30),
     ("v2_cave.png", (-152, 200, None), (-160, 230, 3), 26),
-    ("v2_ruins.png", (266, -14, 4), (300, 66, 12), 22),
-    ("v2_ship.png", (112, 296, 30), (40, 305, 8), 24),
+    ("v2_ruins.png", (300, 30, 3), (300, 70, 11), 20),
+    ("v2_ship.png", (85, 320, 4), (40, 303, 6), 22),
 ]
 
 

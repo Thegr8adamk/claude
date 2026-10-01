@@ -39,6 +39,8 @@ BAKE = {
     "A_DeckTiles": (4, False), "A_PoolTile": (2, False), "A_ShipHull": (8, False), "A_Teak": (2, False),
     "A_Trim": (4, True), "A_Aluminum": (2, True), "A_Cushion": (2, False), "A_SignBoard": (2, True),
     "A_Thatch": (4, False), "PalmBark": (2, True), "JungleBark": (2, True),
+    "A_Carpet": (2, False), "A_Wallpaper": (2, True), "A_Sheets": (2, False), "A_Duvet": (2, False),
+    "A_DoorWood": (2, True),
 }
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
 WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime"}
@@ -50,7 +52,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
-ASSETS = ["Asset_Hotel", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
+ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
 
@@ -541,6 +543,16 @@ def material_rows(mats_used, res, skip_bake):
         elif n in FOLIAGE_IMG:
             rows.append(dict(name=n, kind="foliage", baseMap=f"Textures/{FOLIAGE_IMG[n]}", color=[1, 1, 1, 1],
                              smoothness=0.35))
+        elif m is not None and m.get("image"):
+            import shutil
+            f = m["image"]
+            shutil.copy(os.path.join(HERE, "textures", f), os.path.join(TEX, f))
+            r = principled_row(m)
+            r.update(baseMap=f"Textures/{f}", color=[1, 1, 1, 1])
+            if "emission" in r:
+                r["emissionMap"] = f"Textures/{f}"
+                r["emission"] = [1.5, 1.5, 1.5]
+            rows.append(r)
         elif n == "A_Straw":
             rows.append(dict(name=n, kind="lit", baseMap="Textures/A_Straw_base.png", color=[1, 1, 1, 1],
                              smoothness=0.1, twoSided=True))

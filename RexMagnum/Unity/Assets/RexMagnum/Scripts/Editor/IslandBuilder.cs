@@ -32,7 +32,7 @@ namespace RexMagnum.EditorTools
         // ---------------------------------------------------------------- json
         [Serializable] class MatRow
         {
-            public string name, kind, baseMap, normalMap, maskMap, water;
+            public string name, kind, baseMap, normalMap, maskMap, emissionMap, water;
             public float[] color, emission;
             public float metallic, smoothness, alpha, tile, flow;
             public bool twoSided;
@@ -312,6 +312,8 @@ namespace RexMagnum.EditorTools
                             m.EnableKeyword("_EMISSION");
                             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                             m.SetColor("_EmissionColor", C(r.emission) * 0.6f);
+                            var em = Tex(r.emissionMap);
+                            if (em != null) m.SetTexture("_EmissionMap", em);
                         }
                         break;
                 }
