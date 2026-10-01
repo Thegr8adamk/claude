@@ -20,6 +20,7 @@ namespace RexMagnum
         static readonly int HandsDownHash = Animator.StringToHash("HandsDown");
 
         float pressTime = -1f, busyUntil, faceAimUntil;
+        public float jabDamage = 12f, heavyDamage = 30f;
 
         public string ActionWord => controller.HandsDown ? "Talk" : "Punch";
 
@@ -43,11 +44,13 @@ namespace RexMagnum
                     if (RMInput.ActionUp && Time.time - pressTime < holdTime)
                     {
                         Do(Jab, 0.45f);
+                        StartCoroutine(HitAfter(0.18f, jabDamage, 1.4f, false));
                         pressTime = -1f;
                     }
                     else if (RMInput.ActionHeld && Time.time - pressTime >= holdTime)
                     {
                         Do(Heavy, 0.9f);
+                        StartCoroutine(HitAfter(0.45f, heavyDamage, 1.6f, true));
                         pressTime = -1f;
                     }
                 }
@@ -58,13 +61,41 @@ namespace RexMagnum
             {
                 Do(Taunt, 1.6f);
                 if (face) face.Expression("SmugGrin", 1.6f);
+                RexVoice.Say(gameObject, "Taunt");
+                // Blobs that see it get angry and answer with a rude tentacle
+                foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
+                    if (Vector3.Distance(b.transform.position, transform.position) < 30f) b.OnTaunted();
             }
             if (RMInput.Photo && !busy)
             {
                 Do(Photo, 1.9f);
                 if (face) face.Expression("Smile", 1.9f);
+                Blob nearest = null;
+                float best = 6f;
+                foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
+                {
+                    float d = Vector3.Distance(b.transform.position, transform.position);
+                    if (d < best) { best = d; nearest = b; }
+                }
+                if (nearest != null) nearest.OnPhoto();
+                RexVoice.Say(gameObject, nearest != null ? "Photo" : "PhotoAlone");
             }
             controller.FaceAim = Time.time < faceAimUntil;
+        }
+
+        System.Collections.IEnumerator HitAfter(float delay, float damage, float reach, bool heavy)
+        {
+            yield return new WaitForSeconds(delay);
+            Vector3 c = transform.position + Vector3.up * 1.2f + transform.forward * (reach * 0.6f);
+            foreach (var col in Physics.OverlapSphere(c, reach * 0.55f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var h = col.GetComponentInParent<Health>();
+                if (h == null || h.gameObject == gameObject) continue;
+                bool wasAlive = !h.IsDead;
+                h.Damage(damage, col.ClosestPoint(c), gameObject);
+                if (wasAlive && h.IsDead) RexVoice.Say(gameObject, "Fists");
+                break;
+            }
         }
 
         void Do(int trigger, float seconds)

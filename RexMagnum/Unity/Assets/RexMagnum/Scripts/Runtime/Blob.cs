@@ -1,0 +1,230 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.AI;
+
+namespace RexMagnum
+{
+    /// <summary>
+    /// Blob alien behaviour (brief section 4). One script for all types:
+    ///  Tourist   - slow, spits slime
+    ///  Lifeguard - fast, throws pool floats / chairs
+    ///  Bouncer   - strong tentacle whip; when it pops it splits into 2 half-size blobs
+    ///  KingGlorp - boss: spits and whips, a lot of health
+    /// Reactions: Rex's taunt (rude tentacle, then angry), stun, photo pose, hit, pop.
+    /// </summary>
+    [RequireComponent(typeof(NavMeshAgent))]
+    [RequireComponent(typeof(Health))]
+    public class Blob : MonoBehaviour
+    {
+        public enum Kind { Tourist, Lifeguard, Bouncer, KingGlorp }
+
+        [Header("Type")]
+        public Kind kind = Kind.Tourist;
+        public bool isHalf;                       // bouncer half after a split
+
+        [Header("Links")]
+        public Animator animator;
+        public Renderer jellyRenderer;
+        public GameObject throwPrefab;            // lifeguard: float/chair (optional)
+        public Blob splitPrefab;                  // bouncer: the half-size copy (this prefab)
+
+        [Header("Tuning (set from the type)")]
+        public float speed = 1.2f;
+        public float sightRange = 18f;
+        public float attackRange = 7f;
+        public float attackInterval = 2.5f;
+        public float damage = 8f;
+
+        public bool IsStunned => Time.time < stunUntil;
+        public bool IsAngry => Time.time < angryUntil;
+
+        NavMeshAgent agent;
+        Health health;
+        Transform rex;
+        Health rexHealth;
+        float nextAttack, stunUntil, angryUntil, busyUntil;
+        bool wasStunned;
+        MaterialPropertyBlock mpb;
+        Color baseColor;
+
+        static readonly int SpeedHash = Animator.StringToHash("Speed");
+
+        void Awake()
+        {
+            agent = GetComponent<NavMeshAgent>();
+            health = GetComponent<Health>();
+            health.Damaged += OnDamaged;
+            health.Died += OnDied;
+            mpb = new MaterialPropertyBlock();
+            ApplyKind();
+            if (jellyRenderer != null && jellyRenderer.sharedMaterial != null)
+                baseColor = jellyRenderer.sharedMaterial.GetColor("_BaseColor");
+        }
+
+        void ApplyKind()
+        {
+            switch (kind)
+            {
+                case Kind.Tourist: speed = 1.2f; attackRange = 7f; attackInterval = 2.6f; damage = 8f; health.ResetHealth(40); break;
+                case Kind.Lifeguard: speed = 4.2f; attackRange = 11f; attackInterval = 2.0f; damage = 10f; health.ResetHealth(30); break;
+                case Kind.Bouncer: speed = 2.0f; attackRange = 2.6f; attackInterval = 1.8f; damage = 18f; health.ResetHealth(isHalf ? 40 : 90); break;
+                case Kind.KingGlorp: speed = 1.5f; attackRange = 14f; attackInterval = 1.6f; damage = 15f; health.ResetHealth(1200); break;
+            }
+            agent.speed = speed;
+            agent.angularSpeed = 240f;
+            agent.stoppingDistance = Mathf.Min(attackRange * 0.6f, 4f);
+        }
+
+        void Start()
+        {
+            var p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null)
+            {
+                rex = p.transform;
+                rexHealth = p.GetComponent<Health>();
+            }
+            nextAttack = Time.time + Random.Range(1f, 3f);
+        }
+
+        void Update()
+        {
+            if (health.IsDead) return;
+            if (animator != null) animator.SetFloat(SpeedHash, agent.velocity.magnitude);
+
+            // Angry: darker color + shake (brief); a little faster
+            float angry = IsAngry ? 1f : 0f;
+            agent.speed = speed * (IsAngry ? 1.5f : 1f) * (IsStunned ? 0f : 1f);
+            if (jellyRenderer != null)
+            {
+                jellyRenderer.GetPropertyBlock(mpb);
+                mpb.SetColor("_BaseColor", Color.Lerp(baseColor, baseColor * 0.45f, angry));
+                jellyRenderer.SetPropertyBlock(mpb);
+            }
+
+            if (wasStunned && !IsStunned) Play("Locomotion", 0.2f);
+            wasStunned = IsStunned;
+            if (rex == null || (rexHealth != null && rexHealth.IsDead) || IsStunned || Time.time < busyUntil)
+            {
+                if (agent.isOnNavMesh) agent.isStopped = true;
+                return;
+            }
+            float dist = Vector3.Distance(transform.position, rex.position);
+            if (dist > sightRange && !IsAngry)
+            {
+                if (agent.isOnNavMesh) agent.isStopped = true;
+                return;
+            }
+            if (agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
+                agent.SetDestination(rex.position);
+            }
+            Vector3 to = rex.position - transform.position;
+            to.y = 0f;
+            if (to.sqrMagnitude > 0.01f && dist < attackRange * 1.2f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(to), 6f * Time.deltaTime);
+            if (dist <= attackRange && Time.time >= nextAttack)
+                StartCoroutine(Attack(dist));
+        }
+
+        IEnumerator Attack(float dist)
+        {
+            nextAttack = Time.time + attackInterval * (IsAngry ? 0.6f : 1f);
+            bool melee = kind == Kind.Bouncer || (kind == Kind.KingGlorp && dist < 4f) || dist < 2.2f;
+            string clip = melee ? "Whip" : kind == Kind.Lifeguard ? "Throw" : "Spit";
+            Play(clip);
+            busyUntil = Time.time + 0.6f;
+            yield return new WaitForSeconds(melee ? 0.4f : 0.45f);
+            if (health.IsDead || rex == null) yield break;
+            Vector3 mouth = transform.position + Vector3.up * HeightOf() * 0.6f + transform.forward * 0.4f;
+            if (melee)
+            {
+                if (Vector3.Distance(transform.position, rex.position) < attackRange + 0.6f && rexHealth != null)
+                    rexHealth.Damage(damage, rex.position + Vector3.up, gameObject);
+            }
+            else
+            {
+                Vector3 target = rex.position + Vector3.up * 1.2f;
+                SlimeProjectile.Launch(mouth, target, damage, gameObject, BaseColor(),
+                    kind == Kind.Lifeguard ? throwPrefab : null);
+            }
+        }
+
+        float HeightOf() => kind == Kind.Tourist ? 1.25f : kind == Kind.Lifeguard ? 1.9f : kind == Kind.Bouncer ? (isHalf ? 1.1f : 2.15f) : 4.2f;
+
+        public Color BaseColor() => baseColor;
+
+        public void Play(string clip, float fade = 0.08f)
+        {
+            if (animator != null) animator.CrossFadeInFixedTime(clip, fade);
+        }
+
+        // ---------------------------------------------------------------- reactions
+
+        /// <summary>Rex's taunt: answer with the rude tentacle, then get angry and charge.</summary>
+        public void OnTaunted()
+        {
+            if (health.IsDead || IsStunned) return;
+            Play("Rude");
+            busyUntil = Time.time + 1.5f;
+            angryUntil = Time.time + 10f;
+        }
+
+        public void Stun(float seconds)
+        {
+            if (health.IsDead) return;
+            stunUntil = Time.time + seconds;
+            Play("Stun");
+        }
+
+        /// <summary>Rex takes a photo: stunned blobs stay still; others pose confused, then hit back.</summary>
+        public bool OnPhoto()
+        {
+            if (IsStunned) return true;
+            Play("Photo");
+            busyUntil = Time.time + 1.2f;
+            nextAttack = Time.time + 1.2f;
+            return false;
+        }
+
+        void OnDamaged(float amount, Vector3 point, GameObject attacker)
+        {
+            if (!health.IsDead && !IsStunned) Play("Hit", 0.03f);
+        }
+
+        void OnDied(GameObject killer)
+        {
+            agent.enabled = false;
+            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
+            Play("Pop", 0.02f);
+            StartCoroutine(PopRoutine());
+        }
+
+        IEnumerator PopRoutine()
+        {
+            yield return new WaitForSeconds(0.4f);
+            SlimeFX.Burst(transform.position + Vector3.up * HeightOf() * 0.5f, BaseColor(), HeightOf());
+            if (kind == Kind.Bouncer && !isHalf && splitPrefab != null)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    Vector3 side = transform.right * (i == 0 ? -0.9f : 0.9f);
+                    var half = Instantiate(splitPrefab, transform.position + side, transform.rotation);
+                    half.isHalf = true;
+                    half.transform.localScale = transform.localScale * 0.5f;
+                    half.ApplyKind();
+                }
+            }
+            Destroy(gameObject, 0.15f);
+        }
+
+        /// <summary>Night: soft glow in its own color.</summary>
+        public void SetNightGlow(float amount)
+        {
+            if (jellyRenderer == null) return;
+            jellyRenderer.GetPropertyBlock(mpb);
+            mpb.SetColor("_EmissionColor", baseColor * amount * 1.5f);
+            jellyRenderer.SetPropertyBlock(mpb);
+        }
+    }
+}

@@ -290,6 +290,9 @@ namespace RexMagnum.EditorTools
             voice.spatialBlend = 1f;
             voice.playOnAwake = false;
             face.voice = voice;
+            var hp = root.AddComponent<Health>();
+            hp.maxHealth = 100f;
+            root.AddComponent<RexLife>();
             var act = root.AddComponent<RexActions>();
             act.controller = ctrl;
             act.face = face;
@@ -361,8 +364,19 @@ namespace RexMagnum.EditorTools
             ctrl.cameraRig = rig;
             ctrl.armsAnimator = arms.GetComponent<Animator>();
 
+            // Blobs: NavMesh is built at start; a spawner keeps a few blobs around
+            var blobs = BlobBuilder.Build();
+            var game = new GameObject("Game");
+            game.AddComponent<RuntimeNavMesh>();
+            if (blobs.Count > 0)
+            {
+                var sp = game.AddComponent<BlobSpawner>();
+                sp.prefabs = blobs.Where(kv => kv.Key != "KingGlorp").Select(kv => kv.Value).ToArray();
+            }
+
             var hudGo = new GameObject("TestHUD");
             var hud = hudGo.AddComponent<RexTestHUD>();
+            hud.rexHealth = rex.GetComponent<Health>();
             hud.rig = rig;
             hud.actions = rex.GetComponent<RexActions>();
 

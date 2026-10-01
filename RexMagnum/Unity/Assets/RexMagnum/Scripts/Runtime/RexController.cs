@@ -28,11 +28,40 @@ namespace RexMagnum
         public bool HandsDown { get; set; }
         public bool FaceAim { get; set; }      // set by actions (attack, aim)
         public Vector3 Velocity => velocity;
+        public bool IsRunning { get; private set; }
         public bool Grounded => cc.isGrounded;
 
         static readonly int SpeedHash = Animator.StringToHash("Speed");
         static readonly int GroundedHash = Animator.StringToHash("Grounded");
         static readonly int JumpHash = Animator.StringToHash("Jump");
+        static readonly int SlipHash = Animator.StringToHash("Slip");
+        static readonly int HitHash = Animator.StringToHash("Hit");
+        static readonly int DeathHash = Animator.StringToHash("Death");
+        float lockedUntil;
+
+        /// <summary>Comedy fall on slime. Rex cannot move for a moment.</summary>
+        public void Slip()
+        {
+            if (Time.time < lockedUntil) return;
+            SetTrigger(SlipHash);
+            lockedUntil = Time.time + 1.7f;
+            velocity.x *= 0.3f;
+            velocity.z *= 0.3f;
+            RexVoice.Say(gameObject, "Slip");
+        }
+
+        /// <summary>Hit by slime (a line, and later a slime look on the shirt).</summary>
+        public void Slimed() => RexVoice.Say(gameObject, "Slime");
+
+        public void Hurt() => SetTrigger(HitHash);
+
+        public void Die()
+        {
+            SetTrigger(DeathHash);
+            lockedUntil = Time.time + 999f;
+        }
+
+        public void Revive() => lockedUntil = 0f;
 
         CharacterController cc;
         Vector3 velocity;
@@ -44,7 +73,9 @@ namespace RexMagnum
         {
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
+            if (Time.time < lockedUntil) input = Vector2.zero;
             bool run = InputEnabled && RMInput.Run && input.magnitude > 0.1f;
+            IsRunning = run && new Vector2(velocity.x, velocity.z).magnitude > walkSpeed;
 
             float yaw = cameraRig != null ? cameraRig.Yaw : transform.eulerAngles.y;
             Quaternion yawRot = Quaternion.Euler(0f, yaw, 0f);
@@ -58,7 +89,7 @@ namespace RexMagnum
             if (cc.isGrounded)
             {
                 if (velocity.y < 0f) velocity.y = -2f;
-                if (InputEnabled && RMInput.Jump)
+                if (InputEnabled && RMInput.Jump && Time.time >= lockedUntil)
                 {
                     velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
                     SetTrigger(JumpHash);

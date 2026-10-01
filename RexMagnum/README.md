@@ -8,7 +8,7 @@ The full project brief is in [CLAUDE.md](CLAUDE.md). Claude Code reads it at the
 |---|---|---|
 | 1 | PC specs check + safe settings | Waiting: run the command below and send the result |
 | 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Done (v1). Ready to test in Unity |
-| 3 | Tourist blob → other 3 blobs | Not started |
+| 3 | Tourist blob → other 3 blobs | Done (v1): models, rigs, 13 animations each, Unity AI |
 | 4 | Bottle, towel, knife → other weapons | Not started |
 | 5 | Island rough map + 3 view pictures | Not started |
 | 6 | First playable (room 304 + pool) | Not started |
@@ -109,3 +109,23 @@ Add `--preview` for fast, small test pictures.
 | Esc | Pause (frees the mouse) |
 
 Animations are version 1 (made by hand in code). The rig uses Mixamo bone names, so better Mixamo animations can replace them later.
+
+## Blobs (build step 3)
+
+![Tourist](Renders/blobs/blob_tourist_front.png)
+
+| Blob | Look | Behavior in the game |
+|---|---|---|
+| Tourist (green) | Rex chest height, 3 eyes, 4 tentacles | Slow. Spits slime (arcs). Slime puddles make Rex slip. |
+| Lifeguard (red) | Tall and thin, 2 eyes on stalks, 2 tentacles | Fast. Throws things from far away. |
+| Bouncer (purple) | Wide, taller than Rex, 1 big eye, 4 thick tentacles | Strong tentacle whip. When it pops, it splits into 2 half-size blobs. |
+| King Glorp (gold) | 4.2 m, 5 eyes, 6 tentacles, crown spikes | Boss: spits and whips, 1200 health. |
+
+All blobs: one smooth jelly mesh (no seams), pink brain inside, cartoon eyes in slime sockets.
+Animations (13 each): Idle, Slide, SlideFast, Whip, Spit, Throw, Hit, Stun (eyes roll), Angry, Rude (answer to Rex's taunt), Photo (confused), Pinned, Pop.
+Leak, freeze + break and the bouncer split are done in Unity code.
+
+Reactions to Rex: **Taunt (T)** → blobs show the rude tentacle, then get angry (darker, faster). **Photo (P)** → the nearest blob poses, confused. **Punch** → hit ripple; at 0 health the blob pops (slime burst, puddle, slime on the walls).
+
+Files: `Unity/Assets/RexMagnum/Characters/Blobs/Blob_<Type>.fbx` (+ `.glb`), sources `Blender/Blob_<Type>_v01.blend` (model) and `_v02_rig.blend` (rig + animations).
+In Unity, **Rex Magnum → Build Rex + Test Scene** also builds the blobs (or use **Rex Magnum → Build Blobs**). The test scene spawns Tourist, Lifeguard and Bouncer blobs.
