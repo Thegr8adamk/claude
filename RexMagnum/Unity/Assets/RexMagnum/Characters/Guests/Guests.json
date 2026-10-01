@@ -84,79 +84,6 @@
    ]
   },
   {
-   "name": "Callie",
-   "fbx": "Callie.fbx",
-   "voice": "7YaUDeaStRuoYg3FKsmU",
-   "security": false,
-   "materials": [
-    {
-     "name": "Callie_Skin",
-     "baseMap": "Textures/Callie_Skin_BC.png",
-     "normalMap": "Textures/Callie_Skin_N.png",
-     "maskMap": "Textures/Callie_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Callie_Bottom",
-     "color": [
-      0.25,
-      0.4000000059604645,
-      0.6000000238418579,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Callie_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.44783500000000004,
-      0.310956,
-      0.160024,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Callie_Sole",
-     "color": [
-      0.8500000238418579,
-      0.75,
-      0.6000000238418579,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Callie_Top",
-     "color": [
-      0.949999988079071,
-      0.3499999940395355,
-      0.30000001192092896,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Lucy",
    "fbx": "Lucy.fbx",
    "voice": "lcMyyd2HUfFzxdCaC4Ta",
@@ -409,6 +336,89 @@
       0.05999999865889549,
       0.10000000149011612,
       0.2199999988079071,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Callie",
+   "fbx": "Callie.fbx",
+   "voice": "7YaUDeaStRuoYg3FKsmU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Callie_Skin",
+     "baseMap": "Textures/Callie_Skin_BC.png",
+     "normalMap": "Textures/Callie_Skin_N.png",
+     "maskMap": "Textures/Callie_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Callie_Bottom",
+     "color": [
+      0.07999999821186066,
+      0.15000000596046448,
+      0.30000001192092896,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Callie_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.44783500000000004,
+      0.310956,
+      0.160024,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Callie_HairCap",
+     "color": [
+      0.4478349983692169,
+      0.3109560012817383,
+      0.1600240021944046,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Callie_Sole",
+     "color": [
+      0.8500000238418579,
+      0.75,
+      0.6000000238418579,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Callie_Top",
+     "color": [
+      0.949999988079071,
+      0.3499999940395355,
+      0.30000001192092896,
       1
      ],
      "smoothness": 0.25
