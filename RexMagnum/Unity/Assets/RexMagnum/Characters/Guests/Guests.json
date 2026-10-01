@@ -424,6 +424,79 @@
      "smoothness": 0.25
     }
    ]
+  },
+  {
+   "name": "Heather",
+   "fbx": "Heather.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Heather_Skin",
+     "baseMap": "Textures/Heather_Skin_BC.png",
+     "normalMap": "Textures/Heather_Skin_N.png",
+     "maskMap": "Textures/Heather_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Heather_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.05788500000000003,
+      0.034236000000000016,
+      0.018744000000000007,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Heather_HairCap",
+     "color": [
+      0.05788499861955643,
+      0.03423599898815155,
+      0.018743999302387238,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Heather_Sole",
+     "color": [
+      0.4000000059604645,
+      0.25,
+      0.11999999731779099,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Heather_Top",
+     "color": [
+      0.949999988079071,
+      0.75,
+      0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
   }
  ]
 }
