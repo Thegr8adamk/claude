@@ -9,8 +9,8 @@ The full project brief is in [CLAUDE.md](CLAUDE.md). Claude Code reads it at the
 | 1 | PC specs check + safe settings | Waiting: run the command below and send the result |
 | 2 | Rex: front/side pictures → approval → rig, first-person arms, animations | Done (v1). Ready to test in Unity |
 | 3 | Tourist blob → other 3 blobs | Done (v1): models, rigs, 13 animations each, Unity AI |
-| 4 | Bottle, towel, knife → other weapons | Not started |
-| 5 | Island rough map + 3 view pictures | Not started |
+| 4 | Bottle, towel, knife → other weapons | Done (v2, approved): 10 realistic connected models, 2K PBR textures, Unity weapon system |
+| 5 | Island rough map + 3 view pictures | v2 in progress: realistic terrain, jungle, ocean, detailed hotel, pool, beach, waterfall, cave, ruins, ship (Blender/build_island_v2.py). Unity island builder next |
 | 6 | First playable (room 304 + pool) | Not started |
 | 7 | Other zones, one at a time | Not started |
 | 8 | Accomplishments, album, settings, remap, save | Not started |
