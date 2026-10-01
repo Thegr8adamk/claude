@@ -1,99 +1,6 @@
 {
  "guests": [
   {
-   "name": "Carmen",
-   "fbx": "Carmen.fbx",
-   "voice": "y3CfH7z4dKrH4hDLOEQK",
-   "security": true,
-   "materials": [
-    {
-     "name": "Carmen_Skin",
-     "baseMap": "Textures/Carmen_Skin_BC.png",
-     "normalMap": "Textures/Carmen_Skin_N.png",
-     "maskMap": "Textures/Carmen_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Carmen_Sole",
-     "color": [
-      0.05000000074505806,
-      0.05000000074505806,
-      0.05000000074505806,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Carmen_Bottom",
-     "color": [
-      0.07999999821186066,
-      0.07999999821186066,
-      0.10000000149011612,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Carmen_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.07865399999999999,
-      0.046454399999999986,
-      0.02465759999999999,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Carmen_HairCap",
-     "color": [
-      0.07865399867296219,
-      0.046454399824142456,
-      0.02465759962797165,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Carmen_Radio",
-     "color": [
-      0.019999999552965164,
-      0.019999999552965164,
-      0.019999999552965164,
-      1
-     ],
-     "smoothness": 0.5
-    },
-    {
-     "name": "Carmen_Top",
-     "color": [
-      0.05999999865889549,
-      0.10000000149011612,
-      0.2199999988079071,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Callie",
    "fbx": "Callie.fbx",
    "voice": "7YaUDeaStRuoYg3FKsmU",
@@ -575,6 +482,99 @@
       0.012000000104308128,
       0.019999999552965164,
       0.07000000029802322,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Carmen",
+   "fbx": "Carmen.fbx",
+   "voice": "y3CfH7z4dKrH4hDLOEQK",
+   "security": true,
+   "materials": [
+    {
+     "name": "Carmen_Skin",
+     "baseMap": "Textures/Carmen_Skin_BC.png",
+     "normalMap": "Textures/Carmen_Skin_N.png",
+     "maskMap": "Textures/Carmen_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Carmen_Sole",
+     "color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Carmen_Bottom",
+     "color": [
+      0.019999999552965164,
+      0.019999999552965164,
+      0.02500000037252903,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Carmen_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.07865399999999999,
+      0.046454399999999986,
+      0.02465759999999999,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Carmen_HairCap",
+     "color": [
+      0.07865399867296219,
+      0.046454399824142456,
+      0.02465759962797165,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Carmen_Radio",
+     "color": [
+      0.019999999552965164,
+      0.019999999552965164,
+      0.019999999552965164,
+      1
+     ],
+     "smoothness": 0.5
+    },
+    {
+     "name": "Carmen_Top",
+     "color": [
+      0.00800000037997961,
+      0.012000000104308128,
+      0.04500000178813934,
       1
      ],
      "smoothness": 0.25
