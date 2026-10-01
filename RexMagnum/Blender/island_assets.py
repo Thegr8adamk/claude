@@ -887,6 +887,200 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
             k.box((xc, y1 + 1.6, z + 1.21), (xc + 0.8, y1 + 1.86, z + 1.25), tm, "Towel")
 
 
+STAIR_X = (-44.6, -39.8)     # stairwell (hotel-local x), corridor width y -1.6..1.6
+ELEV_X = (39.4, 42.6)        # elevator shaft
+FLOOR_H = 3.6
+
+
+def slab(k, m, z, x0, x1, y0, y1, holes=True, name="Slab"):
+    """Floor slab (0.35 m) as pieces around the stair and elevator openings."""
+    xa, xb = x0 - 0.3, x1 + 0.3
+    ya, yb = y0 - 0.3, y1 + 0.3
+    if not holes:
+        k.box((xa, ya, z), (xb, yb, z + 0.35), m["trim"], name)
+        return
+    cuts = [STAIR_X, ELEV_X]
+    xs = [xa, cuts[0][0], cuts[0][1], cuts[1][0], cuts[1][1], xb]
+    for i in range(5):
+        a, b = xs[i], xs[i + 1]
+        if i in (1, 3):           # opening column: only the strips beside the corridor
+            k.box((a, ya, z), (b, -1.6, z + 0.35), m["trim"], name)
+            k.box((a, 1.6, z), (b, yb, z + 0.35), m["trim"], name)
+        else:
+            k.box((a, ya, z), (b, yb, z + 0.35), m["trim"], name)
+
+
+def stairs(k, m, z, F):
+    """Switchback stairs from floor top z to z + F inside the stairwell: flight A goes west on the south half,
+    landing at the west end, flight B goes east on the north half and arrives at the east edge of the opening."""
+    sx0, sx1 = STAIR_X
+    n = 12
+    rise, run = F / 2 / n, 0.3
+    tread = textured("A_StairStone", "tiles", (0.62, 0.6, 0.56), (0.58, 0.56, 0.52), 0.6, 1.0, 0.1)
+    for j in range(n):
+        xe = sx1 - j * run                      # flight A (south): from the east end going west
+        top_ = z + (j + 1) * rise
+        k.box((xe - run, -1.6, max(z, top_ - 0.4)), (xe, -0.1, top_), tread, "StairA")
+        xw = sx0 + 1.0 + j * run                # flight B (north): from the landing going east
+        top_b = z + F / 2 + (j + 1) * rise
+        k.box((xw, 0.1, top_b - 0.4), (xw + run, 1.6, top_b), tread, "StairB")
+    k.box((sx0, -1.6, z + F / 2 - 0.3), (sx0 + 1.0, 1.6, z + F / 2), tread, "Landing")
+    k.box((sx0 + 1.0, -0.1, z), (sx1, 0.1, z + F / 2 + 1.0), m["stucco"], "StairWall")     # wall between flights
+    for yy, zz in ((-0.1, z + F / 2 + 1.0), (1.55, z + F + 1.0)):
+        k.cyl((sx0 + 1.0, yy + 0.05, zz - 0.1), (sx1, yy + 0.05, zz - 0.1 + (F / 2 if yy > 0 else 0)), 0.025,
+              m["alu"], segs=8, base="Handrail")
+
+
+def elevator_shaft(k, m, z, F, last=False):
+    """Shaft walls for one floor; the west wall (corridor side) has the door opening. The cab is a Unity object."""
+    ex0, ex1 = ELEV_X
+    k.box((ex0, -1.75, z), (ex1, -1.6, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex0, 1.6, z), (ex1, 1.75, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex1, -1.75, z), (ex1 + 0.15, 1.75, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex0 - 0.15, -1.75, z), (ex0, -0.65, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex0 - 0.15, 0.65, z), (ex0, 1.75, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex0 - 0.15, -0.65, z + 2.2), (ex0, 0.65, z + F - 0.35), m["stucco"], "Shaft")
+    k.box((ex0 - 0.2, -0.75, z + 2.2), (ex0 - 0.15, 0.75, z + 2.35), m["alu"], "LiftFrame")
+    k.box((ex0 - 0.2, 0.75, z + 1.2), (ex0 - 0.15, 0.95, z + 1.45), m["poollight"], "LiftButton")
+
+
+def corridor(k, m, fl, z, F, x0, x1, bay, B):
+    """Guest-floor corridor: carpet runner, ceiling with lights, wallpaper walls with a door to every room and
+    room numbers. Room 304's door is the openable one in room304() (gap here)."""
+    zf, zc = z + 0.35, z + F
+    xa, xb = STAIR_X[1], ELEV_X[0] - 0.15
+    carpet = textured("A_CorridorCarpet", "sand", (0.32, 0.08, 0.08), (0.42, 0.12, 0.1), 0.95, 3.0, 0.15)
+    paper = textured("A_CorridorPaper", "stucco", (0.72, 0.66, 0.52), (0.8, 0.74, 0.6), 0.85, 2.0, 0.05)
+    door = textured("A_DoorWood", "planks", (0.32, 0.2, 0.1), (0.38, 0.24, 0.12), 0.6, 1.0, 0.2)
+    k.box((xa, -1.6, zf), (xb, 1.6, zf + 0.02), carpet, "CorridorCarpet")
+    k.box((x0 + 0.35, -1.6, zc - 0.02), (x1 - 0.35, 1.6, zc), m["trim"], "CorridorCeiling")
+    for i in range(B):
+        xc = x0 + (i + 0.5) * bay
+        if STAIR_X[0] < xc < STAIR_X[1] + 1 or ELEV_X[0] - 1 < xc < ELEV_X[1]:
+            continue
+        k.box((xc - 0.5, -0.4, zc - 0.05), (xc + 0.5, 0.4, zc - 0.02), m["roomlight"], "CorridorLight")
+        dxa, dxb = xc + 0.3, xc + 1.3                     # door opening (matches room 304's door)
+        ba, bb = x0 + i * bay + 0.35, x0 + (i + 1) * bay - 0.35
+        for side in (-1, 1):
+            y = side * 1.59
+            ya, yb = min(y, y - side * 0.02), max(y, y - side * 0.02)
+            k.box((ba, ya, zf), (dxa, yb, zc), paper, "CorrWall")
+            k.box((dxb, ya, zf), (bb, yb, zc), paper, "CorrWall")
+            k.box((dxa, ya, zf + 2.1), (dxb, yb, zc), paper, "CorrWall")
+            k.box((dxa - 0.06, ya - 0.02, zf), (dxa, yb + 0.02, zf + 2.16), m["trim"], "CorrFrame")
+            k.box((dxb, ya - 0.02, zf), (dxb + 0.06, yb + 0.02, zf + 2.16), m["trim"], "CorrFrame")
+            k.box((dxa - 0.06, ya - 0.02, zf + 2.1), (dxb + 0.06, yb + 0.02, zf + 2.16), m["trim"], "CorrFrame")
+            if fl == 2 and i == ROOM304_BAY and side == 1:
+                continue                                  # Rex's door: separate, can be punched open
+            k.box((dxa, ya + side * 0.01, zf), (dxb, yb + side * 0.01, zf + 2.1), door, "RoomDoor")
+            num = f"{fl + 1}{i + 1:02d}" if side == 1 else f"{fl + 1}{i + 16:02d}"
+            k.text(num, 0.14, (dxb + 0.3, -side * 1.565, zf + 1.5), m["sign_board"], 0.01,
+                   rot=(math.pi / 2, 0, 0 if side == 1 else math.pi), base="RoomNo")
+
+
+def ground_floor(k, m, z, F, x0, x1, y0, y1):
+    """Floor 1: lounge bar (Rex's lounge act), lobby + reception, casino lounge, buffet + walk-in freezer."""
+    zf, zc = z + 0.35, z + F
+    marble = textured("A_Marble", "tiles", (0.88, 0.86, 0.82), (0.8, 0.78, 0.74), 0.2, 1.0, 0.05)
+    casino = textured("A_CasinoCarpet", "sand", (0.35, 0.05, 0.08), (0.5, 0.35, 0.08), 0.95, 2.0, 0.1)
+    felt = principled("A_Felt", (0.03, 0.25, 0.08), 0.9)
+    gold = principled("A_Gold", (1.0, 0.75, 0.3), 0.25, 1.0)
+    frost = principled("A_Frost", (0.82, 0.9, 0.95), 0.35, **{"Coat Weight": 0.6})
+    xin0, xin1 = x0 + 0.35, x1 - 0.35
+    k.box((STAIR_X[1], y0 + 0.27, zf), (ELEV_X[0] - 0.15, y1 - 0.27, zf + 0.02), marble, "LobbyFloor")
+    k.box((9, y0 + 0.7, zf + 0.02), (27, y1 - 0.7, zf + 0.03), casino, "CasinoCarpet")
+    k.box((xin0, y0 + 0.27, zc - 0.02), (xin1, y1 - 0.27, zc), m["trim"], "LobbyCeiling")
+    # partitions between zones (wide openings in the middle)
+    for xp in (-15.0, 9.0, 27.0):
+        k.box((xp - 0.1, y0 + 0.7, zf), (xp + 0.1, -3.0, zc), m["stucco"], "Partition")
+        k.box((xp - 0.1, 3.0, zf), (xp + 0.1, y1 - 0.7, zc), m["stucco"], "Partition")
+    # lounge bar + stage
+    k.box((-36, 5.5, zf), (-27, 6.3, zf + 1.1), m["teak"], "BarCounter")
+    k.box((-36.1, 5.4, zf + 1.1), (-26.9, 6.4, zf + 1.16), m["darkmetal"], "BarTop")
+    k.box((-36, 9.6, zf), (-27, 10.2, zf + 2.4), m["teak"], "BackBar")
+    rng = random.Random(77)
+    glass = principled("A_BottleGlass", (0.2, 0.5, 0.2), 0.05, **{"Transmission Weight": 0.8})
+    for j in range(30):
+        x = -35.7 + j * 0.28
+        for shelf in (1.2, 1.7):
+            k.cyl((x, 9.85, zf + shelf), (x, 9.85, zf + shelf + rng.uniform(0.22, 0.32)), 0.035, glass, segs=10,
+                  base="BarBottle")
+    for j in range(8):
+        x = -35.3 + j * 1.1
+        k.cyl((x, 4.9, zf), (x, 4.9, zf + 0.75), 0.03, m["alu"], segs=8, base="BarStoolLeg")
+        k.disc((x, 4.9, zf + 0.75), 0.2, 0.06, m["cushion"], base="BarStoolSeat")
+    k.box((-21, -9.5, zf), (-15.6, -4, zf + 0.45), m["teak"], "LoungeStage")
+    k.box((-19.5, -8.5, zf + 0.45), (-17.9, -7.0, zf + 1.45), principled("A_PianoBlack", (0.01, 0.01, 0.01), 0.1,
+          **{"Coat Weight": 1.0}), "Piano", bevel=0.03)
+    k.cyl((-17.0, -6.0, zf + 0.45), (-17.0, -6.0, zf + 1.9), 0.015, m["alu"], segs=8, base="MicStand")
+    k.text("REX MAGNUM - LIVE TONIGHT", 0.35, (-18.3, -10.0, zf + 2.6), m["neon"], 0.03,
+           rot=(math.pi / 2, 0, 0), base="LoungeSign")
+    for j in range(6):
+        tx, ty = -33 + (j % 3) * 4.5, -6 + (j // 3) * 4.5
+        k.cyl((tx, ty, zf), (tx, ty, zf + 0.72), 0.04, m["darkmetal"], segs=8, base="LoungeTableLeg")
+        k.disc((tx, ty, zf + 0.72), 0.45, 0.04, m["teak"], base="LoungeTable")
+    # lobby: reception desk, sofas, plants
+    k.box((-6, -1.0, zf), (2, 0.0, zf + 1.1), m["teak"], "Reception")
+    k.box((-6.1, -1.1, zf + 1.1), (2.1, 0.1, zf + 1.16), m["darkmetal"], "ReceptionTop")
+    k.box((-7, 2.6, zf), (3, 2.9, zc), m["teak"], "ReceptionWall")
+    k.text("ISLA GRANDE", 0.5, (-2, 2.58, zf + 2.2), gold, 0.03, rot=(math.pi / 2, 0, math.pi), base="LobbyName")
+    sofa = principled("A_Sofa", (0.55, 0.42, 0.3), 0.85)
+    for sx_ in (-11, 5):
+        k.box((sx_, -8.5, zf), (sx_ + 2.4, -7.6, zf + 0.45), sofa, "Sofa", bevel=0.06)
+        k.box((sx_, -8.5, zf + 0.45), (sx_ + 2.4, -8.2, zf + 0.9), sofa, "SofaBack", bevel=0.06)
+        k.box((sx_ + 0.4, -6.8, zf), (sx_ + 2.0, -6.0, zf + 0.4), m["teak"], "CoffeeTable")
+    leaf = principled("A_PlantLeaf", (0.08, 0.3, 0.06), 0.6)
+    for px, py in ((-14, -9.5), (8, -9.5), (-14, 9.5), (8, 9.5), (-8, 2.0), (4, 2.0)):
+        k.cyl((px, py, zf), (px, py, zf + 0.6), 0.3, m["terracotta"], segs=14, r1=0.22, base="Pot")
+        k.rock((px, py, zf + 1.3), (0.6, 0.6, 0.8), leaf, seed=int(px * 10 + py), base="Plant", detail=2)
+    # casino lounge: slot machines, card tables, roulette
+    for j in range(12):
+        x = 10 + j * 1.4
+        k.box((x, 8.6, zf), (x + 0.8, 9.3, zf + 1.6), principled("A_SlotBody", (0.6, 0.05, 0.1), 0.3, 0.6), "Slot",
+              bevel=0.04)
+        k.box((x + 0.1, 8.58, zf + 0.9), (x + 0.7, 8.6, zf + 1.35), m["poollight"], "SlotScreen")
+        k.box((x + 0.1, 8.7, zf + 1.6), (x + 0.7, 9.2, zf + 1.75), m["neon"], "SlotLight")
+    for tx in (14.0, 21.0):
+        k.cyl((tx, -4.0, zf), (tx, -4.0, zf + 0.72), 0.12, m["darkmetal"], segs=10, base="CardTableLeg")
+        tb = k.disc((tx, -4.0, zf + 0.72), 1.2, 0.06, felt, segs=40, base="CardTable")
+        tb.scale = (1.4, 1.0, 1.0)
+        tb.location = (tx * (1 - 1.4), 0, 0)
+    k.disc((17.5, 3.5, zf + 0.9), 0.55, 0.08, gold, segs=36, base="Roulette")
+    k.box((16.0, 2.6, zf), (19.0, 4.4, zf + 0.9), felt, "RouletteTable")
+    # buffet: two counters with food trays and sneeze guards, walk-in freezer in the north-east corner
+    food = [principled(f"A_Food{i}", c, 0.5) for i, c in enumerate(((0.8, 0.5, 0.2), (0.9, 0.85, 0.6), (0.4, 0.6, 0.2),
+                                                                     (0.75, 0.2, 0.15), (0.95, 0.9, 0.85)))]
+    for yy in (-3.0, 2.0):
+        k.box((28, yy, zf), (34.5, yy + 1.0, zf + 0.9), m["alu"], "BuffetCounter")
+        for j in range(8):
+            k.box((28.2 + j * 0.78, yy + 0.2, zf + 0.9), (28.8 + j * 0.78, yy + 0.8, zf + 0.98), food[j % 5], "Tray")
+        k.box((28, yy + 0.45, zf + 1.3), (34.5, yy + 0.55, zf + 1.34), m["railglass"], "SneezeGuard")
+    fx0, fx1, fy0, fy1 = 35.0, 39.0, 5.5, 10.4
+    for a_, b_ in (((fx0, fy0), (fx1, fy0 + 0.12)), ((fx0, fy1 - 0.12), (fx1, fy1)), ((fx1 - 0.12, fy0), (fx1, fy1))):
+        k.box((a_[0], a_[1], zf), (b_[0], b_[1], zc), frost, "FreezerWall")
+    k.box((fx0, fy0, zf), (fx0 + 0.12, 7.4, zc), frost, "FreezerWall")
+    k.box((fx0, 8.6, zf), (fx0 + 0.12, fy1, zc), frost, "FreezerWall")
+    k.box((fx0, 7.4, zf + 2.2), (fx0 + 0.12, 8.6, zc), frost, "FreezerWall")
+    k.box((fx0 + 0.12, fy0 + 0.12, zf + 0.02), (fx1 - 0.12, fy1 - 0.12, zf + 0.04), frost, "FreezerFloor")
+    for yy in (6.0, 9.6):
+        for sh in (0.5, 1.1, 1.7):
+            k.box((fx0 + 0.6, yy, zf + sh), (fx1 - 0.2, yy + 0.5, zf + sh + 0.04), m["alu"], "FreezerShelf")
+    for j in range(4):
+        k.box((fx0 + 0.8 + j * 0.7, 9.65, zf + 1.15), (fx0 + 1.3 + j * 0.7, 10.05, zf + 1.4), frost, "IceBox")
+
+
+def hotel_markers():
+    """Gameplay points (hotel-local, Blender axes) for Unity: weapon pickups, elevator stops, stairs."""
+    F = FLOOR_H
+    ex = (ELEV_X[0] + ELEV_X[1]) / 2
+    return dict(
+        pistol=(14.0, -4.0, 0.35 + 0.8), knife=(31.0, -2.5, 0.35 + 0.99), swordfish=(37.0, 7.95, 0.35 + 0.05),
+        sniper=(42.0, 8.0, 5 * F + 0.4), elevatorX=(ex, 0.0, 0.0),
+        elevatorFloors=tuple(fl * F + 0.35 for fl in range(6)), stage=(-18.3, -6.5, 0.35 + 0.45),
+        poolDoors=(0.0, 11.0, 0.35),
+    )
+
+
 def hotel(m):
     """Resort hotel: 90 m x 22 m, 5 floors (3.6 m), lobby on floor 1, balconies on the pool (north) side,
     penthouse + roof terrace + sniper spot. Rex's room 304 = floor 3, bay 4 (marked)."""
@@ -896,8 +1090,8 @@ def hotel(m):
     bay = W / B
     for fl in range(5):
         z = fl * F
-        k.box((x0 - 0.3, y0 - 0.3, z), (x1 + 0.3, y1 + 0.3, z + 0.35), m["trim"], "Slab")
-        # thin glazing behind the piers (set back 0.25 m); corridor core in the middle; rooms between
+        slab(k, m, z, x0, x1, y0, y1, holes=fl > 0)
+        # thin glazing behind the piers (set back 0.25 m); corridor in the middle; rooms between
         k.box((x0 + 0.1, y0 + 0.25, z + 0.35), (x1 - 0.1, y0 + 0.27, z + F), m["glass"], "Glass")
         if fl == 2:   # room 304: sliding door stands open (gap), the door panel is slid behind the fixed pane
             gx0, gx1 = ROOM304_DOOR
@@ -905,14 +1099,33 @@ def hotel(m):
             k.box((gx1, y1 - 0.27, z + 0.35), (x1 - 0.1, y1 - 0.25, z + F), m["glass"], "Glass")
             k.box((gx0 - 1.5, y1 - 0.33, z + 0.37), (gx0 + 0.05, y1 - 0.29, z + F - 0.4), m["glass"], "SlidDoor")
             k.box((gx1 - 0.04, y1 - 0.29, z + 0.35), (gx1, y1 - 0.23, z + F), m["alu"], "DoorJamb")
+        elif fl == 0:   # ground floor: glass doors to the pool (main doors + buffet terrace)
+            edges = [x0 + 0.1, -3.0, 3.0, 29.5, 32.5, x1 - 0.1]
+            for a_, b_ in ((edges[0], edges[1]), (edges[2], edges[3]), (edges[4], edges[5])):
+                k.box((a_, y1 - 0.27, z + 0.35), (b_, y1 - 0.25, z + F), m["glass"], "Glass")
+            for a_, b_ in ((-3.0, 3.0), (29.5, 32.5)):
+                k.box((a_ - 0.06, y1 - 0.3, z + 0.35), (a_, y1 - 0.2, z + 2.8), m["alu"], "DoorJamb")
+                k.box((b_, y1 - 0.3, z + 0.35), (b_ + 0.06, y1 - 0.2, z + 2.8), m["alu"], "DoorJamb")
+                k.box((a_ - 0.06, y1 - 0.3, z + 2.8), (b_ + 0.06, y1 - 0.2, z + 2.9), m["alu"], "DoorHead")
         else:
             k.box((x0 + 0.1, y1 - 0.27, z + 0.35), (x1 - 0.1, y1 - 0.25, z + F), m["glass"], "Glass")
-        k.box((x0 + 0.1, -1.6, z + 0.35), (x1 - 0.1, 1.6, z + F), m["roomwall"], "Core")
         if fl > 0:
             rooms(k, m, fl, z, F, x0, y0, y1, bay, B)
+            corridor(k, m, fl, z, F, x0, x1, bay, B)
+        else:
+            ground_floor(k, m, z, F, x0, x1, y0, y1)
+        stairs(k, m, z + 0.35, F)
+        elevator_shaft(k, m, z + 0.35, F, last=False)
         for i in range(B + 1):        # piers between rooms (stand on the slab, touch the slab above)
             x = x0 + i * bay
-            k.box((x - 0.35, y0, z + 0.35), (x + 0.35, y1, z + F), m["stucco"], "Pier")
+            if fl > 0:                # rooms: piers stop at the corridor walls
+                k.box((x - 0.35, y0, z + 0.35), (x + 0.35, -1.6, z + F), m["stucco"], "Pier")
+                k.box((x - 0.35, 1.6, z + 0.35), (x + 0.35, y1, z + F), m["stucco"], "Pier")
+            else:                     # lobby level: columns at the facades only (open plan)
+                for yy in (y0, y1 - 0.7):
+                    k.box((x - 0.35, yy, z + 0.35), (x + 0.35, yy + 0.7, z + F), m["stucco"], "Pier")
+                if 0 < i < B and i % 2 == 0:
+                    k.cyl((x, 0, z + 0.35), (x, 0, z + F), 0.35, m["trim"], segs=20, base="Column")
         if fl == 0:                   # lobby: tall glass with mullions + entrance canopy (south)
             for i in range(B * 2 + 1):
                 x = x0 + i * bay / 2
@@ -946,7 +1159,18 @@ def hotel(m):
             xc = x0 + 3.5 * bay
             k.text("304", 0.35, (xc, y1 + 1.81, z + 0.6), m["sign_board"], 0.02, rot=(math.pi / 2, 0, math.pi), base="Room304")
     top = 5 * F
-    k.box((x0 - 0.3, y0 - 0.3, top), (x1 + 0.3, y1 + 0.3, top + 0.35), m["trim"], "Roof")
+    slab(k, m, top, x0, x1, y0, y1, holes=True, name="Roof")
+    # stair house on the roof over the stairwell (door on the east side) + elevator machine room
+    sx0, sx1 = STAIR_X
+    k.box((sx0 - 0.4, -2.0, top + 0.35), (sx1 + 0.4, -1.6, top + 3.2), m["stucco"], "StairHouse")
+    k.box((sx0 - 0.4, 1.6, top + 0.35), (sx1 + 0.4, 2.0, top + 3.2), m["stucco"], "StairHouse")
+    k.box((sx0 - 0.4, -2.0, top + 0.35), (sx0, 2.0, top + 3.2), m["stucco"], "StairHouse")
+    k.box((sx1, -2.0, top + 2.5), (sx1 + 0.4, 2.0, top + 3.2), m["stucco"], "StairHouse")
+    k.box((sx1, -2.0, top + 0.35), (sx1 + 0.4, -0.6, top + 2.5), m["stucco"], "StairHouse")
+    k.box((sx1, 0.6, top + 0.35), (sx1 + 0.4, 2.0, top + 2.5), m["stucco"], "StairHouse")
+    k.box((sx0 - 0.6, -2.2, top + 3.2), (sx1 + 0.6, 2.2, top + 3.45), m["trim"], "StairHouseRoof")
+    ex0, ex1 = ELEV_X
+    k.box((ex0 - 0.15, -1.75, top + 0.35), (ex1 + 0.15, 1.75, top + 3.0), m["stucco"], "LiftMotorRoom")
     for (a, b) in (((x0 - 0.3, y0 - 0.3), (x1 + 0.3, y0)), ((x0 - 0.3, y1), (x1 + 0.3, y1 + 0.3)),
                    ((x0 - 0.3, y0), (x0, y1)), ((x1, y0), (x1 + 0.3, y1))):
         k.box((a[0], a[1], top + 0.35), (b[0], b[1], top + 1.35), m["stucco"], "Parapet")
