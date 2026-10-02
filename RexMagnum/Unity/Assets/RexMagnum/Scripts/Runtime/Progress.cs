@@ -233,7 +233,7 @@ namespace RexMagnum
             PlayerPrefs.DeleteKey(FactoryCore.SaveKey);
             PlayerPrefs.DeleteKey(KingGlorpBoss.SaveKey);
             PlayerPrefs.DeleteKey("RexMagnum_VoiceMail");      // MartyPhone: the voice mails start again
-            PlayerPrefs.DeleteKey(RexLife.SavedCheckpointKey); // the saved checkpoint: wake up in room 304 again
+            RexLife.ClearSavedCheckpoint();                    // the zone checkpoint and the quit spot: wake up in room 304 again
             PlayerPrefs.Save();
         }
     }

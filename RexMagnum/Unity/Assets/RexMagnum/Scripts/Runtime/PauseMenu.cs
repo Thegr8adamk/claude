@@ -13,8 +13,10 @@ namespace RexMagnum
     /// Help (the controls of the device used last).
     /// Controller: LT / RT or keys 1-5 change the tab, Up / Down scroll the lists, B / Menu resume,
     /// Y / key T: QUIT TO TITLE (asks first, saves, loads the scene again). Settings are saved in PlayerPrefs.
-    /// MAP: FAST TRAVEL to the cart charge stations and the cave mouth in visited zones (Up / Down + OK, or click),
-    /// only with no blob within 25 m and not in an event, the boss fight or the tutorial.
+    /// MAP: FAST TRAVEL to the cart charge stations and the cave mouth in visited zones (Up / Down + OK, or click;
+    /// Down past the last button scrolls on, PageUp / PageDown always scroll), only with no blob within 25 m and not in
+    /// an event, the boss fight or the tutorial. A stop with blobs (or a blob spawner) near is greyed; the cave stop at
+    /// night while the siege can start asks twice (warning).
     /// Ultrawide: the panel stops at ~1.9 x the screen height.
     /// </summary>
     public class PauseMenu : MonoBehaviour
@@ -683,11 +685,10 @@ namespace RexMagnum
                 if (rex.cameraRig != null) rex.cameraRig.SetYaw(spot.yaw);
                 if (hp != null) hp.Invulnerable(2f);
             }
+            NightSiege.Breather(60f);       // a breather after the arrival: the night siege does not start while the screen fades in
             yield return new WaitForSecondsRealtime(0.15f);
             for (float t = 1f; t > 0f; t -= Time.unscaledDeltaTime / 0.4f) { travelFade = t; yield return null; }
             travelFade = 0f;
-            // a short breather after the arrival: the night siege does not start while the screen fades in
-            NightSiege.Breather(60f);
             if (spot.siege) RexTestHUD.Notice(SiegeWarning, 5f);
             // input back as the menu's resume gives it (not at the cart's wheel, not in the ending)
             if (rex != null && GolfCart.Driven == null && !Open && !EndingSequence.Playing) rex.InputEnabled = true;

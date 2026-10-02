@@ -308,13 +308,17 @@ namespace RexMagnum
         // ------------------------------------------------------------ big goals: banner + music sting
 
         static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended", "cave_siege" };
-        // the reward line: RexLife raises max health by 25 for the factory and King Glorp (its own notice says so)
-        static readonly string[] GoalNames = { "The blob factory is stopped.   MAX HEALTH +25", "King Glorp is popped.   MAX HEALTH +25",
-                                                   "The bar held. Free refill: all your guns are full.",
-                                                   "The cave siege is over. +5 coconuts and ammo for all your guns." };   // the events show no notice of their own
+        static readonly string[] GoalNames = { "The blob factory is stopped.", "King Glorp is popped.", "The bar held.", "The cave siege is over." };
+        // the reward line under it, the same form for all 4: RexLife raises max health by 25 for the factory and King
+        // Glorp; the bar and the cave give ammo (the events show no notice of their own)
+        static readonly string[] GoalRewards = { "REWARD: MAX HEALTH +25.  Fewer blobs on the island.",
+                                                 "REWARD: MAX HEALTH +25.  Free play: the island is yours.",
+                                                 "REWARD: all your guns are full.",
+                                                 "REWARD: +5 coconuts and half a load for every gun." };
         AudioSource sting;
         float bannerUntil, stingStart = -100f, nextGoalCheck;
-        string bannerLine;
+        string bannerLine, bannerReward;
+        int glorpAtLoad = -1;       // King Glorp was already popped when this scene loaded (1), or not (0); -1: not looked yet
 
         /// <summary>A big goal is done: "BIG GOAL COMPLETE" + its reward line and a short music sting,
         /// once per goal per save ("goal_banner_&lt;key&gt;"). Waits while the ending plays; King Glorp's waits until the
@@ -324,12 +328,16 @@ namespace RexMagnum
             if (Time.unscaledTime < nextGoalCheck) return;
             nextGoalCheck = Time.unscaledTime + 0.5f;
             if (EndingSequence.Playing || Time.unscaledTime < bannerUntil) return;
+            // a quit during the ending (or before it started) never set Finished: a King Glorp popped before this scene
+            // loaded, with no ending here, gets his banner + stats card now (else they would be lost for good)
+            if (glorpAtLoad < 0) glorpAtLoad = Progress.Value("glorp") > 0 && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1 ? 1 : 0;
             for (int i = 0; i < GoalKeys.Length; i++)
             {
                 if (Progress.Value(GoalKeys[i]) <= 0 || Progress.Value("goal_banner_" + GoalKeys[i]) > 0) continue;
-                if (GoalKeys[i] == "glorp" && !EndingSequence.Finished) continue;
+                if (GoalKeys[i] == "glorp" && !EndingSequence.Finished && (glorpAtLoad != 1 || FindAnyObjectByType<EndingSequence>() != null)) continue;
                 Progress.Set("goal_banner_" + GoalKeys[i], 1);
                 bannerLine = GoalNames[i];
+                bannerReward = GoalRewards[i];
                 bannerUntil = Time.unscaledTime + 5f;
                 // King Glorp (after the ending): the run's stats card follows the banner
                 if (GoalKeys[i] == "glorp") { statsFrom = bannerUntil; statsUntil = statsFrom + StatsSeconds; statsList = null; }
@@ -615,14 +623,19 @@ namespace RexMagnum
         {
             float left = bannerUntil - Time.unscaledTime;
             float a = MenuSkin.Appear(bannerUntil - 5f, 0.35f) * Mathf.Clamp01(left / 0.8f);
-            var r = new Rect(w * 0.2f, h * 0.36f, w * 0.6f, 150 * s);
+            var r = new Rect(w * 0.2f, h * 0.36f, w * 0.6f, 190 * s);
             GUI.color = new Color(1f, 1f, 1f, a);
             MenuSkin.DrawPanel(r);
             GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
             GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
             GUI.color = new Color(1f, 1f, 1f, a);
             GUI.Label(new Rect(r.x, r.y + 10 * s, r.width, 80 * s), "BIG GOAL COMPLETE", MenuSkin.Title);
-            GUI.Label(new Rect(r.x, r.y + 80 * s, r.width, 56 * s), bannerLine, MenuSkin.Hint);
+            GUI.Label(new Rect(r.x, r.y + 80 * s, r.width, 50 * s), bannerLine, MenuSkin.Hint);
+            if (!string.IsNullOrEmpty(bannerReward))
+            {
+                GUI.color = new Color(1f, 0.85f, 0.4f, a);          // gold: what it unlocked
+                GUI.Label(new Rect(r.x, r.y + 128 * s, r.width, 50 * s), bannerReward, MenuSkin.Hint);
+            }
             GUI.color = Color.white;
         }
 
