@@ -26,6 +26,7 @@ namespace RexMagnum
 
         void Awake()
         {
+            probeRes.Clear();                              // probes of the previous scene (QUIT TO TITLE / NEW GAME)
             UsePlayCopy();
             if (terrains == null || terrains.Length == 0) terrains = Terrain.activeTerrains;
             int saved = PlayerPrefs.GetInt(PrefKey, -1);

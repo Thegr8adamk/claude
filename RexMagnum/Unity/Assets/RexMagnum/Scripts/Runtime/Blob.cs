@@ -508,7 +508,7 @@ namespace RexMagnum
             {
                 agent.isStopped = false;
                 // a new path only when Rex has moved or every 0.25 s (path search for every blob every frame is costly)
-                if (Time.time > nextPath || (rex.position - lastTarget).sqrMagnitude > 0.25f)
+                if (Time.time > nextPath && ((rex.position - lastTarget).sqrMagnitude > 0.25f || Time.time > nextPath + 0.5f))
                 {
                     agent.SetDestination(rex.position);
                     lastTarget = rex.position;
@@ -1123,6 +1123,8 @@ namespace RexMagnum
         Vector3 screen;
         bool show;
         float nextCheck;
+
+        void Awake() { useGUILayout = false; }   // tags only: no IMGUI layout pass per guardian
 
         void LateUpdate()
         {

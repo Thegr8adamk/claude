@@ -86,11 +86,12 @@ namespace RexMagnum
             return true;               // still flying when the fuse ends: it blows up in the air there
         }
 
-        public static void CoconutDone(bool killed)
+        public static void CoconutDone(Transform c, bool killed)
         {
-            if (riding) rideKilled = killed;                 // the ride shows the blast and the pop
-            else if (killed && coconut != null) Show(coconut, coconut.position + Vector3.up * 2f, Style.Orbit);
-            coconut = null;
+            bool ridden = riding && c != null && c == coconut;   // another coconut's blast: not the one the camera rides
+            if (ridden) rideKilled = killed;                 // the ride shows the blast and the pop
+            else if (killed && c != null) Show(c, c.position + Vector3.up * 2f, Style.Orbit);
+            if (c == coconut) coconut = null;
         }
 
         Camera MakeCam()
@@ -133,7 +134,8 @@ namespace RexMagnum
         void OnDestroy()
         {
             if (running && Time.timeScale > 0f) Time.timeScale = 1f;
-            running = riding = false;
+            running = riding = rideKilled = false;
+            coconut = null;
             EndCam();
         }
 

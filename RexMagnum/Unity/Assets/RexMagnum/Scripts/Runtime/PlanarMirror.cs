@@ -170,6 +170,8 @@ namespace RexMagnum
             if (cam == null || rendering) return;
             if (VRMode.Active != vrLook) SetVRLook(VRMode.Active);
             if (vrLook) return;
+            // the selfie / kill cam / ending cameras would sample the main camera's reflection: shiny surface instead
+            if (KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing || Time.time < PhotoAlbum.PoseUntil) { if (showingMirror) ShowMirror(false); return; }
             // a full scene render is costly: only the nearest mirror in front of the player and on screen
             Rank(cam);
             if (nearest != this) { Idle(); return; }

@@ -141,15 +141,19 @@ namespace RexMagnum.EditorTools
             // this asset's list: our aux once; other aux entries (the old shared one, another source's) out, so the
             // camera's prefix match finds this one
             bool has = false;
+            var defIdx = so.FindProperty("m_DefaultRendererIndex");
+            // a delete shifts the later slots down: keep the default renderer pointing at the same renderer
+            void Removed(int at) { if (defIdx == null) return; if (defIdx.intValue > at) defIdx.intValue--; else if (defIdx.intValue == at) defIdx.intValue = 0; }
             for (int i = list.arraySize - 1; i >= 1; i--)
             {
                 var e = list.GetArrayElementAtIndex(i);
-                if (e.objectReferenceValue == null) { list.DeleteArrayElementAtIndex(i); continue; }   // a leftover empty slot
+                if (e.objectReferenceValue == null) { list.DeleteArrayElementAtIndex(i); Removed(i); continue; }   // a leftover empty slot
                 if (!(e.objectReferenceValue is ScriptableRendererData d) ||
                     !d.name.StartsWith(RexMagnum.QualityAuto.AuxRendererName, System.StringComparison.Ordinal)) continue;
                 if (d == aux && !has) { has = true; continue; }
                 e.objectReferenceValue = null;             // (older Unity only nulls an object entry on the first delete)
                 list.DeleteArrayElementAtIndex(i);
+                Removed(i);
             }
             if (!has)
             {

@@ -17,6 +17,7 @@ namespace RexMagnum
         public float opacity = 0.45f;
         // ---- layout editor (brief: drag / resize / opacity per button, saved, reset)
         public static bool EditMode;
+        static bool editPaused;
         static readonly string[] AllButtons = { "Action", "Jump", "Dodge", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera", "Move" };
         string selected = "Action";
         bool dragging;
@@ -109,7 +110,13 @@ namespace RexMagnum
         {
             if (GameFlow.Busy) { TouchState.Active = false; return; }    // title and intro: no touch buttons
             opacity = PlayerPrefs.GetFloat("RexMagnum_TouchOpacity", 0.45f);
-            if (EditMode) { TouchState.Active = false; EditUpdate(); return; }
+            if (EditMode)
+            {
+                TouchState.Active = false;
+                if (PauseMenu.Open) EditMode = false;            // the menu came back: editing ends
+                else { if (Time.timeScale != 0f) { editPaused = true; Time.timeScale = 0f; } EditUpdate(); return; }   // nothing moves while the buttons are dragged
+            }
+            if (editPaused) { editPaused = false; if (Time.timeScale == 0f && !PauseMenu.Open) Time.timeScale = 1f; }
             var ts = Touchscreen.current;
             // a Windows laptop with a touch screen has a Touchscreen too: show the buttons only after a first touch there
             TouchState.Active = ts != null && Gamepad.current == null &&

@@ -93,7 +93,7 @@ namespace RexMagnum
             }
             if (killed) RexVoice.Say(owner, "Coconut");
             if (kills >= 3) Progress.Add("coconut_multi");
-            KillCam.CoconutDone(killed);
+            KillCam.CoconutDone(transform, killed);
             Destroy(gameObject);
         }
 

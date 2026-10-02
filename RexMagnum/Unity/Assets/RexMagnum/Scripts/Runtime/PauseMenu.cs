@@ -596,6 +596,7 @@ namespace RexMagnum
             if (KingGlorpBoss.Fighting || EndingSequence.Playing) return "No fast travel during the boss fight.";
             if (GameGuide.EventRunning) return "No fast travel during an event. Finish it first.";
             if (GolfCart.Driven != null) return "Get out of the golf cart to fast travel.";
+            if (Time.time < PhotoAlbum.PoseUntil || PhotoAlbum.Capturing) return "No fast travel during a photo.";
             if (Blob.LivingNear(rex.transform.position, 25f) > 0) return "Blobs nearby: no fast travel with a blob within 25 m.";
             return null;
         }

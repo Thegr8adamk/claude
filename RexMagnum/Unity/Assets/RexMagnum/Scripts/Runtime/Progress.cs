@@ -70,7 +70,13 @@ namespace RexMagnum
         {
             if (data != null) return data;
             try { data = File.Exists(PathFile) ? JsonUtility.FromJson<Data>(File.ReadAllText(PathFile)) : new Data(); }
-            catch { data = new Data(); }
+            catch (Exception e)
+            {
+                // keep the unreadable file (a lock, bad JSON): the next write would replace it with an empty save
+                Debug.LogWarning(e);
+                try { if (File.Exists(PathFile)) File.Copy(PathFile, PathFile + ".bad", true); } catch (Exception) { }
+                data = new Data();
+            }
             if (data == null) data = new Data();
             // saves from before these lists existed load them as null
             if (data.clues == null) data.clues = new List<string>();
@@ -99,7 +105,7 @@ namespace RexMagnum
                     catch (PlatformNotSupportedException) { File.Copy(tmp, PathFile, true); File.Delete(tmp); }   // some phones
                 }
             }
-            catch (Exception e) { Debug.LogWarning(e); }
+            catch (Exception e) { Debug.LogWarning(e); dirty = true; }   // write again at the next flush
         }
 
         public static int Value(string key)

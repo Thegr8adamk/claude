@@ -27,6 +27,7 @@ namespace RexMagnum
         void Update()
         {
             if (calling || Time.timeScale == 0f || !ctrl.InputEnabled) return;
+            if (GameGuide.EventRunning || KingGlorpBoss.Fighting || GameFlow.Busy || EndingSequence.Playing) return;   // no call over an event
             playTime += Time.deltaTime;
             if (playTime < nextCall) return;
             int n = PlayerPrefs.GetInt(Key, 0);

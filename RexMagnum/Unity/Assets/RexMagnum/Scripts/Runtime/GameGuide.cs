@@ -339,9 +339,11 @@ namespace RexMagnum
         static ZoneDoor[] doors;
         static float nextFind;
 
+        static bool HasDead(Object[] a) { if (a == null) return true; foreach (var o in a) if (o == null) return true; return false; }
+
         static void FindThings()
         {
-            if (Time.unscaledTime < nextFind && carts != null) return;
+            if (Time.unscaledTime < nextFind && carts != null && !HasDead(carts) && !HasDead(lifts) && !HasDead(doors)) return;
             nextFind = Time.unscaledTime + 10f;
             carts = Object.FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
             lifts = Object.FindObjectsByType<Elevator>(FindObjectsSortMode.None);

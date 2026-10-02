@@ -113,7 +113,7 @@ namespace RexMagnum
             const float r2 = OtherUseRadius * OtherUseRadius;
             foreach (var g in Guest.All)
                 if (g != null && !g.Rescued && (g.transform.position - p).sqrMagnitude < GuestUseR2) return true;   // a guest: only right next to them (Rosa sits ~1 m from the counter)
-            if (carts == null || Time.unscaledTime > nextFind)
+            if (carts == null || Time.unscaledTime > nextFind || System.Array.Exists(carts, c => c == null) || System.Array.Exists(elevators, e => e == null))
             {
                 nextFind = Time.unscaledTime + 10f;
                 carts = FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
