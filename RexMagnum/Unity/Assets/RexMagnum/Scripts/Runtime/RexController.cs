@@ -7,7 +7,7 @@ namespace RexMagnum
     /// Third person: Rex turns toward where he walks (or toward the aim when aiming / attacking).
     /// First person: Rex always faces the camera direction.
     /// </summary>
-    [RequireComponent(typeof(CharacterController), typeof(MartyPhone))]
+    [RequireComponent(typeof(CharacterController), typeof(MartyPhone), typeof(BaldGlint))]
     public class RexController : MonoBehaviour
     {
         [Header("Links")]
