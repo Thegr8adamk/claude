@@ -214,7 +214,7 @@ namespace RexMagnum
             Aiming = !controller.HandsDown && d.isGun && RMInput.Aim;
             Scoped = Aiming && current == WeaponId.Sniper;
             if (controller.HandsDown) return;
-            bool busy = Time.time < busyUntil;
+            bool busy = Time.time < busyUntil || Time.time < PhotoAlbum.PoseUntil;   // no attacks during a photo
 
             if (d.grip == Grip.Throw)
             {

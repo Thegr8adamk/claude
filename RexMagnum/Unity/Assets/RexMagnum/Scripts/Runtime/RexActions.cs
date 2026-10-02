@@ -92,8 +92,12 @@ namespace RexMagnum
                 if (nearest != null) nearest.OnPhoto();
                 if (guest != null) Progress.Add("guest_photos");
                 RexVoice.Say(gameObject, guest != null ? "PhotoGuest" : nearest != null ? "Photo" : "PhotoAlone");
+                // a stunned blob or a guest gets pulled in; an un-stunned blob stays (and fights back in the shot)
+                Transform pulled = guest != null ? guest.transform
+                                 : nearest != null && nearest.IsStunned && nearest.GetComponent<KingGlorpBoss>() == null ? nearest.transform : null;
                 PhotoAlbum.Take(this, guest != null ? "Guest" : nearest == null ? "" :
-                                      nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString());
+                                      nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString(),
+                                transform, pulled);
             }
             controller.FaceAim = Time.time < faceAimUntil;
         }
