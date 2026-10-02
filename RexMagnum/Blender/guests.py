@@ -215,24 +215,17 @@ def make_top(body, L, kind, colour, name, look):
         torso = abs(c.x) < abs(L["sh_l"].x) + 0.04 and t is None
         if kind == "bikini":
             return torso and chest - 0.09 < c.z < chest + 0.07 and (c.y < 0.02 or chest - 0.03 < c.z < chest + 0.0)
-        if kind == "tank":
-            if t is not None or not torso or c.z < hip - 0.06:
+        if kind in ("tank", "dress"):               # straight neckline, curving down into the armholes;
+            if t is not None or not torso or c.z < hip - 0.06:   # straps are separate ribbons (make_straps)
                 return False
-            ax, sx = abs(c.x), abs(L["sh_l"].x)
-            if ax < 0.42 * sx:                       # scoop neck: lower in front than at the back
-                return c.z < chest + (0.05 if c.y < cy else 0.1)
-            if ax < 0.72 * sx:                       # strap: up and over the shoulder
-                return c.z < neck_z + 0.04
-            return c.z < chest - 0.01                # armhole
+            sx = abs(L["sh_l"].x)
+            e = min(1.0, max(0.0, (abs(c.x) - 0.5 * sx) / (0.45 * sx)))
+            top = 0.05 if c.y < cy else 0.09           # neckline height: front, back
+            return c.z < chest + top + (-0.07 - top) * e * e * (3 - 2 * e)   # front + back meet under the arm
         if kind in ("tshirt", "polo"):
             if t is not None:
                 return t < (0.45 if kind == "tshirt" else 0.4)
             return torso and hip - 0.1 < c.z < neck_z + 0.01
-        if kind == "dress":
-            if t is not None:
-                return False
-            # bodice only; the skirt is a separate flared cone (make_skirt), so it does not split into trousers
-            return torso and hip - 0.04 < c.z < neck_z - 0.05 and (abs(c.x) > 0.035 or c.z < chest + 0.05)
         return False
 
     def off(c, n):
@@ -247,12 +240,57 @@ def make_top(body, L, kind, colour, name, look):
     ob = look.shell(body, f"{name}_Top", keep, off, mat)
     clean_hems(ob)
     look.smooth_shell(ob, 6 if kind == "dress" else 3, 0.5)
+    if kind in ("tank", "dress"):
+        make_straps(body, L, mat, name, cy, width=0.016 if kind == "dress" else 0.045)
     if kind == "dress":
-        make_skirt(body, L, mat, name)
+        make_skirt(body, L, mat, name, ob)
     return ob
 
 
-def make_skirt(body, L, mat, name, rings=12, segs=48):
+def make_straps(body, L, mat, name, cy, width, segs=24):
+    """Two clean ribbon straps from the front neckline, over the shoulder, to the back neckline. Each follows the
+    body surface (largest radius per direction in a thin slice), 6 mm out, so it never cuts into the skin."""
+    sx = abs(float(L["sh_l"].x))
+    chest = L["chest_z"]
+    zc = chest - 0.02                                   # centre of the arc, inside the chest
+    bm = bmesh.new()
+    for side in (-1, 1):
+        xp = side * 0.6 * sx
+        sl = body.co[(np.abs(body.co[:, 0] - xp) < 0.012) & (body.co[:, 2] > chest - 0.02)]
+        sl = sl[sl[:, 2] < float(L["sh_l"].z) + 0.07]       # shoulder top only (not the neck, head or hair)
+        ang = np.arctan2(sl[:, 2] - zc, cy - sl[:, 1])   # 0 = front, pi/2 = up, pi = back
+        rad = np.hypot(sl[:, 2] - zc, sl[:, 1] - cy)
+        # arc from below the front neckline, over the shoulder, to below the back neckline
+        a0, a1 = 0.3, math.pi - 0.5             # both ends tuck into the bodice
+        prev = None
+        for i in range(segs + 1):
+            a = a0 + (a1 - a0) * i / segs
+            m = np.abs(ang - a) < 0.12
+            r = float(rad[m].max()) if m.any() else float(rad.max())
+            r += 0.006
+            y, z = cy - math.cos(a) * r, zc + math.sin(a) * r
+            pair = [bm.verts.new((xp - width / 2, y, z)), bm.verts.new((xp + width / 2, y, z))]
+            if prev:
+                bm.faces.new((prev[0], prev[1], pair[1], pair[0]))
+            prev = pair
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(f"{name}_Straps")
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    me.materials.append(mat)
+    ob = bpy.data.objects.new(f"{name}_Straps", me)
+    bpy.context.scene.collection.objects.link(ob)
+    sm = ob.modifiers.new("Smooth", "SMOOTH")
+    sm.iterations = 3
+    so = ob.modifiers.new("Thickness", "SOLIDIFY")
+    so.thickness = 0.003
+    so.offset = 1.0
+    return ob
+
+
+def make_skirt(body, L, mat, name, bodice, rings=12, segs=48):
     """Skirt from the waist (overlapping the bodice) down to the knee. The top ring follows the body shape at the
     bodice distance, so there is no step at the waist; lower rings flare out with soft folds. The radius per
     direction never gets smaller going down (widest body point above), so the legs never poke through."""
@@ -276,6 +314,16 @@ def make_skirt(body, L, mat, name, rings=12, segs=48):
             r = np.where(r > 0, r, np.maximum(np.roll(r, 1), np.roll(r, -1)))
         return np.maximum(r, (np.roll(r, 1) + r + np.roll(r, -1)) / 3)   # no single-bin dips
 
+    # finished bodice (smoothing + thickness applied): the skirt top sits right on it, so there is no ledge
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = bodice.evaluated_get(dg)
+    bme = ev.to_mesh()
+    bco = np.array([tuple(bodice.matrix_world @ v.co) for v in bme.vertices])
+    ev.to_mesh_clear()
+    bb = bco[(bco[:, 2] > top_z - 0.015) & (bco[:, 2] < top_z + 0.015)]
+    top = np.zeros(segs)
+    bbins = ((np.arctan2(bb[:, 1] - cy, bb[:, 0]) % math.tau) / math.tau * segs).astype(int) % segs
+    np.maximum.at(top, bbins, np.hypot(bb[:, 0], bb[:, 1] - cy))
     bm = bmesh.new()
     prev, widest = None, np.zeros(segs)
     for r_i in range(rings + 1):
@@ -286,7 +334,11 @@ def make_skirt(body, L, mat, name, rings=12, segs=48):
         for k in range(segs):
             a = math.tau * (k + 0.5) / segs
             flare = (0.09 * math.cos(a) ** 2 + 0.07 * math.sin(a) ** 2) * t * t
-            rr = (widest[k] + 0.009 + 0.012 * t + flare) * (1 + 0.035 * t * math.sin(a * 8))
+            if r_i == 0 and top[k] > 0:
+                base = top[k] + 0.0015                # top ring: right on the bodice
+            else:
+                base = max(widest[k] + 0.009 + 0.012 * t, top[k] + 0.0015)   # never inside the bodice or body
+            rr = (base + flare) * (1 + 0.035 * t * math.sin(a * 8))
             ring.append(bm.verts.new((math.cos(a) * rr, cy + math.sin(a) * rr, z)))
         if prev:
             for k in range(segs):
