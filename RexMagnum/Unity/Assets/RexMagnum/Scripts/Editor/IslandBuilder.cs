@@ -541,13 +541,15 @@ namespace RexMagnum.EditorTools
                 var lg = owner.AddComponent<LODGroup>();
                 lg.SetLODs(parts[pi].Select((rl, li) => new LOD(heights[li], rl)).ToArray());
                 lg.RecalculateBounds();
-                // a part is smaller than the building: its screen height drops sooner. Scaled by part / building size
-                // (at least 0.35), each part switches at about the distance the whole building did (one factor for all
-                // levels: still strictly decreasing, > 0)
+                // every part measures the WHOLE building (its size, from its centre): all parts of a building switch
+                // LOD at the same distance (no seams between a near part at LOD0 and a far one at LOD1); the renderers
+                // still cull per part. The old per-part height scaling switched neighbouring parts at different ranges.
                 if (parts.Count > 1 && wholeSize > 0f)
                 {
-                    float scale = Mathf.Clamp(lg.size / wholeSize, 0.35f, 1f);
-                    lg.SetLODs(parts[pi].Select((rl, li) => new LOD(heights[li] * scale, rl)).ToArray());
+                    var ls = owner.transform.lossyScale;
+                    float sc = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y), Mathf.Abs(ls.z));
+                    lg.localReferencePoint = owner.transform.InverseTransformPoint(wholeBox.center);
+                    lg.size = sc > 0f ? wholeSize / sc : wholeSize;          // LODGroup.size is in local units
                 }
             }
             MarkUnreadable();
@@ -1892,8 +1894,26 @@ namespace RexMagnum.EditorTools
             r.shadowCastingMode = pr.kind == "fern" ? ShadowCastingMode.Off : ShadowCastingMode.On;
             var lg = root.AddComponent<LODGroup>();
             // palms / trees: a cross-quad picture of the tree far away (the terrain's own billboards only work
-            // with SpeedTree shaders, so LODGroup trees drew the full mesh out to treeDistance)
+            // with SpeedTree shaders, so LODGroup trees drew the full mesh out to treeDistance); the picture is
+            // baked from the full mesh
             var far = pr.kind == "palm" || pr.kind == "tree" ? TreeImpostor(mesh, mats, pr.name) : null;
+            // middle LOD: <Name>_LOD1.fbx, the same tree from island_hq at lod=1 (~1k tris instead of 3.2k-4.7k;
+            // up to ~1200 trees within 200 m in the jungle). QualityAuto turns its shadows off on Low / phones.
+            Renderer mid = null;
+            if (far != null)
+            {
+                var (lm, lmats) = BakedMesh(pr.fbx.Replace(".fbx", "_LOD1.fbx"), pr.name + "_LOD1");
+                if (lm != null)
+                {
+                    var mg = new GameObject(pr.name + "_LOD1");
+                    mg.transform.SetParent(root.transform, false);
+                    mg.AddComponent<MeshFilter>().sharedMesh = lm;
+                    mid = mg.AddComponent<MeshRenderer>();
+                    mid.sharedMaterials = lmats;
+                    mid.shadowCastingMode = ShadowCastingMode.On;
+                }
+                else Debug.LogWarning($"[Rex Magnum] {pr.name}_LOD1.fbx missing (island_export.py --trees): mesh -> picture");
+            }
             if (far != null)
             {
                 var fg = new GameObject(pr.name + "_Far");
@@ -1902,7 +1922,9 @@ namespace RexMagnum.EditorTools
                 var fr = fg.AddComponent<MeshRenderer>();
                 fr.sharedMaterial = far.Value.mat;
                 fr.shadowCastingMode = ShadowCastingMode.Off;      // far beyond the shadow distance anyway
-                lg.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r }), new LOD(0.008f, new Renderer[] { fr }) });
+                lg.SetLODs(mid != null
+                    ? new[] { new LOD(0.25f, new Renderer[] { r }), new LOD(0.06f, new Renderer[] { mid }), new LOD(0.008f, new Renderer[] { fr }) }
+                    : new[] { new LOD(0.06f, new Renderer[] { r }), new LOD(0.008f, new Renderer[] { fr }) });
                 lg.fadeMode = LODFadeMode.CrossFade;        // dithered blend mesh <-> picture instead of a pop
                 lg.animateCrossFading = true;               // time-based: the LODs' fade widths stay 0
             }

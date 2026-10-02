@@ -3,6 +3,7 @@
 Reads Island_v02.blend (built by build_island_v2.py) and writes Unity/Assets/RexMagnum/Island/:
   Buildings/<Asset>.fbx      one file per building zone, world coordinates, objects <Asset>_LOD0 / <Asset>_LOD1
   Vegetation/<Proto>.fbx     palms, jungle trees, ferns, boulders, grass clumps (local coordinates)
+  Vegetation/<Proto>_LOD1.fbx  ~1k-tri middle LOD of each palm / jungle tree (same generator, lod=1)
   Textures/*.png             baked tileable PBR tiles (base, normal, mask), terrain layers, water normal, falls
   island_splat0/1.png        terrain paint weights (RGBA + RG) for 6 terrain layers
   Island.json                materials, assets, vegetation instances, terrain + spawn data for IslandBuilder.cs
@@ -619,6 +620,8 @@ def export_vegetation(mats_used, kinds=("Palm", "Jungle", "FernC", "BoulderC", "
                 "fern" if n.startswith("Fern") else "rock" if n.startswith("Boulder") else "grass")
         protos.append(dict(name=n, fbx=f"Vegetation/{n}.fbx", kind=kind))
         bpy.data.objects.remove(ob)
+        if kind in ("palm", "tree"):
+            export_tree_lod1(n, mats_used)
     index = {p["name"]: i for i, p in enumerate(protos)}
     inst = []
     for o in bpy.data.collections["Vegetation"].objects:
@@ -628,6 +631,37 @@ def export_vegetation(mats_used, kinds=("Palm", "Jungle", "FernC", "BoulderC", "
         inst.extend([index[c.name], round(o.location.x, 2), round(o.location.y, 2), round(o.location.z, 2),
                      round(o.rotation_euler.z, 3), round(o.scale.x, 3)])     # flat: 6 numbers per plant
     return protos, inst
+
+
+def tree_protos():
+    mats = bpy.data.materials
+    return dict(palm_bark=mats["PalmBark"], bark=mats["JungleBark"], palm_leaf=mats["PalmLeaf"],
+                broad_leaf=mats["BroadLeaf"], coconut=mats["CoconutRaw"])
+
+
+def export_tree_lod1(n, mats_used):
+    """<n>_LOD1.fbx: the same palm / jungle tree rebuilt by island_hq at lod=1 (same seed -> same silhouette,
+    same materials and Wind colours, ~1k tris). Built in a throw-away collection, not kept in the blend."""
+    import island_hq as HQ
+    import re
+    seed = int(re.sub(r"\D", "", n))
+    pc = bpy.data.collections.get("Protos")
+    hid = pc.hide_render if pc else None           # island_hq.coll() un-hides it; the bakes after this want it as it was
+    c = (HQ.make_palm if n.startswith("Palm") else HQ.make_jungle_tree)(seed, tree_protos(), lod=1)
+    objs = list(c.objects)
+    ob = bpy.data.objects.new(n + "_Lite", joined_mesh(objs, n + "_Lite", mats_used))
+    temp_collection().objects.link(ob)
+    export_fbx([ob], os.path.join(VEG, f"{n}_LOD1.fbx"), "LINEAR")
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    print(f"[Export] {n}_LOD1: {tris} tris", flush=True)
+    for o in objs + [ob]:
+        me = o.data
+        bpy.data.objects.remove(o)
+        if me.users == 0:
+            bpy.data.meshes.remove(me)
+    bpy.data.collections.remove(c)
+    if hid is not None:
+        bpy.data.collections["Protos"].hide_render = hid
 
 
 def axis_probe():
@@ -836,9 +870,7 @@ def rebuild_trees(blend):
     Prints the triangle count of each tree."""
     import island_hq as HQ
     bpy.ops.wm.open_mainfile(filepath=blend)
-    mats = bpy.data.materials
-    protos = dict(palm_bark=mats["PalmBark"], bark=mats["JungleBark"], palm_leaf=mats["PalmLeaf"],
-                  broad_leaf=mats["BroadLeaf"], coconut=mats["CoconutRaw"])
+    protos = tree_protos()
     import re
     for c in [c for c in bpy.data.collections if re.fullmatch(r"(Palm|Jungle)\d+", c.name) and c.objects]:
         seed = int(re.sub(r"\D", "", c.name))

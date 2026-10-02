@@ -410,9 +410,12 @@ def leaf_card(bm, uv, pts_rows, cols_rows):
                 lp[uv].uv = (a / (ni - 1), c / (nj - 1))
 
 
-def make_palm(seed, protos):
-    """Coconut palm, ~3.5-4.5k tris: ringed, curved, tapering trunk and 12-16 arching fronds of drooping leaflets."""
+def make_palm(seed, protos, lod=0):
+    """Coconut palm, ~3.5-4.5k tris: ringed, curved, tapering trunk and 12-16 arching fronds of drooping leaflets.
+    lod=1: the same palm (same random draws, so the same silhouette) at ~1k tris for the middle LOD: fewer trunk
+    rings / sides, every other leaflet (wider, two segments), half the rachis segments."""
     rng = random.Random(seed)
+    lo = lod > 0
     up = Vector((0, 0, 1))
     bm = bmesh.new()
     H = rng.uniform(9, 13)
@@ -425,7 +428,11 @@ def make_palm(seed, protos):
     radii = [0.29 - 0.11 * t + 0.14 * max(0.0, 1 - t * 12) ** 2 + 0.03 * max(0.0, t - 0.9) * 10 for t in ts]
     RT = 0.4                                       # main bend weight at the crown
     cols = [(RT * t * t, 0.0, 0.0) for t in ts]
-    bark_tube(bm, pts, radii, 12, cols, bulge=lambda i, a: 1.0 + (0.07 if i % 2 == 0 and 0 < i < NR - 2 else 0.0))
+    if lo:                                         # 10 rings x 6 sides, no leaf-scar rings
+        keep = [round(i * (NR - 1) / 9) for i in range(10)]
+        bark_tube(bm, [pts[i] for i in keep], [radii[i] for i in keep], 6, [cols[i] for i in keep])
+    else:
+        bark_tube(bm, pts, radii, 12, cols, bulge=lambda i, a: 1.0 + (0.07 if i % 2 == 0 and 0 < i < NR - 2 else 0.0))
     trunk = mesh_ob(f"PalmTrunk{seed}", bm, protos["palm_bark"], "Protos")
     top = pts[-1] + up * 0.15
     bm = bmesh.new()
@@ -457,22 +464,28 @@ def make_palm(seed, protos):
         for r, cr in zip(vs, crow):
             for v, c in zip(r, cr):
                 v[cl] = (*c, 1.0)
-        for k in range(NS):
-            fc = bm.faces.new((vs[k][0], vs[k][1], vs[k + 1][1], vs[k + 1][0]))
-            for lp, c in zip(fc.loops, ((0.44, k / NS), (0.56, k / NS), (0.56, (k + 1) / NS), (0.44, (k + 1) / NS))):
-                lp[uv].uv = c
+        if lo:                                     # lod 1: no rachis strip (10 cm wide: sub-pixel that far out)
+            bmesh.ops.delete(bm, geom=[v for r in vs for v in r], context="VERTS")
+        else:
+            for k in range(NS):
+                fc = bm.faces.new((vs[k][0], vs[k][1], vs[k + 1][1], vs[k + 1][0]))
+                for lp, c in zip(fc.loops, ((0.44, k / NS), (0.56, k / NS), (0.56, (k + 1) / NS), (0.44, (k + 1) / NS))):
+                    lp[uv].uv = c
         for k in range(1, NS - 1):                 # leaflets on both sides, three bent segments each
             tk = k / NS
             T = (spine[k + 1] - spine[k - 1]).normalized()
             S = T.cross(up).normalized()
             ll = (0.3 + 0.95 * math.sin(tk * math.pi * 0.95)) * L / 4.4
-            hw = 0.075 + 0.04 * math.sin(tk * math.pi)
+            hw = (0.075 + 0.04 * math.sin(tk * math.pi)) * (1.8 if lo else 1.0)   # lod 1: wider, fill the gaps
             for s in (-1, 1):
                 d0 = (S * s * 0.85 + T * 0.55 + up * 0.22).normalized()
-                bend = rng.uniform(0.35, 0.6)
+                bend = rng.uniform(0.35, 0.6)      # drawn for every leaflet: lod 1 keeps the same random sequence
+                if lo and k % 2 == 0:
+                    continue
                 pr, cr = [], []
-                for j in range(4):
-                    u = j / 3
+                nseg = 2 if lo else 3
+                for j in range(nseg + 1):
+                    u = j / nseg
                     p = spine[k] + d0 * (ll * u) - up * (bend * ll * u * u)
                     pr.append([p - T * hw, p + T * hw])
                     c = (RT + 0.3 * tk + 0.05 * u, g, min(1.0, 0.6 * tk + 0.4 * u + 0.15))
@@ -494,9 +507,12 @@ def make_palm(seed, protos):
     return c
 
 
-def make_jungle_tree(seed, protos):
-    """Broadleaf canopy tree, ~4-5k tris: buttressed curved trunk, arching branches with twigs, layered leaf clumps."""
+def make_jungle_tree(seed, protos, lod=0):
+    """Broadleaf canopy tree, ~4-5k tris: buttressed curved trunk, arching branches with twigs, layered leaf clumps.
+    lod=1: the same tree (same random draws) at ~1k tris for the middle LOD: coarser tubes, every other leaf card
+    (bigger, flat across)."""
     rng = random.Random(seed + 100)
+    lo = lod > 0
     up = Vector((0, 0, 1))
     bm = bmesh.new()
     H = rng.uniform(14, 22)
@@ -510,7 +526,12 @@ def make_jungle_tree(seed, protos):
     nb = rng.randint(4, 6)
     buttress = lambda i, a: 1.0 + 0.7 * max(0.0, math.cos(a * nb + ph)) ** 3 * max(0.0, 1 - ts[i] * 5) ** 2 \
         + (0.04 if i % 3 == 0 else 0.0)            # flared roots at the base, faint growth rings above
-    bark_tube(bm, pts, radii, 14, cols, bulge=buttress)
+    if lo:                                          # 8 rings x 7 sides, buttresses kept at the base
+        keep = [0, 1, 2, 4, 7, 11, 15, NR - 1]
+        bark_tube(bm, [pts[i] for i in keep], [radii[i] for i in keep], 7, [cols[i] for i in keep],
+                  bulge=lambda i, a: buttress(keep[i], a))
+    else:
+        bark_tube(bm, pts, radii, 14, cols, bulge=buttress)
     ends = []                                       # (point, wind colour, cards) of every leaf clump
     nbr = rng.randint(5, 7)
     for bi in range(nbr):
@@ -523,7 +544,11 @@ def make_jungle_tree(seed, protos):
         L = rng.uniform(3.5, 6.5)
         bp = [start + d * (L * t / 7) + up * (L * 0.18 * (t / 7) ** 2) for t in range(8)]
         bcols = [(r0 + 0.12 * t / 7, g, 0.35 * t / 7) for t in range(8)]
-        bark_tube(bm, bp, [radii[i0] * 0.45 * (1 - 0.8 * t / 7) + 0.04 for t in range(8)], 7, bcols, cap=True)
+        br = [radii[i0] * 0.45 * (1 - 0.8 * t / 7) + 0.04 for t in range(8)]
+        if lo:
+            bark_tube(bm, bp[::3] + [bp[-1]], br[::3] + [br[-1]], 4, bcols[::3] + [bcols[-1]], cap=True)
+        else:
+            bark_tube(bm, bp, br, 7, bcols, cap=True)
         ends.append((bp[-1], bcols[-1], 20))
         for tw in range(2):                         # two twigs off the outer half of each branch
             j = rng.randint(3, 5)
@@ -531,7 +556,11 @@ def make_jungle_tree(seed, protos):
             tl = rng.uniform(1.5, 2.6)
             tp = [bp[j] + sd * (tl * t / 3) for t in range(4)]
             tc = [(bcols[j][0] + 0.06 * t / 3, (g + 0.13 * (tw + 1)) % 1.0, bcols[j][2] + 0.15 * t / 3) for t in range(4)]
-            bark_tube(bm, tp, [0.09 * (1 - 0.6 * t / 3) + 0.02 for t in range(4)], 5, tc, cap=True)
+            tr = [0.09 * (1 - 0.6 * t / 3) + 0.02 for t in range(4)]
+            if lo:
+                bark_tube(bm, [tp[0], tp[3]], [tr[0], tr[3]], 3, [tc[0], tc[3]], cap=True)
+            else:
+                bark_tube(bm, tp, tr, 5, tc, cap=True)
             ends.append((tp[-1], tc[-1], 14))
     ends.append((pts[-1] + up * 0.6, (RT, rng.random(), 0.3), 28))
     trunk = mesh_ob(f"JTrunk{seed}", bm, protos["bark"], "Protos")
@@ -552,12 +581,16 @@ def make_jungle_tree(seed, protos):
             if t2.dot(dirv) < 0:
                 t2 = -t2
             s = rng.uniform(0.9, 1.5) * (0.8 if inner else 1.0)
+            if lo and k % 2:                        # lod 1: every other card (all random draws above still made)
+                continue
+            if lo:
+                s *= 1.35
             pr, cr = [], []
             for j in range(3):                      # 3 x 3 grid: cupped across, drooping at the outer edge
                 v = j - 1
                 row, crow = [], []
-                for i in range(3):
-                    u = i - 1
+                for i in ((-1, 1) if lo else (-1, 0, 1)):    # lod 1: 3 x 2, flat across
+                    u = i
                     q = p + (t1 * u + t2 * v) * s + nrm * (0.18 * s * (1 - u * u)) - up * (0.3 * s * max(0, v) ** 2)
                     row.append(q)
                     crow.append((r0 + 0.05 * (v + 1), (g + 0.07 * (k % 4)) % 1.0, min(1.0, max(b0, 0.45) + 0.25 * (v + 1))))

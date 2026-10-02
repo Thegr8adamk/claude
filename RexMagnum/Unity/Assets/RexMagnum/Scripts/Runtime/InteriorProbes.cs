@@ -16,6 +16,7 @@ namespace RexMagnum
         ReflectionProbe[] probes;
         int band = -1;
         bool busy, again;
+        Vector3? pinned;                       // ZoneStreamer.EnsureShown position of the probe rendering now
 
         void Start()
         {
@@ -51,12 +52,30 @@ namespace RexMagnum
                 foreach (var p in probes)
                 {
                     if (p == null || !p.isActiveAndEnabled) continue;
+                    // the probe's zone at full detail while it renders (a streamed-out zone sits at its lowest LOD)
+                    pinned = p.transform.position;
+                    ZoneStreamer.EnsureShown(pinned.Value);
                     int id = p.RenderProbe();
                     // wait for the slices (about 9 frames); cap it so a probe disabled mid-render cannot stall the pass
                     for (int f = 0; f < 30 && p != null && !p.IsFinishedRendering(id); f++) yield return null;
+                    Unpin();
                 }
             } while (again);
             busy = false;
+        }
+
+        void Unpin()
+        {
+            if (pinned.HasValue) ZoneStreamer.ReleaseShown(pinned.Value);
+            pinned = null;
+        }
+
+        void OnDisable()
+        {
+            // the pass coroutine stops with the object: release its zone and render again when enabled
+            Unpin();
+            busy = again = false;
+            band = -1;
         }
     }
 }

@@ -20,10 +20,17 @@ namespace RexMagnum
 
         public Zone[] zones;
 
-        /// <summary>True while every zone must be shown (DayNight: the island reflection probe is rendering).</summary>
-        public static bool HoldAll;
+        // Hold(): every zone shown (time-sliced) until the matching Release(); EnsureShown(pos): the zone at pos shown at
+        // once (InteriorProbes: a box probe must capture its zone at full detail, not the forced lowest LOD).
+        // Both run out after HoldTimeout (a caller that never released).
+        static int holds;
+        static readonly System.Collections.Generic.List<Vector3> pins = new System.Collections.Generic.List<Vector3>();
         static ZoneStreamer active;
-        static float holdUntil;
+        static float holdUntil, pinUntil;
+        const float HoldTimeout = 20f;
+
+        /// <summary>True while a Hold() is active.</summary>
+        public static bool Held => holds > 0;
 
         class State
         {
@@ -49,14 +56,54 @@ namespace RexMagnum
         const int EnablePerFrame = 150;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { HoldAll = false; active = null; holdUntil = 0f; }
+        static void ResetStatics() { holds = 0; pins.Clear(); active = null; holdUntil = pinUntil = 0f; }
 
-        /// <summary>Shows every zone at once and holds them (until HoldAll is cleared, 20 s at most).</summary>
-        public static void ShowAllNow()
+        /// <summary>Shows every zone and keeps them shown until the matching Release() (HoldTimeout at most). Hidden
+        /// zones come back a few renderers per frame (an instant show of thousands of renderers hitched on phones).</summary>
+        public static void Hold()
         {
-            HoldAll = true;
-            holdUntil = Time.unscaledTime + 20f;
-            if (active != null) active.Refresh(true);
+            holds++;
+            holdUntil = Time.unscaledTime + HoldTimeout;
+            if (active != null) active.Refresh(false);
+        }
+
+        public static void Release() { if (holds > 0) holds--; }
+
+        /// <summary>Shows the zone at pos (the smallest zone box holding it) at once, full detail, and keeps it shown
+        /// until ReleaseShown(pos) (HoldTimeout at most). One zone: cheap enough to do in one frame.</summary>
+        public static void EnsureShown(Vector3 pos)
+        {
+            pins.Add(pos);
+            pinUntil = Time.unscaledTime + HoldTimeout;
+            if (active == null || active.st == null) return;      // not culled yet: Refresh respects the pin later
+            int i = active.ZoneAt(pos);
+            if (i < 0) return;
+            var s = active.st[i];
+            if (s.hidden) active.Show(s, true);
+            else if (s.pending >= 0) active.Finish(s);
+        }
+
+        public static void ReleaseShown(Vector3 pos) => pins.Remove(pos);
+
+        /// <summary>Index of the smallest zone box that holds pos, -1 if none.</summary>
+        int ZoneAt(Vector3 pos)
+        {
+            int best = -1;
+            float bestVol = float.MaxValue;
+            for (int i = 0; i < st.Length; i++)
+            {
+                var b = st[i].b;
+                if (!b.Contains(pos)) continue;
+                float vol = b.size.x * b.size.y * b.size.z;
+                if (vol < bestVol) { bestVol = vol; best = i; }
+            }
+            return best;
+        }
+
+        bool Pinned(int i)
+        {
+            foreach (var p in pins) if (ZoneAt(p) == i) return true;
+            return false;
         }
 
         void OnEnable() => active = this;
@@ -121,7 +168,9 @@ namespace RexMagnum
         void Update()
         {
             if (st == null) return;
-            if (HoldAll && Time.unscaledTime > holdUntil) HoldAll = false;     // a probe pass that never reported back
+            // a hold / pin that never got released (caller destroyed mid-pass)
+            if (holds > 0 && Time.unscaledTime > holdUntil) holds = 0;
+            if (pins.Count > 0 && Time.unscaledTime > pinUntil) pins.Clear();
             // fast travel / zone doors / respawn: a jump refreshes now and shows the new zone at once (no slicing)
             bool jump = false;
             if (player != null)
@@ -153,8 +202,9 @@ namespace RexMagnum
             if (st == null) return;
             float r = Radius();
             int cams = Camera.allCamerasCount <= camBuf.Length ? Camera.GetAllCameras(camBuf) : 0;
-            foreach (var s in st)
+            for (int zi = 0; zi < st.Length; zi++)
             {
+                var s = st[zi];
                 // nearest viewpoint: Rex, the main / VR camera, and any other on-screen camera (kill cam, photo,
                 // title); render-to-texture cameras (mirrors, pool reflection) look at what Rex already sees
                 float d = float.MaxValue;
@@ -163,7 +213,7 @@ namespace RexMagnum
                     if (camBuf[c] != null && camBuf[c].targetTexture == null)
                         d = Mathf.Min(d, Mathf.Sqrt(s.b.SqrDistance(camBuf[c].transform.position)));
                 if (cams == 0 && Camera.main != null) d = Mathf.Min(d, Mathf.Sqrt(s.b.SqrDistance(Camera.main.transform.position)));
-                bool far = !HoldAll && d < float.MaxValue && d > (s.hidden ? r : r + Hysteresis);
+                bool far = holds == 0 && d < float.MaxValue && d > (s.hidden ? r : r + Hysteresis) && !(pins.Count > 0 && Pinned(zi));
                 if (far && !s.hidden) Hide(s);
                 else if (!far && s.hidden) Show(s, instant);
                 else if (!far && instant && s.pending >= 0) Finish(s);
@@ -221,7 +271,8 @@ namespace RexMagnum
         void OnDestroy()
         {
             if (active == this) active = null;
-            HoldAll = false;
+            holds = 0;
+            pins.Clear();
         }
     }
 }
