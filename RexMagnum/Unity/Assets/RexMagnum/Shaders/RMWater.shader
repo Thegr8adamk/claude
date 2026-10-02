@@ -53,7 +53,7 @@ Shader "RexMagnum/Water"
                 float _DepthFade, _NormalTiling, _NormalStrength, _FlowSpeed, _Smoothness, _FoamDepth;
                 float _WaveHeight, _WaveLength, _WaveFade, _River, _UsePlanar;
             CBUFFER_END
-            float _RMOceanCoarse, _RMWaterLow;     // globals (QualityAuto); 0 = not set = full quality
+            float _RMOceanCoarse, _RMWaterLow, _RMNoDepth;   // _RMNoDepth: 1 while a reflection camera without a depth texture renders     // globals (QualityAuto); 0 = not set = full quality
 
             struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V
@@ -155,7 +155,7 @@ Shader "RexMagnum/Water"
 
                 float2 suv = i.screenPos.xy / i.screenPos.w;
                 float sceneEye = LinearEyeDepth(SampleSceneDepth(suv), _ZBufferParams);
-                float depth = max(0, sceneEye - i.screenPos.w);
+                float depth = _RMNoDepth > 0.5 ? _DepthFade * 4 : max(0, sceneEye - i.screenPos.w);   // no depth: deep colour, no shore foam
                 float t = saturate(depth / _DepthFade);
                 float4 col = lerp(_ShallowColor, _DeepColor, t);
 

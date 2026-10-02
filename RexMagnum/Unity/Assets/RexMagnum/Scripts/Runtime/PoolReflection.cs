@@ -16,6 +16,7 @@ namespace RexMagnum
     [DefaultExecutionOrder(100)]                   // LateUpdate after the mirrors: their frame stamp is set by then
     public class PoolReflection : MonoBehaviour
     {
+        static readonly int NoDepthId = Shader.PropertyToID("_RMNoDepth");
         /// <summary>Unity's built-in "Water" layer: IslandBuilder puts the pool water renderer on it, so the reflection
         /// camera culls just the water (the glass rails / leaves of the same model stay in the reflection).</summary>
         public const int WaterLayer = 4;
@@ -206,7 +207,9 @@ namespace RexMagnum
                 foreach (var r in rig.fpArms.GetComponentsInChildren<Renderer>())
                     if (r.enabled) { armsOff.Add(r); r.enabled = false; }
             GL.invertCulling = true;
+            Shader.SetGlobalFloat(NoDepthId, 1f);          // this camera has no depth texture: water must not read another view's
             RenderPipeline.SubmitRenderRequest(reflCam, req);
+            Shader.SetGlobalFloat(NoDepthId, 0f);
             GL.invertCulling = false;
             foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             foreach (var r in armsOff) r.enabled = true;

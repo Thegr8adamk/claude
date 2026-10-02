@@ -32,7 +32,8 @@ namespace RexMagnum
         Material sky, clouds;
         float baseCover = 0.45f;
         QualityAuto quality;
-        float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f, glowNight = -1f;
+        float nextLine, nextEnv, glowNight = -1f;
+        int probeBand = -1, probeJumps;     // the island probe's day band (InteriorProbes' bands) / ZoneStreamer.Jumps seen
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
@@ -43,7 +44,6 @@ namespace RexMagnum
         {
             if (sun == null) sun = RenderSettings.sun;
             baseSun = sun != null ? sun.intensity : 2f;
-            probeTime = timeOfDay;      // the probe renders once on awake with this sky
             baseAmbient = RenderSettings.ambientIntensity;
             baseFog = RenderSettings.fogDensity;
             sky = RenderSettings.skybox != null ? new Material(RenderSettings.skybox) : null;   // do not edit the asset
@@ -186,15 +186,23 @@ namespace RexMagnum
                 if (islandProbe == null)
                 {
                     var go = GameObject.Find("ReflectionProbe");
-                    if (go != null && go.TryGetComponent(out islandProbe)) islandProbe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+                    if (go != null && go.TryGetComponent(out islandProbe))
+                    {
+                        islandProbe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+                        // one cube face per frame: a re-render is spread over ~9 frames, never six island renders in one
+                        islandProbe.timeSlicingMode = UnityEngine.Rendering.ReflectionProbeTimeSlicingMode.IndividualFaces;
+                    }
                 }
-                // the 2.4 km probe is expensive: at most every 30 s, and only when the sky has really changed
-                float dt = Mathf.Abs(Mathf.DeltaAngle(timeOfDay * 360f, probeTime * 360f)) / 360f;
-                if (islandProbe != null && Time.time >= nextProbe && dt > 0.015f)
+                // the 2.4 km probe renders the whole island: it rendered once on awake (OnAwake), then again only when
+                // the day band changes (day / dawn-dusk / night, the same bands as InteriorProbes) or after a fast
+                // travel (the zones far from the old spot were culled by ZoneStreamer). It was every 30 s all day.
+                int band = Night < 0.3f ? 0 : Night < 0.7f ? 1 : 2;
+                if (probeBand < 0) { probeBand = band; probeJumps = ZoneStreamer.Jumps; }
+                if (islandProbe != null && islandProbe.isActiveAndEnabled && (band != probeBand || ZoneStreamer.Jumps != probeJumps))
                 {
                     islandProbe.RenderProbe();
-                    probeTime = timeOfDay;
-                    nextProbe = Time.time + 30f;
+                    probeBand = band;
+                    probeJumps = ZoneStreamer.Jumps;
                 }
             }
             if (Night > 0.8f && Time.time > nextLine)

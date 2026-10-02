@@ -12,6 +12,7 @@ namespace RexMagnum
     [RequireComponent(typeof(Renderer))]
     public class PlanarMirror : MonoBehaviour
     {
+        static readonly int NoDepthId = Shader.PropertyToID("_RMNoDepth");
         static readonly System.Collections.Generic.List<PlanarMirror> all = new System.Collections.Generic.List<PlanarMirror>();
         void OnEnable() => all.Add(this);
         void OnDisable() => all.Remove(this);
@@ -211,7 +212,9 @@ namespace RexMagnum
                 foreach (var r in rig.fpArms.GetComponentsInChildren<Renderer>())
                     if (r.enabled) { armsOff.Add(r); r.enabled = false; }
             GL.invertCulling = true;
+            Shader.SetGlobalFloat(NoDepthId, 1f);          // this camera has no depth texture: water must not read another view's
             RenderPipeline.SubmitRenderRequest(mirrorCam, req);
+            Shader.SetGlobalFloat(NoDepthId, 0f);
             GL.invertCulling = false;
             foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             foreach (var r in armsOff) r.enabled = true;
