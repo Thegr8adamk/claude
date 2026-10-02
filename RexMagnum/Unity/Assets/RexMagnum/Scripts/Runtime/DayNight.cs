@@ -33,7 +33,7 @@ namespace RexMagnum
         float baseCover = 0.45f;
         QualityAuto quality;
         float nextLine, nextEnv, glowNight = -1f;
-        int probeBand = -1, probeId = -1;     // the island probe's day band (InteriorProbes' bands) / pass in flight
+        int probeBand = -1, probeId = -1; float probeWaitSince = -1f;     // the island probe's day band (InteriorProbes' bands) / pass in flight
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
@@ -196,14 +196,25 @@ namespace RexMagnum
                 // the 2.4 km probe renders the whole island: it rendered once on awake (OnAwake), then again only when
                 // the day band changes (day / dawn-dusk / night, the same bands as InteriorProbes). It was every 30 s all
                 // day. ZoneStreamer keeps the lowest LOD of far zones, so the probe sees the
-                // whole island without re-showing every detail renderer (that was a hitch on phones).
+                // whole island without re-showing every detail renderer (that was a hitch on phones). Very far zones
+                // (fully culled) get their lowest LOD back for the pass (ZoneStreamer.KeepLowAll).
                 int band = Night < 0.3f ? 0 : Night < 0.7f ? 1 : 2;
                 if (probeBand < 0) probeBand = band;
-                if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId))) probeId = -1;
+                if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId)))
+                {
+                    probeId = -1;
+                    ZoneStreamer.KeepLowAll(false);
+                }
                 if (islandProbe != null && islandProbe.isActiveAndEnabled && probeId < 0 && band != probeBand)
                 {
-                    probeId = islandProbe.RenderProbe();
-                    probeBand = band;
+                    // very far zones are fully culled: bring their lowest LOD back (sliced) for this pass, wait at most 2 s
+                    if (probeWaitSince < 0f) { probeWaitSince = Time.unscaledTime; ZoneStreamer.KeepLowAll(true); }
+                    if (ZoneStreamer.LowReady() || Time.unscaledTime - probeWaitSince > 2f)
+                    {
+                        probeWaitSince = -1f;
+                        probeId = islandProbe.RenderProbe();
+                        probeBand = band;
+                    }
                 }
             }
             if (Night > 0.8f && Time.time > nextLine)

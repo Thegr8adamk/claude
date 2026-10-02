@@ -58,7 +58,24 @@ namespace RexMagnum
         const float FarCull = 2.5f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { pins.Clear(); active = null; pinUntil = 0f; }
+        static void ResetStatics() { pins.Clear(); active = null; pinUntil = 0f; keepLow = false; }
+
+        static bool keepLow;
+        /// <summary>On: very far zones keep their lowest LOD (the 2.4 km island probe must see the whole island).</summary>
+        public static void KeepLowAll(bool on)
+        {
+            if (keepLow == on) return;
+            keepLow = on;
+            if (active != null) active.Refresh(false);
+        }
+
+        /// <summary>Every zone has its lowest LOD shown (no sliced low show still running).</summary>
+        public static bool LowReady()
+        {
+            if (active == null || active.st == null) return true;
+            foreach (var s in active.st) if (s.lowHidden || s.lowPending >= 0) return false;
+            return true;
+        }
 
         /// <summary>Shows every zone whose box touches box (a probe's world bounds: a tunnel probe can reach into the
         /// ruins zone) at full detail and keeps them shown until ReleaseShown(box) with the same box (HoldTimeout at
@@ -211,7 +228,7 @@ namespace RexMagnum
                 if (cams == 0 && Camera.main != null) d = Mathf.Min(d, Mathf.Sqrt(s.b.SqrDistance(Camera.main.transform.position)));
                 bool far = d < float.MaxValue && d > (s.hidden ? r : r + Hysteresis) && !(pins.Count > 0 && Pinned(zi));
                 // very far: the lowest level off too (same hysteresis)
-                bool veryFar = far && d > (s.lowHidden ? r * FarCull : r * FarCull + Hysteresis);
+                bool veryFar = !keepLow && far && d > (s.lowHidden ? r * FarCull : r * FarCull + Hysteresis);
                 if (far && !s.hidden) Hide(s);
                 else if (!far && s.hidden) Show(s, instant);
                 else if (!far && instant && s.pending >= 0) Finish(s);
@@ -305,6 +322,7 @@ namespace RexMagnum
         {
             if (active == this) active = null;
             pins.Clear();
+            keepLow = false;
         }
     }
 }
