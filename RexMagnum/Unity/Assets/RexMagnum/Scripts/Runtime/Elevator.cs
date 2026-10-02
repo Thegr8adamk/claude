@@ -72,13 +72,13 @@ namespace RexMagnum
         void Update()
         {
             bool moving = Mathf.Abs(cab.position.y - floorHeights[target]) > 0.01f;
-            if (RMInput.Use && Time.time > nextUse && rex != null)
+            if (RMInput.Use && Time.time > nextUse && rex != null && !PauseMenu.Open && !GameFlow.Busy)
             {
                 nextUse = Time.time + 0.5f;
                 if (RexInCab() && !moving)
-                    target = current + 1 < floorHeights.Length ? current + 1 : 0;
+                { target = current + 1 < floorHeights.Length ? current + 1 : 0; RMInput.ConsumeUse(); }
                 else if (Vector3.Distance(rex.transform.position, landingDoors[NearestFloor(rex.transform.position.y)].position) < 3f)
-                    target = NearestFloor(rex.transform.position.y);
+                { target = NearestFloor(rex.transform.position.y); RMInput.ConsumeUse(); }
                 // a new target starts the ride now (else 'current' jumps to it and Arrived runs at the start floor)
                 moving = Mathf.Abs(cab.position.y - floorHeights[target]) > 0.01f;
             }

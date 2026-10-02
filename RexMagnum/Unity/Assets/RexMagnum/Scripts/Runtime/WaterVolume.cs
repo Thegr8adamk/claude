@@ -5,8 +5,8 @@ namespace RexMagnum
 {
     /// <summary>
     /// Swimmable water (brief section 6: pool and sea; the green river too). Found at scene load from every
-    /// renderer that uses the RexMagnum/Water shader. The surface is the middle of the renderer bounds (flat water;
-    /// the ocean has symmetric wave bounds around sea level). Sloped water (a river mesh that is more than 1.5 m
+    /// renderer part (submesh) that uses the RexMagnum/Water shader. The surface is the top of that part (the ocean:
+    /// the middle, its wave bounds are symmetric around sea level). Sloped water (a river part more than 2.5 m
     /// high but not ocean-sized) is skipped. Water under a roof (caves, hotel floors) does not count.
     /// </summary>
     public static class WaterVolume
@@ -20,15 +20,31 @@ namespace RexMagnum
         {
             areas.Clear();
             foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
-                foreach (var m in r.sharedMaterials)
+            {
+                var mats = r.sharedMaterials;
+                var mesh = r.TryGetComponent<MeshFilter>(out var mf) ? mf.sharedMesh : null;
+                for (int i = 0; i < mats.Length; i++)
                 {
+                    var m = mats[i];
                     if (m == null || m.shader == null || m.shader.name != "RexMagnum/Water") continue;
-                    var b = r.bounds;
+                    // the water part only: pool water is joined with slides, umbrellas and the stage in one mesh,
+                    // whose whole bounds are far taller than the water
+                    var b = mesh != null && i < mesh.subMeshCount ? WorldBounds(mesh.GetSubMesh(i).bounds, r.localToWorldMatrix) : r.bounds;
                     bool ocean = b.size.x > 1000f || b.size.z > 1000f;
-                    if (!ocean && b.size.y > 1.5f) break;            // sloped river / falls: not swimmable as a box
-                    areas.Add(new Area { b = b, surface = b.center.y, slime = IsSlime(m) });
-                    break;
+                    if (!ocean && b.size.y > 2.5f) continue;            // sloped river / falls: not swimmable as a box
+                    // ocean: waves move symmetric around sea level; a pool or plunge pool: the top of the water
+                    areas.Add(new Area { b = b, surface = ocean ? b.center.y : b.max.y, slime = IsSlime(m) });
                 }
+            }
+        }
+
+        static Bounds WorldBounds(Bounds local, Matrix4x4 m)
+        {
+            var w = new Bounds(m.MultiplyPoint3x4(local.center), Vector3.zero);
+            for (int k = 0; k < 8; k++)
+                w.Encapsulate(m.MultiplyPoint3x4(local.center + Vector3.Scale(local.extents,
+                    new Vector3((k & 1) == 0 ? -1 : 1, (k & 2) == 0 ? -1 : 1, (k & 4) == 0 ? -1 : 1))));
+            return w;
         }
 
         static bool IsSlime(Material m)

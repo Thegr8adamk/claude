@@ -106,6 +106,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (GameFlow.Busy) { TouchState.Active = false; return; }    // title and intro: no touch buttons
             opacity = PlayerPrefs.GetFloat("RexMagnum_TouchOpacity", 0.45f);
             if (EditMode) { TouchState.Active = false; EditUpdate(); return; }
             var ts = Touchscreen.current;
@@ -186,7 +187,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (!TouchState.Active && !EditMode) return;
+            if (GameFlow.Busy || (!TouchState.Active && !EditMode)) return;
             var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
                 fontSize = Mathf.RoundToInt(H * 0.028f) };
             style.normal.textColor = Color.white;

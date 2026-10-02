@@ -20,7 +20,8 @@ namespace RexMagnum
         public static float Night { get; private set; }
         float baseSun, baseAmbient, baseFog, baseExposure;
         Material sky;
-        float nextLine;
+        float nextLine, nextEnv;
+        ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
 
@@ -84,6 +85,18 @@ namespace RexMagnum
                 foreach (var sp in spawners)
                     if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 2.5f, Night) * sp.factoryScale));
             if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
+            // ambient light and sky reflections follow the time of day (they were computed once, at start)
+            if (Time.time > nextEnv)
+            {
+                nextEnv = Time.time + 2f;
+                DynamicGI.UpdateEnvironment();
+                if (islandProbe == null)
+                {
+                    var go = GameObject.Find("ReflectionProbe");
+                    if (go != null && go.TryGetComponent(out islandProbe)) islandProbe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+                }
+                if (islandProbe != null && Mathf.Repeat(Time.time, 10f) < 2f) islandProbe.RenderProbe();   // about every 10 s
+            }
             if (Night > 0.8f && Time.time > nextLine)
             {
                 nextLine = Time.time + 240f;

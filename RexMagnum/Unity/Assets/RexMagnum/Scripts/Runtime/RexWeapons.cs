@@ -307,11 +307,11 @@ namespace RexMagnum
                 h.Damage(dmg, col.ClosestPoint(c), gameObject);
                 if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
                 if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
-                if (h.IsDead)
+                if (h.IsDead && blob != null)       // blobs only: the stuck door also has Health (no kill cam for a door)
                 {
                     KillLine(d, blob);
                     // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
-                    if ((heavy && d.killCamOnHold) || (blob != null && Blob.LivingNear(transform.position, 30f) == 0))
+                    if ((heavy && d.killCamOnHold) || Blob.LivingNear(transform.position, 30f) == 0)
                         KillCam.Show(h.transform, transform.position,
                             d.id == WeaponId.GolfClub && heavy ? KillCam.Style.Follow :
                             d.id == WeaponId.Towel ? KillCam.Style.Towel :

@@ -53,6 +53,7 @@ namespace RexMagnum
             Vector3 p = respawnPoint != null ? respawnPoint.position : startPos;
             float y = respawnPoint != null ? respawnPoint.eulerAngles.y : startYaw;
             ctrl.Teleport(p, y);
+            if (ctrl.cameraRig != null) ctrl.cameraRig.SetYaw(y);      // the view faces the way Rex wakes up
             if (ctrl.bodyAnimator) ctrl.bodyAnimator.Play("Locomotion", 0, 0f);
             if (ctrl.armsAnimator && ctrl.armsAnimator.gameObject.activeInHierarchy) ctrl.armsAnimator.Play("Locomotion", 0, 0f);
             health.ResetHealth();

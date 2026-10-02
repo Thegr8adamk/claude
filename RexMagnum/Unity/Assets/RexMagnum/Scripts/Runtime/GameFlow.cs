@@ -143,7 +143,7 @@ namespace RexMagnum
         void Choose(int i)
         {
             if (state != State.Title) return;
-            Sfx.Play("bottle_clink", titleCamera != null ? titleCamera.transform.position : Vector3.zero, 0.5f);
+            Sfx.Play("bottle_clink", playerCamera != null ? playerCamera.transform.position : Vector3.zero, 0.5f);   // at the listener
             if (i == 0) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; StartCoroutine(Intro()); }
             else if (i == 1) { inSettings = true; settings.page = 0; }
             else if (i == 2) Application.Quit();

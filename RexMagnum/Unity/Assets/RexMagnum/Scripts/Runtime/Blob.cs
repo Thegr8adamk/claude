@@ -137,7 +137,7 @@ namespace RexMagnum
 
             if (wasStunned && !IsStunned) Play("Locomotion", 0.2f);
             wasStunned = IsStunned;
-            if (rex == null || (rexHealth != null && rexHealth.IsDead) || IsStunned || Time.time < busyUntil)
+            if (rex == null || (rexHealth != null && rexHealth.IsDead) || IsStunned || Time.time < busyUntil || GameFlow.Busy)   // Busy: title + intro
             {
                 if (agent.isOnNavMesh) agent.isStopped = true;
                 return;
