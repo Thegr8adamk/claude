@@ -12,6 +12,17 @@ namespace RexMagnum
     [RequireComponent(typeof(Renderer))]
     public class PlanarMirror : MonoBehaviour
     {
+        static readonly System.Collections.Generic.List<PlanarMirror> all = new System.Collections.Generic.List<PlanarMirror>();
+        void OnEnable() => all.Add(this);
+        void OnDisable() => all.Remove(this);
+
+        /// <summary>Rex is close to a mirror (Taunt there = comb the side hair over the bald spot).</summary>
+        public static bool Near(Vector3 p)
+        {
+            foreach (var m in all) if (m != null && Vector3.Distance(m.transform.position, p) < 3f) return true;
+            return false;
+        }
+
         public Vector3 localNormal = Vector3.forward;
         public float activeDistance = 8f;
         public int resolution = 512;

@@ -18,6 +18,7 @@ namespace RexMagnum
         static readonly int Heavy = Animator.StringToHash("Heavy");
         static readonly int Taunt = Animator.StringToHash("Taunt");
         static readonly int Photo = Animator.StringToHash("Photo");
+        static readonly int Comb = Animator.StringToHash("Comb");
         static readonly int HandsDownHash = Animator.StringToHash("HandsDown");
 
         float pressTime = -1f, busyUntil, faceAimUntil;
@@ -59,7 +60,13 @@ namespace RexMagnum
                 if (RMInput.ActionUp) pressTime = -1f;
             }
 
-            if (RMInput.Taunt && !busy)
+            if (RMInput.Taunt && !busy && PlanarMirror.Near(transform.position))
+            {
+                // brief section 8: at a mirror Rex combs his thin side hair over the bald spot (PlanarMirror says the line)
+                Do(Comb, 2.4f);
+                if (face) face.Expression("SmugGrin", 2.4f);
+            }
+            else if (RMInput.Taunt && !busy)
             {
                 Do(Taunt, 1.6f);
                 if (face) face.Expression("SmugGrin", 1.6f);

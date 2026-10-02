@@ -378,6 +378,25 @@ def p_photo(P, t):
     P.fist("Left", 1.0, 0.0)
 
 
+def p_comb(P, t):
+    """Mirror (brief section 8): Rex combs his thin side hair over the bald spot with his fingers. Right hand up
+    to the right temple, three slow strokes back over the top, head tilted to admire the result."""
+    up_t = seg(t, 0.0, 0.18) * (1 - seg(t, 0.85, 1.0))
+    stroke = 0.5 - 0.5 * math.cos(math.tau * 3 * seg(t, 0.18, 0.85))     # 0 = temple, 1 = over the top
+    P.hips(pitch=-2 * up_t)
+    P.spine(bend=-3 * up_t, side=3 * up_t)
+    P.head(nod=-4 * up_t, turn=10 * up_t, tilt=12 * up_t)
+    P.leg("Left", 2, 4, spread=0.13)
+    P.leg("Right", 2, 4, spread=0.13)
+    P.arm_swing("Left", 0, 30, 0.35)                                     # other hand loose at the side
+    P.fist("Left", 0.4)
+    up = d(-0.2, -0.3, -0.9).lerp(d(-0.7, -0.25, 0.45), up_t)            # elbow out to the side
+    fore = d(-0.1, -0.6, -0.8).lerp(d(0.9, -0.1 + 0.4 * stroke, 0.3 - 0.1 * stroke), up_t)   # hand at the temple
+    hand = d(-0.1, -0.6, -0.8).lerp(d(0.4, 0.5 * stroke, 0.6), up_t)    # fingers sweep back over the top
+    P.arm_dirs("Right", up, fore, hand)
+    P.fist("Right", 0.15, 0.3)                                           # flat fingers, combing
+
+
 def p_hit(P, t):
     k = seg(t, 0.0, 0.15) * (1 - seg(t, 0.3, 1.0))
     P.hips((0, 0.04 * k, -0.02 * k), pitch=-6 * k)
@@ -460,6 +479,7 @@ ACTIONS = [
     ("Rex_Whip", 0.8, p_whip, False),
     ("Rex_Taunt", 1.8, p_taunt, False),
     ("Rex_Photo", 2.0, p_photo, False),
+    ("Rex_Comb", 2.4, p_comb, False),
     ("Rex_Hit", 0.5, p_hit, False),
     ("Rex_Slip", 1.6, p_slip, False),
     ("Rex_Death", 1.6, p_death, False),

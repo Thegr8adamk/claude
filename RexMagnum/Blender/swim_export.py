@@ -27,7 +27,7 @@ def main():
     bpy.context.scene.render.fps = rex_anim.FPS
     P = rex_anim.Poser(arm)
     acts = [rex_anim.make_action(arm, P, n, sec, fn, loop)
-            for n, sec, fn, loop in rex_anim.ACTIONS if n in ("Rex_Tread", "Rex_Paddle")]
+            for n, sec, fn, loop in rex_anim.ACTIONS if n in ("Rex_Tread", "Rex_Paddle", "Rex_Comb")]
     if "--render" in sys.argv:
         render(arm, acts, os.path.abspath(sys.argv[sys.argv.index("--render") + 1]))
     # only the swim actions go into this FBX

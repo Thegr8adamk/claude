@@ -232,9 +232,9 @@ namespace RexMagnum.EditorTools
             foreach (var c in mi.defaultClipAnimations)
             {
                 string n = c.takeName.Contains("|") ? c.takeName.Substring(c.takeName.LastIndexOf('|') + 1) : c.takeName;
-                if (n != "Rex_Tread" && n != "Rex_Paddle") continue;
+                if (n != "Rex_Tread" && n != "Rex_Paddle" && n != "Rex_Comb") continue;
                 c.name = n;
-                c.loopTime = c.loopPose = true;
+                c.loopTime = c.loopPose = n != "Rex_Comb";        // the mirror comb plays once
                 c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true;
                 c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
                 clips.Add(c);
@@ -261,7 +261,7 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("Grounded", AnimatorControllerParameterType.Bool);
             ac.AddParameter("HandsDown", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Swim", AnimatorControllerParameterType.Bool);
-            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death" };
+            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
             var layers = ac.layers;
@@ -301,7 +301,7 @@ namespace RexMagnum.EditorTools
             {
                 { "Jump", "Rex_Jump" }, { "Jab", "Rex_PunchJab" }, { "Heavy", "Rex_PunchHeavy" }, { "Swing", "Rex_Swing" },
                 { "Whip", "Rex_Whip" }, { "Taunt", "Rex_Taunt" }, { "Photo", "Rex_Photo" }, { "Hit", "Rex_Hit" },
-                { "Slip", "Rex_Slip" }, { "Death", "Rex_Death" },
+                { "Slip", "Rex_Slip" }, { "Death", "Rex_Death" }, { "Comb", "Rex_Comb" },
             };
             foreach (var kv in map)
             {
