@@ -157,6 +157,8 @@ def grass(ha, zones):
             z = ha(q.x, q.y)
             if z < 1.4 or z > 140:
                 continue
+            if HQ._river_dist(q.x, q.y) < 8.5:                 # no grass in the river
+                continue
             # slope check
             if abs(ha(q.x + 2, q.y) - z) > 1.2 or abs(ha(q.x, q.y + 2) - z) > 1.2:
                 continue

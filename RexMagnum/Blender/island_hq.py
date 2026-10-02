@@ -503,6 +503,8 @@ def scatter(height_at, protos_list, count, rng, zmin, zmax, clear, name, scale=(
             continue
         if avoid_lines and any(I._seg_dist(x, y, a, b) < 14 for a, b in VIEWS_CLEAR):
             continue
+        if _river_dist(x, y) < 9.5:           # nothing grows in the river channel
+            continue
         inst = bpy.data.objects.new(name, None)
         inst.instance_type = "COLLECTION"
         inst.instance_collection = protos_list[rng.randrange(len(protos_list))]
@@ -513,6 +515,22 @@ def scatter(height_at, protos_list, count, rng, zmin, zmax, clear, name, scale=(
         link(inst, "Vegetation")
         placed += 1
     return placed
+
+
+_RIVER_KD = []
+
+
+def _river_dist(x, y):
+    """Distance (m) from a point to the slime river path."""
+    if not _RIVER_KD:
+        from mathutils import kdtree
+        _, _, _, (rx, ry) = I.heightmap()
+        kd = kdtree.KDTree(len(rx))
+        for i, (a, b) in enumerate(zip(rx, ry)):
+            kd.insert((float(a), float(b), 0.0), i)
+        kd.balance()
+        _RIVER_KD.append(kd)
+    return _RIVER_KD[0].find((x, y, 0.0))[2]
 
 
 VIEWS_CLEAR = [((75, -420), (40, -268)), ((15, 110), (40, 250)), ((215, -40), (300, 70))]
