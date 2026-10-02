@@ -105,7 +105,8 @@ namespace RexMagnum
         {
             if (!health.IsDead && Random.value < Time.deltaTime * 0.06f) Sfx.Play("blob_idle", transform.position, 0.5f);
             if (health.IsDead) return;
-            if (animator != null) animator.SetFloat(SpeedHash, agent.velocity.magnitude);
+            if (animator != null) animator.SetFloat(SpeedHash, agent.enabled ? agent.velocity.magnitude : 0f);
+            if (!agent.enabled) return;            // rising out of the water (BlobSpawner)
 
             // Angry: darker color + shake (brief); a little faster
             float angry = IsAngry ? 1f : 0f;

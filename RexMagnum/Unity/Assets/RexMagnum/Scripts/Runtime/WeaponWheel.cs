@@ -29,10 +29,10 @@ namespace RexMagnum
 
         void Update()
         {
-            bool paused = Time.timeScale == 0f && !IsOpen;
-            bool want = !paused && controller != null && controller.InputEnabled && RMInput.WheelHeld;
-            if (want && !IsOpen) Open();
-            else if (!want && IsOpen) Close(!paused);
+            // opens only at normal speed (not in the pause menu, not during the kill cam slow motion)
+            bool want = controller != null && controller.InputEnabled && RMInput.WheelHeld;
+            if (want && !IsOpen && Mathf.Approximately(Time.timeScale, 1f)) Open();
+            else if (!want && IsOpen) Close(true);
             if (!IsOpen) return;
             Vector2 stick = RMInput.WheelStick;
             if (stick.magnitude > 0.5f) pointer = stick.normalized;
@@ -60,9 +60,10 @@ namespace RexMagnum
         void Close(bool equip)
         {
             IsOpen = false;
-            Time.timeScale = savedScale;
+            bool ours = Mathf.Approximately(Time.timeScale, slowMotion);   // the pause menu / kill cam may own it now
+            if (ours) Time.timeScale = savedScale;
             RMInput.LookBlocked = false;
-            if (equip && selected >= 0 && selected < items.Count) weapons.Equip(items[selected]);
+            if (equip && ours && selected >= 0 && selected < items.Count) weapons.Equip(items[selected]);
         }
 
         void OnDisable() { if (IsOpen) Close(false); }
