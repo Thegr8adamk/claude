@@ -7,11 +7,12 @@ namespace RexMagnum
 {
     /// <summary>
     /// "Defend the bar" (mid-game set piece, one time). Starts when Rex walks into the lounge bar on the hotel's
-    /// ground floor (within ~7 m of the counter) with the pistol, any time after that (before or after the blob factory,
+    /// ground floor (within ~7 m of the counter for 1.5 s, not running past; a notice warns first) with the pistol, any time after that (before or after the blob factory,
     /// never in the boss fight or the cave siege: it can not be missed; it unlocks the cart horn). Three short waves of
     /// blobs come in from the pool doors, or the buffet-terrace doors when Rex stands at the pool doors (at most MaxAlive
     /// at once); bouncer halves count to their wave; a wave blob that makes no progress for StuckAfter s is moved next
     /// to the bar. The spawners around the hotel hold off meanwhile (BlobSpawner).
+    /// Each wave puts a pistol ammo pickup on the counter (one at a time, removed at the end).
     /// Reward: all owned guns full + Progress "bar_defended" (saved: never again). Rex dies, goes more than
     /// AbortRadius away or stays upstairs over UpstairsAbort s: the event stops cleanly and can start again later
     /// (after a death the wave blobs go too). A win sets LastSummary (time, best time "bar_best_s", no hit).
@@ -35,6 +36,8 @@ namespace RexMagnum
         const int MaxAlive = 4;
         const float StuckAfter = 20f, StuckRexDistance = 15f;
         const float UpstairsAbort = 20f;                                  // this long above the ground floor: he left the bar
+        // start: this long near the counter, slower than a run (running past on the way to the pool doors is no start)
+        const float StartDwell = 1.5f, StartMaxSpeed = 4f;
         // replay: a small fixed spot at the counter, and no other Use target close by
         const float ReplayRadius = 2.5f, OtherUseRadius = 3f;
         static readonly int[] WaveSize = { 4, 6, 7 };
@@ -157,6 +160,9 @@ namespace RexMagnum
         Health rexHealth;
         RexWeapons weapons;
         float nextCheck, retryAt, startedAt, highSince = -1f;
+        float nearSince = -1f, noticeAgainAt, lastCheckTime;
+        Vector3 lastCheckPos;
+        WeaponPickup barAmmo;                                             // the pistol ammo on the counter (one per wave)
         int popped;
         readonly List<Blob> prefabs = new List<Blob>();
         readonly List<Blob> mine = new List<Blob>();
@@ -183,6 +189,7 @@ namespace RexMagnum
             if (inst == this) inst = null;
             // a scene reload / NEW GAME mid-event: the spawners must not stay on hold
             if (Active) { Active = false; Wave = 0; Left = 0; }
+            ClearAmmo();
             Replaying = false;
             ReplayAvailable = false;
         }
@@ -201,13 +208,26 @@ namespace RexMagnum
             nextCheck = Time.time + 0.5f;
             ReplayAvailable = CanReplay();
             // any time after the pistol (also after the factory): the event must not be missable (it unlocks the cart horn)
-            if (Time.time < retryAt || Done || KingGlorpBoss.Fighting || NightSiege.Active || GameFlow.Busy) return;
-            if (weapons == null || !weapons.Has(WeaponId.Pistol) || (rexHealth != null && rexHealth.IsDead)) return;
+            if (Time.time < retryAt || Done || KingGlorpBoss.Fighting || NightSiege.Active || GameFlow.Busy) { nearSince = -1f; return; }
+            if (weapons == null || !weapons.Has(WeaponId.Pistol) || (rexHealth != null && rexHealth.IsDead)) { nearSince = -1f; return; }
             Vector3 p = transform.position;
-            if (p.y > StartTop) return;                                       // the ground floor only
+            // no surprise start: Rex must stay near the counter for StartDwell s, not just run past it (stairs -> pool doors)
+            Vector3 moved = p - lastCheckPos; moved.y = 0f;
+            float speed = moved.magnitude / Mathf.Max(0.01f, Time.time - lastCheckTime);
+            lastCheckPos = p; lastCheckTime = Time.time;
             Vector3 flat = p - Center; flat.y = 0f;
-            if (flat.sqrMagnitude > StartRadius * StartRadius) return;
+            if (p.y > StartTop || flat.sqrMagnitude > StartRadius * StartRadius || speed > StartMaxSpeed)
+            { nearSince = -1f; return; }                                       // left (or just passing): cancelled quietly
             if (!FindPrefabs()) return;
+            if (nearSince < 0f)
+            {
+                nearSince = Time.time;
+                if (Time.time > noticeAgainAt) RexTestHUD.Notice("Blobs are coming for the bar! Stay to defend it.", 3f);
+                noticeAgainAt = Time.time + 15f;                              // in and out at the edge: no notice spam
+                return;
+            }
+            if (Time.time - nearSince < StartDwell) return;
+            nearSince = -1f;
             StartCoroutine(Run());
         }
 
@@ -260,6 +280,7 @@ namespace RexMagnum
 
         void Abort()
         {
+            ClearAmmo();
             Active = false;
             Wave = 0;
             Left = 0;
@@ -292,6 +313,7 @@ namespace RexMagnum
             {
                 Wave = w + 1;
                 RexTestHUD.Notice($"DEFEND THE BAR! Wave {Wave}/{Waves}", 3f);
+                PutAmmo();
                 int toSpawn = WaveSize[w];
                 float nextSpawn = Time.time + 1.5f, nextAlert = 0f, lastProgress = Time.time;
                 Left = toSpawn;
@@ -332,6 +354,37 @@ namespace RexMagnum
                 }
             }
             Win();
+        }
+
+        /// <summary>A pistol ammo pickup on the bar counter at each wave start (one at a time: an untaken one stays).
+        /// A copy of the guests' / blob loot pistol ammo, else of a world one.</summary>
+        void PutAmmo()
+        {
+            if (barAmmo != null) return;
+            GameObject src = null;
+            if (Blob.Loot != null)
+                foreach (var g in Blob.Loot)
+                    if (g != null && g.TryGetComponent(out WeaponPickup wp) && wp.ammoOnly && wp.weapon == WeaponId.Pistol) { src = g; break; }
+            bool fromWorld = false;
+            if (src == null)
+                foreach (var wp in FindObjectsByType<WeaponPickup>(FindObjectsSortMode.None))
+                    if (wp.ammoOnly && wp.weapon == WeaponId.Pistol) { src = wp.gameObject; fromWorld = true; break; }
+            if (src == null) return;
+            var go = Instantiate(src, Center + Vector3.up * 1.2f, Quaternion.identity);   // on the counter top
+            barAmmo = go.GetComponent<WeaponPickup>();
+            barAmmo.respawnSeconds = 0f;                                  // one time (Start does it too after the first 2 s)
+            if (fromWorld)
+            {
+                // a world copy brings its glow light and maybe its hidden (taken) state: fresh ones from Start
+                foreach (var l in go.GetComponentsInChildren<Light>(true)) Destroy(l.gameObject);
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.enabled = true;
+            }
+        }
+
+        void ClearAmmo()
+        {
+            if (barAmmo != null) Destroy(barAmmo.gameObject);
+            barAmmo = null;
         }
 
         /// <summary>Wave blobs far from Rex: warped to a dry NavMesh point near the bar (not next to Rex); none found:
@@ -383,6 +436,7 @@ namespace RexMagnum
 
         void Win()
         {
+            ClearAmmo();
             Active = false;
             Wave = 0;
             Left = 0;

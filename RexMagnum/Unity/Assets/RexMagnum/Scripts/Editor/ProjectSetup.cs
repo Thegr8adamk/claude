@@ -105,38 +105,54 @@ namespace RexMagnum.EditorTools
                 EditorApplication.OpenProject(System.IO.Directory.GetCurrentDirectory());
         }
 
-        /// <summary>A second, lightweight renderer in the asset's renderer list: a copy of the default one without renderer
-        /// features (no SSAO pass / depth-normals prepass). The mirror and pool reflection cameras pick it by name
-        /// (QualityAuto.UseAuxRenderer). Made once in Assets/Settings, shared by every URP asset.</summary>
+        /// <summary>A second, lightweight renderer in the asset's renderer list: a copy of the asset's default renderer without
+        /// renderer features (no SSAO pass / depth-normals prepass). The mirror and pool reflection cameras pick it by name
+        /// prefix (QualityAuto.UseAuxRenderer). One per source renderer ("RexMagnum_AuxRenderer_&lt;source name&gt;" in
+        /// Assets/Settings), re-copied from the source each run so it follows changes to it.</summary>
         internal static void AddAuxRenderer(UniversalRenderPipelineAsset urp)
         {
             var so = new SerializedObject(urp);
             var list = so.FindProperty("m_RendererDataList");
             if (list == null || list.arraySize == 0) return;
-            for (int i = 0; i < list.arraySize; i++)
-                if (list.GetArrayElementAtIndex(i).objectReferenceValue is ScriptableRendererData d && d.name == RexMagnum.QualityAuto.AuxRendererName) return;
-            string path = "Assets/Settings/" + RexMagnum.QualityAuto.AuxRendererName + ".asset";
+            // same rendering path / depth settings as the default renderer (one set of shader variants), no features
+            if (!(list.GetArrayElementAtIndex(0).objectReferenceValue is UniversalRendererData source)) return;
+            if (source.name.StartsWith(RexMagnum.QualityAuto.AuxRendererName, System.StringComparison.Ordinal)) return;
+            string auxName = RexMagnum.QualityAuto.AuxRendererName + "_" + source.name;
+            string path = "Assets/Settings/" + auxName + ".asset";
             var aux = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
             if (aux == null)
             {
                 if (!AssetDatabase.IsValidFolder("Assets/Settings")) AssetDatabase.CreateFolder("Assets", "Settings");
                 aux = ScriptableObject.CreateInstance<UniversalRendererData>();
-                // same rendering path / depth settings as the default renderer (one set of shader variants), no features
-                if (list.GetArrayElementAtIndex(0).objectReferenceValue is UniversalRendererData main)
-                {
-                    EditorUtility.CopySerialized(main, aux);
-                    var aso = new SerializedObject(aux);
-                    var feats = aso.FindProperty("m_RendererFeatures");
-                    if (feats != null) feats.arraySize = 0;
-                    var map = aso.FindProperty("m_RendererFeatureMap");
-                    if (map != null) map.arraySize = 0;
-                    aso.ApplyModifiedPropertiesWithoutUndo();
-                }
-                aux.name = RexMagnum.QualityAuto.AuxRendererName;
+                aux.name = auxName;
                 AssetDatabase.CreateAsset(aux, path);
             }
-            list.arraySize++;
-            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = aux;
+            EditorUtility.CopySerialized(source, aux);
+            var aso = new SerializedObject(aux);
+            var feats = aso.FindProperty("m_RendererFeatures");
+            if (feats != null) feats.arraySize = 0;
+            var map = aso.FindProperty("m_RendererFeatureMap");
+            if (map != null) map.arraySize = 0;
+            aso.ApplyModifiedPropertiesWithoutUndo();
+            aux.name = auxName;                            // CopySerialized brings the source's name along
+            EditorUtility.SetDirty(aux);
+            // this asset's list: our aux once; other aux entries (the old shared one, another source's) out, so the
+            // camera's prefix match finds this one
+            bool has = false;
+            for (int i = list.arraySize - 1; i >= 1; i--)
+            {
+                var e = list.GetArrayElementAtIndex(i);
+                if (!(e.objectReferenceValue is ScriptableRendererData d) ||
+                    !d.name.StartsWith(RexMagnum.QualityAuto.AuxRendererName, System.StringComparison.Ordinal)) continue;
+                if (d == aux && !has) { has = true; continue; }
+                e.objectReferenceValue = null;             // (older Unity only nulls an object entry on the first delete)
+                list.DeleteArrayElementAtIndex(i);
+            }
+            if (!has)
+            {
+                list.arraySize++;
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = aux;
+            }
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }

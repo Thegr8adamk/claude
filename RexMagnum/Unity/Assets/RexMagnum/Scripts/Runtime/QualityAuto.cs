@@ -46,11 +46,16 @@ namespace RexMagnum
         void Update()
         {
             if (Time.unscaledTime < camCheck) return;
-            camCheck = Time.unscaledTime + 0.5f;           // twice a second is enough: Camera.allCameras allocates
+            camCheck = Time.unscaledTime + 0.5f;           // twice a second is enough
             if (seenCams.Count > 64) seenCams.RemoveWhere(c => c == null);
-            foreach (var c in Camera.allCameras)
-                if (seenCams.Add(c)) TierAA(c);
+            // into a reused buffer (Camera.allCameras allocates a new array each call)
+            if (camBuf.Length < Camera.allCamerasCount) camBuf = new Camera[Camera.allCamerasCount + 8];
+            int camCount = Camera.GetAllCameras(camBuf);
+            for (int i = 0; i < camCount; i++)
+                if (camBuf[i] != null && seenCams.Add(camBuf[i])) TierAA(camBuf[i]);
+            System.Array.Clear(camBuf, 0, camCount);       // no stale references kept alive
         }
+        Camera[] camBuf = new Camera[16];
 
         void TierAA(Camera c)
         {
@@ -199,7 +204,8 @@ namespace RexMagnum
             return null;
         }
 
-        /// <summary>Name of the lightweight renderer (no SSAO / renderer features) that ProjectSetup adds to every URP asset.</summary>
+        /// <summary>Name prefix of the lightweight renderer (no SSAO / renderer features) that ProjectSetup adds to every URP
+        /// asset: one per source renderer, "RexMagnum_AuxRenderer_&lt;source name&gt;".</summary>
         public const string AuxRendererName = "RexMagnum_AuxRenderer";
 
         /// <summary>Mirror / pool reflection cameras: render with the lightweight renderer (no SSAO pass and depth-normals
@@ -212,9 +218,10 @@ namespace RexMagnum
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
             var list = f != null ? f.GetValue(urp) as ScriptableRendererData[] : null;
             if (list == null) return;
-            // 0 is the default renderer; SetRenderer by reflection (not in the check build's older URP)
+            // 0 is the default renderer; SetRenderer by reflection (not in the check build's older URP). By prefix within
+            // this asset's own list (each asset carries the aux copy of its own default renderer)
             for (int k = 1; k < list.Length; k++)
-                if (list[k] != null && list[k].name == AuxRendererName) { cd.GetType().GetMethod("SetRenderer", new[] { typeof(int) })?.Invoke(cd, new object[] { k }); return; }
+                if (list[k] != null && list[k].name.StartsWith(AuxRendererName, System.StringComparison.Ordinal)) { cd.GetType().GetMethod("SetRenderer", new[] { typeof(int) })?.Invoke(cd, new object[] { k }); return; }
         }
 
         static readonly System.Collections.Generic.Dictionary<ReflectionProbe, int> probeRes =

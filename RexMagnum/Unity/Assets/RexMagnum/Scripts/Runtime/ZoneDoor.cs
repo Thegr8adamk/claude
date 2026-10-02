@@ -37,6 +37,13 @@ namespace RexMagnum
             rex.StartCoroutine(Go(rex));
         }
 
+        // Rex still standing in the door when the siege ends (or the last fade is over): no new Enter comes, so go now
+        void OnTriggerStay(Collider other)
+        {
+            if (Time.time < busyUntil || NightSiege.Active) return;
+            OnTriggerEnter(other);
+        }
+
         IEnumerator Go(RexController rex)
         {
             for (float t = 0; t < 1f; t += Time.deltaTime / 0.35f) { fade = t; yield return null; }
