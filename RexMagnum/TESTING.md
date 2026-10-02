@@ -33,6 +33,7 @@
 | Third person, daytime, look down at Rex's head | A small star of sun light flashes on his bald spot. |
 | Play about 4 minutes with no blob near | Rex calls Marty (voice mail greeting, then Rex's message). |
 | Leave the controls alone for 35 s | Rex says an idle line. |
+| Get hurt, then go to the buffet, the lounge stage or the swim-up bar; press F near the food | Cocktail / pizza / fruit heals Rex. It comes back after 2 min. Rescued guests sometimes drop food. |
 
 ## 5. Send me the result
 - Window > General > **Console**. If there are red lines: click the first red line, copy the text (Ctrl+C), and paste it in the chat.

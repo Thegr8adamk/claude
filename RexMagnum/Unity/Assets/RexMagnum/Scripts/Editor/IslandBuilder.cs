@@ -589,6 +589,11 @@ namespace RexMagnum.EditorTools
             Pickup("Pickup_Sniper", U(h.sniper) + Vector3.up * 0.1f, root);
             Pickup("Ammo_Pistol", U(h.pistol) + new Vector3(0.6f, 0.05f, 0f), root);
             Pickup("Ammo_Sniper", U(h.sniper) + new Vector3(0.8f, 0.1f, 0f), root);
+            // food + drinks heal Rex (brief section 8): buffet next to the knife, a cocktail on the lounge stage
+            FoodPickup.Spawn(FoodPickup.Kind.Pizza, U(h.knife) + new Vector3(0.7f, 0.05f, 0f), 120f, root);
+            FoodPickup.Spawn(FoodPickup.Kind.Fruit, U(h.knife) + new Vector3(-0.7f, 0.05f, 0f), 120f, root);
+            if (h.stage != null && h.stage.Length == 3)
+                FoodPickup.Spawn(FoodPickup.Kind.Cocktail, U(h.stage) + new Vector3(0f, 0.85f, 0f), 120f, root);
             // elevator: cab (floor, 3 walls, ceiling light) + a sliding landing door on every floor
             var steel = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Aluminum.mat");
             var wood = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Teak.mat");
@@ -878,6 +883,7 @@ namespace RexMagnum.EditorTools
 
         static void Guests(HotelPts h, Vector3 pool)
         {
+            FoodPickup.Spawn(FoodPickup.Kind.Cocktail, pool + new Vector3(11f, 0.9f, -5f), 120f);   // swim-up bar
             var prefabs = GuestBuilder.Build();
             if (prefabs.Count == 0) return;
             var root = new GameObject("Guests").transform;

@@ -98,7 +98,7 @@ namespace RexMagnum
                         "T taunt · P photo · H hands down/up · C swap shoulder · Esc pause";
             action.text = actions.ActionWord;
             if (Time.time > subtitleUntil) subtitle.text = "";
-            prompt.text = WeaponPickup.Nearby != null ? WeaponPickup.Nearby.Label : "";
+            prompt.text = WeaponPickup.Nearby != null ? WeaponPickup.Nearby.Label : FoodPickup.Nearby != null ? FoodPickup.Nearby.Label : "";
             if (actions.weapons != null) scope.SetActive(actions.weapons.Scoped);
             if (rexHealth != null)
             {

@@ -130,8 +130,11 @@ namespace RexMagnum
             agent.speed = 2.2f;
             Progress.Add("rescues");
             if (rex != null) RexVoice.Say(rex.gameObject, "Rescue", true);
-            if (rewardPrefabs != null && rewardPrefabs.Length > 0)
-                Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], transform.position + transform.forward * 0.8f, Quaternion.identity);
+            Vector3 drop = transform.position + transform.forward * 0.8f + Vector3.up * 0.3f;
+            if (Random.value < 0.4f || rewardPrefabs == null || rewardPrefabs.Length == 0)   // brief: ammo / health / clue
+                FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
+            else
+                Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], drop - Vector3.up * 0.3f, Quaternion.identity);
             agent.SetDestination(home);
         }
 

@@ -178,7 +178,7 @@ namespace RexMagnum
             if (rw != null && !string.IsNullOrEmpty(rw.ActionWord)) word = rw.ActionWord;
             Draw(Btn("Action"), Rad("Action"), word, opacity);
             Draw(Btn("Jump"), Rad("Jump"), "Jump", opacity);
-            Draw(Btn("Use"), Rad("Use"), "Use", WeaponPickup.Nearby != null ? opacity * 1.6f : opacity * 0.4f);
+            Draw(Btn("Use"), Rad("Use"), "Use", (WeaponPickup.Nearby != null || FoodPickup.Nearby != null) ? opacity * 1.6f : opacity * 0.4f);
             Draw(Btn("Pause"), Rad("Pause"), "II", opacity);
             foreach (var n in top) Draw(Btn(n), Rad(n), n, opacity);
             if (moveId >= 0)
