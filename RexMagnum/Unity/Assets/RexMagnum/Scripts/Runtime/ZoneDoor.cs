@@ -15,17 +15,19 @@ namespace RexMagnum
         public string label = "";
         static float busyUntil;
         static float fade;
+        static ZoneDoor fadeOwner;      // only the door that started the fade draws it (all 6 doors run OnGUI)
 
         void Reset() { GetComponent<BoxCollider>().isTrigger = true; }
 
         // statics: Time.time starts at 0 again each play session (domain reload off would keep the old values)
-        void Awake() { busyUntil = 0f; fade = 0f; }
+        void Awake() { busyUntil = 0f; fade = 0f; fadeOwner = null; }
 
         void OnTriggerEnter(Collider other)
         {
             var rex = other.GetComponentInParent<RexController>();
             if (rex == null || exit == null || Time.time < busyUntil || GolfCart.Driven != null) return;
             busyUntil = Time.time + 2f;
+            fadeOwner = this;
             rex.StartCoroutine(Go(rex));
         }
 
@@ -43,7 +45,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (fade <= 0.001f || PhotoAlbum.Capturing) return;      // the photo grabs the view without overlays
+            if (fadeOwner != this || fade <= 0.001f || PhotoAlbum.Capturing) return;      // the photo grabs the view without overlays
             GUI.color = new Color(0, 0, 0, fade);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;

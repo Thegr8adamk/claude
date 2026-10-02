@@ -106,14 +106,14 @@ namespace RexMagnum
             float length = clip != null ? clip.length : Mathf.Clamp(text.Length * 0.06f, 2f, 7f);   // or reading time
             if (clip != null && src != null) { src.PlayOneShot(clip, AudioMix.Voice); Speaking(length); }
             ShowSubtitle(who + ": " + text, length + 0.4f);      // same frame as the sound, as long as the sound
-            nextAllowed = Time.time + length;                    // no other line talks over it
+            nextAllowed = Time.unscaledTime + length;                 // no other line talks over it
             return length;
         }
 
         public static void Say(GameObject speaker, string group, bool force = false)
         {
             if (!Lines.TryGetValue(group, out var lines)) return;
-            if (!force && Time.time < nextAllowed) return;
+            if (!force && Time.unscaledTime < nextAllowed) return;
             int i = Random.Range(0, lines.Length);
             if (lines.Length > 1 && last.TryGetValue(group, out int prev) && prev == i) i = (i + 1) % lines.Length;
             last[group] = i;
@@ -122,7 +122,7 @@ namespace RexMagnum
             float length = clip != null ? clip.length : Mathf.Clamp(lines[i].Length * 0.06f, 2f, 6f);
             if (force && src != null) src.Stop();                // a forced line cuts the one before (no two Rex voices at once)
             if (clip != null && src != null) { src.PlayOneShot(clip, AudioMix.Voice); Speaking(length); }
-            nextAllowed = Time.time + length + 0.3f;            // the next line waits until this one is finished
+            nextAllowed = Time.unscaledTime + length + 0.3f;         // the next line waits until this one is finished
             ShowSubtitle("REX: " + lines[i], length + 0.4f);
         }
     }

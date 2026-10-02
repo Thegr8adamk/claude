@@ -151,7 +151,8 @@ namespace RexMagnum
                     Pitch = Mathf.Clamp(Pitch - look.y, -75f, 80f);
                 }
             }
-            IsAiming = InputEnabled && RMInput.Aim;
+            // only a gun aims (zoom + face the crosshair); right click with fists or a towel does nothing
+            IsAiming = InputEnabled && RMInput.Aim && (weapons == null || weapons.Aiming);
             bool scoped = weapons != null && weapons.Scoped;
             bool fp = Mode == CameraMode.FirstPerson || scoped;
             if (scoped != wasScoped)

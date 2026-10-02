@@ -34,7 +34,7 @@ namespace RexMagnum
         {
             if (inst == null || inst.notice == null) return;
             inst.notice.text = text;
-            inst.noticeUntil = Time.time + seconds;
+            inst.noticeUntil = Time.unscaledTime + seconds;
         }
 
         void Awake()
@@ -59,7 +59,7 @@ namespace RexMagnum
             hp.rectTransform.sizeDelta = new Vector2(500, 34);
             RexVoice.Subtitle = line => ShowLine(line, 3f);
             RexVoice.SubtitleTimed = ShowLine;
-            RexVoice.SubtitleCrowd = line => { if (Time.time > subtitleUntil - 0.2f) ShowLine(line, 1.6f); };   // never over a real line
+            RexVoice.SubtitleCrowd = line => { if (Time.unscaledTime > subtitleUntil - 0.2f) ShowLine(line, 1.6f); };   // never over a real line
             weapon = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 92), 26, TextAnchor.LowerRight);
             prompt = MakeText(go.transform, font, new Vector2(0.5f, 0.5f), new Vector2(0, -80), 28, TextAnchor.MiddleCenter);
             prompt.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -292,12 +292,14 @@ namespace RexMagnum
         }
 
         Text weapon;
+        WeaponId shownWeapon = (WeaponId)(-1);
+        int shownAmmo = int.MinValue, shownHp = -1, shownCompassM = -1, shownWorldM = -1;
 
         void ShowLine(string line, float seconds)
         {
             if (!AudioMix.Subtitles) return;        // Settings > Sound > Subtitles
             subtitle.text = line;
-            subtitleUntil = Time.time + Mathf.Max(1.2f, seconds);
+            subtitleUntil = Time.unscaledTime + Mathf.Max(1.2f, seconds);
         }
 
         Text MakeText(Transform parent, Font font, Vector2 anchor, Vector2 pos, int size, TextAnchor align)
@@ -364,11 +366,17 @@ namespace RexMagnum
             {
                 var w = actions.weapons;
                 var d = w.Current;
-                weapon.text = d.isGun ? $"{d.name.ToUpper()}  {w.Ammo(d.id)}" : d.name.ToUpper();
-                weapon.color = d.color;
+                int ammo = d.isGun ? w.Ammo(d.id) : -1;
+                // the string is built only when the weapon or the ammo changes (no garbage every frame)
+                if (d.id != shownWeapon || ammo != shownAmmo)
+                {
+                    shownWeapon = d.id; shownAmmo = ammo;
+                    weapon.text = d.isGun ? $"{d.name.ToUpper()}  {ammo}" : d.name.ToUpper();
+                    weapon.color = d.color;
+                }
             }
-            if (Time.time > subtitleUntil) subtitle.text = "";
-            if (Time.time > noticeUntil) notice.text = "";
+            if (Time.unscaledTime > subtitleUntil) subtitle.text = "";
+            if (Time.unscaledTime > noticeUntil) notice.text = "";
             prompt.text = UsePrompt();
             if (actions.weapons != null) scope.SetActive(actions.weapons.Scoped);
             HealthBar();
@@ -411,7 +419,8 @@ namespace RexMagnum
             var c = Color.HSVToRGB(Mathf.Lerp(0f, 0.33f, f), 0.85f, 1f);                 // red -> yellow -> green
             if (f < 0.25f && f > 0f) c = Color.Lerp(c, Color.white, 0.35f * (0.5f + 0.5f * Mathf.Sin(Time.time * 10f)));   // low: pulse
             hpFillImg.color = c;
-            hp.text = $"HEALTH  {Mathf.CeilToInt(rexHealth.Current)}";
+            int hpNow = Mathf.CeilToInt(rexHealth.Current);
+            if (hpNow != shownHp) { shownHp = hpNow; hp.text = "HEALTH  " + hpNow; }
             hp.color = Color.white;
         }
 
@@ -542,7 +551,8 @@ namespace RexMagnum
                         canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null, out var local))
                 {
                     worldGoal.anchoredPosition = local;
-                    worldGoalDist.text = Mathf.RoundToInt(flat.magnitude) + " m";
+                    int m = Mathf.RoundToInt(flat.magnitude);
+                    if (m != shownWorldM) { shownWorldM = m; worldGoalDist.text = m + " m"; }
                 }
                 else show = false;
             }
@@ -572,7 +582,8 @@ namespace RexMagnum
             float bearing = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
             float dm = Mathf.Clamp(Mathf.DeltaAngle(yaw, bearing), -CompassRange * 0.5f, CompassRange * 0.5f);   // off the strip: at its end
             compassMarker.anchoredPosition = new Vector2(dm * px, 0f);
-            compassDist.text = Mathf.RoundToInt(to.magnitude) + " m";
+            int dm2 = Mathf.RoundToInt(to.magnitude);
+            if (dm2 != shownCompassM) { shownCompassM = dm2; compassDist.text = dm2 + " m"; }
         }
 
         // ------------------------------------------------------------ Use prompts

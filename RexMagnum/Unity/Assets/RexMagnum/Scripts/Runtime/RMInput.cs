@@ -86,7 +86,11 @@ namespace RexMagnum
             LoadKeys();
         }
         static bool KHeld(string a) { var k = KeyFor(a); return K != null && k != Key.None && K[k].isPressed; }
-        static bool KDown(string a) { var k = KeyFor(a); return K != null && k != Key.None && K[k].wasPressedThisFrame; }
+        static bool KDown(string a) => Free && KDownRaw(a);
+        static bool KDownRaw(string a) { var k = KeyFor(a); return K != null && k != Key.None && K[k].wasPressedThisFrame; }
+        /// <summary>No kill cam on screen and none skipped this frame: the skip press (Space, F, T, A...) does not also
+        /// jump / use / taunt. Same idea as ActionDown.</summary>
+        static bool Free => !KillCam.Active && Time.frameCount - ActionBlockedFrame > 0;
 
         // ---- controller + general options (brief section 7), loaded from PlayerPrefs by LoadOptions()
         public static bool SwapSticks, SwapTriggers, AimAssist = true, RunToggle, AimToggle, HandsHold;
@@ -300,7 +304,7 @@ namespace RexMagnum
                 return runOn || (TouchState.Active && TouchState.Move.magnitude > 0.95f);
             }
         }
-        public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame);
+        public static bool Jump => Free && (TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame));
         // not while a menu / kill cam has the press: closing the pause menu with B or skipping the kill cam does not dodge
         public static bool Dodge => !MenuNav.Consumed && Time.frameCount != ActionBlockedFrame && !KillCam.Active &&
                                     !PauseMenu.Open && !GameFlow.Busy &&
@@ -350,24 +354,25 @@ namespace RexMagnum
                 return aimOn || TouchState.Held("Aim");
             }
         }
-        public static bool CameraToggle => TouchState.Down("Camera") || (KDown("Camera")) ||
-                                           (G != null && PB("Camera").wasPressedThisFrame);
-        public static bool SwapShoulder => (KDown("Shoulder")) ||
-                                           (G != null && PB("Shoulder").wasPressedThisFrame);
-        public static bool Taunt => TouchState.Down("Taunt") || (KDown("Taunt")) || (G != null && PB("Taunt").wasPressedThisFrame);
-        public static bool Photo => TouchState.Down("Photo") || (KDown("Photo")) || (G != null && PB("Photo").wasPressedThisFrame);
+        public static bool CameraToggle => Free && (TouchState.Down("Camera") || (KDown("Camera")) ||
+                                           (G != null && PB("Camera").wasPressedThisFrame));
+        public static bool SwapShoulder => Free && ((KDown("Shoulder")) ||
+                                           (G != null && PB("Shoulder").wasPressedThisFrame));
+        public static bool Taunt => Free && (TouchState.Down("Taunt") || (KDown("Taunt")) || (G != null && PB("Taunt").wasPressedThisFrame));
+        public static bool Photo => Free && (TouchState.Down("Photo") || (KDown("Photo")) || (G != null && PB("Photo").wasPressedThisFrame));
         /// <summary>Hands down/up: tap toggles (default); with "hold" the hands stay down only while the key is held
         /// (the controller reads it as press and release events).</summary>
-        public static bool Hands => HandsHold
+        public static bool Hands => Free && (HandsHold
             ? (KDown("Hands") || (K != null && KeyFor("Hands") != Key.None && K[KeyFor("Hands")].wasReleasedThisFrame) ||
                (G != null && (PB("Hands").wasPressedThisFrame || PB("Hands").wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
-            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame));
-        public static bool Use => usedFrame != Time.frameCount &&
+            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame)));
+        public static bool Use => usedFrame != Time.frameCount && Free &&
                                   (TouchState.Down("Use") || (KDown("Use")) || (G != null && PB("Use").wasPressedThisFrame));
         static int usedFrame = -1;
         /// <summary>The Use press did something (pick up, eat, rescue...): nothing else reacts to it this frame.</summary>
         public static void ConsumeUse() => usedFrame = Time.frameCount;
-        public static bool Pause => TouchState.Down("Pause") || (KDown("Pause")) || (G != null && PB("Pause").wasPressedThisFrame);
+        // not gated: Esc during a kill cam skips it and opens the menu (the cam waits behind the menu)
+        public static bool Pause => TouchState.Down("Pause") || (KDownRaw("Pause")) || (G != null && PB("Pause").wasPressedThisFrame);
         /// <summary>Touch Weapon button: a short tap = next weapon, a hold opens the weapon wheel.</summary>
         public const float WheelHoldTime = 0.35f;
         public static bool WheelHeld => KHeld("Wheel") || (G != null && PB("Wheel").isPressed) ||
@@ -394,7 +399,7 @@ namespace RexMagnum
             Application.quitting -= StopRumble;          // a pad must not keep buzzing after the game closes
             Application.quitting += StopRumble;
         }
-        public static bool NextWeapon => (TouchState.Up("Weapon") && TouchState.HeldFor("Weapon") < WheelHoldTime) || (KDown("NextWeapon")) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
+        public static bool NextWeapon => (Free && TouchState.Up("Weapon") && TouchState.HeldFor("Weapon") < WheelHoldTime) || (KDown("NextWeapon")) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
                                          (G != null && NextBtn.wasPressedThisFrame);
         public static bool PrevWeapon => (KDown("PrevWeapon")) || (M != null && M.scroll.ReadValue().y > 0.1f) ||
                                          (G != null && PrevBtn.wasPressedThisFrame);

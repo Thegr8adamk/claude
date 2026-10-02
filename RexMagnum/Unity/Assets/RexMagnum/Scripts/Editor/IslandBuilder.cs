@@ -291,6 +291,18 @@ namespace RexMagnum.EditorTools
             var m = AssetDatabase.LoadAssetAtPath<Material>(p);
             if (m == null) { m = new Material(sh); AssetDatabase.CreateAsset(m, p); }
             m.shader = sh;
+            // a reused .mat keeps the last build's keywords / queue / blend (a row that was glass and is now opaque
+            // would stay transparent): start from the opaque defaults, the kind below sets what it needs
+            m.shaderKeywords = new string[0];
+            m.renderQueue = -1;
+            m.SetOverrideTag("RenderType", "");
+            m.SetShaderPassEnabled("ShadowCaster", true);
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 0f);
+            if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 0f);
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 2f);
+            if (m.HasProperty("_SrcBlend")) m.SetInt("_SrcBlend", (int)BlendMode.One);
+            if (m.HasProperty("_DstBlend")) m.SetInt("_DstBlend", (int)BlendMode.Zero);
+            if (m.HasProperty("_ZWrite")) m.SetInt("_ZWrite", 1);
             return m;
         }
 

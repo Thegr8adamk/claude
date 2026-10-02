@@ -5,7 +5,7 @@ namespace RexMagnum
 {
     /// <summary>
     /// Hotel elevator (brief: stairs + elevator, soft music). Use (F / X) inside the cab: go to the next floor
-    /// (up, then back down). Use near a closed landing door: call the cab. Landing doors open only when the cab
+    /// in the same direction as the last ride (up from below, down from above; it turns at the top / bottom floor). Use near a closed landing door: call the cab. Landing doors open only when the cab
     /// stands at that floor, so nobody falls into the shaft. Rex rides along (moved with the cab).
     /// Music: Resources/Music/elevator (optional).
     /// </summary>
@@ -18,6 +18,7 @@ namespace RexMagnum
         public float speed = 1.6f;
         public Vector3 cabHalfSize = new Vector3(1.45f, 1.3f, 1.55f);
         int target, current;
+        int dir = 1;                          // +1 up, -1 down: the next ride from inside the cab keeps going this way
         CharacterController rex;
         AudioSource music;
         Vector3[] doorClosed;
@@ -45,6 +46,25 @@ namespace RexMagnum
             if (rex == null) return false;
             Vector3 p = cab.InverseTransformPoint(rex.transform.position + Vector3.up * 0.5f);
             return Mathf.Abs(p.x) < cabHalfSize.x && p.y > -0.3f && p.y < cabHalfSize.y * 2f && Mathf.Abs(p.z) < cabHalfSize.z;
+        }
+
+        /// <summary>The floor a Use inside the cab goes to (keeps the ride direction, turns at the ends).</summary>
+        int NextFloor(out int d)
+        {
+            d = dir;
+            if (current + d < 0 || current + d >= floorHeights.Length) d = -d;
+            return Mathf.Clamp(current + d, 0, floorHeights.Length - 1);
+        }
+
+        /// <summary>For the HUD Use prompt inside the cab, e.g. "go UP to floor 3".</summary>
+        public string CabPrompt
+        {
+            get
+            {
+                if (floorHeights == null || floorHeights.Length < 2) return "ride the elevator";
+                int f = NextFloor(out int d);
+                return $"go {(d > 0 ? "UP" : "DOWN")} to floor {f + 1}";
+            }
         }
 
         int NearestFloor(float y)
@@ -79,7 +99,12 @@ namespace RexMagnum
             {
                 nextUse = Time.time + 0.5f;
                 if (RexInCab() && !moving)
-                { target = current + 1 < floorHeights.Length ? current + 1 : 0; RMInput.ConsumeUse(); }
+                {
+                    string say = CabPrompt;
+                    target = NextFloor(out dir);
+                    RMInput.ConsumeUse();
+                    RexTestHUD.Notice("Elevator: " + say, 2f);              // which way it goes, on screen
+                }
                 else if (Vector3.Distance(rex.transform.position, landingDoors[NearestFloor(rex.transform.position.y)].position) < 3f)
                 { target = NearestFloor(rex.transform.position.y); RMInput.ConsumeUse(); }
                 // a new target starts the ride now (else 'current' jumps to it and Arrived runs at the start floor)

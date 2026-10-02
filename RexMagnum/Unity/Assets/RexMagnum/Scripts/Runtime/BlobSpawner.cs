@@ -42,8 +42,9 @@ namespace RexMagnum
 
         /// <summary>Blobs alive on the whole island before no spawner adds more.</summary>
         public const int GlobalCap = 24;
-        /// <summary>Spawners farther than this from Rex do nothing (blobs there would only be culled again).</summary>
-        const float SleepDistance = 120f;
+        /// <summary>Spawners farther than this from Rex do nothing: the cull distance minus how far out this spawner
+        /// places blobs (water up to 1.5x radius, plus the shore search), so it never spawns blobs Blob.CullCheck removes.</summary>
+        float SleepDistance => Mathf.Max(30f, Blob.CullDistance - radius * 1.5f - 14f);
 
         Blob TouristPrefab()
         {
@@ -60,7 +61,7 @@ namespace RexMagnum
 
         /// <summary>Nearest walkable point that is NOT under water (the pool floor / seabed are on the NavMesh too):
         /// rings outward from the water point.</summary>
-        static bool DryShore(Vector3 water, out NavMeshHit hit)
+        public static bool DryShore(Vector3 water, out NavMeshHit hit)
         {
             for (float r = 1f; r <= 14f; r += 1.5f)
                 for (int k = 0; k < 10; k++)
@@ -100,7 +101,8 @@ namespace RexMagnum
             next = Time.time + interval;
             if (rex == null) { var pl = GameObject.FindGameObjectWithTag("Player"); if (pl != null) rex = pl.transform; }
             // Rex is far away: this area sleeps (no spawn, no cleared-break bookkeeping, no blobs for the cull to remove)
-            if (rex != null && (rex.position - transform.position).sqrMagnitude > SleepDistance * SleepDistance) return;
+            float sleep = SleepDistance;
+            if (rex != null && (rex.position - transform.position).sqrMagnitude > sleep * sleep) return;
             int near = 0;
             float r2 = (radius * 3f) * (radius * 3f);
             foreach (var b in Blob.All)

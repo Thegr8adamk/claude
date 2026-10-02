@@ -103,6 +103,7 @@ namespace RexMagnum
         bool wasStunned;
         MaterialPropertyBlock mpb;
         Color baseColor;
+        Color lastCol = new Color(-1f, -1f, -1f, -1f);                    // last _BaseColor written (none yet)
 
         static readonly int SpeedHash = Animator.StringToHash("Speed");
 
@@ -189,7 +190,9 @@ namespace RexMagnum
         }
 
         // far-away blobs nobody sees go away quietly (keeps the blob count and the agents down)
-        const float CullDistance = 90f, CullAfter = 20f;
+        // BlobSpawner sleeps beyond CullDistance minus its spawn reach, so it never spawns blobs this would cull
+        public const float CullDistance = 90f;
+        const float CullAfter = 20f;
         float hiddenSince = -1f, nextCull;
 
         void CullCheck()
@@ -261,7 +264,8 @@ namespace RexMagnum
             if (kind != Kind.KingGlorp) agent.speed = Mathf.Min(agent.speed, MaxChaseSpeed);
             if (jellyRenderer != null)
             {
-                jellyRenderer.GetPropertyBlock(mpb);
+                bool glowDirty = false;
+                Color glow = default;
                 var dark = baseColor * 0.45f;
                 dark.a = baseColor.a;                          // darker, not more see-through
                 var col = Color.Lerp(baseColor, dark, angry);
@@ -276,16 +280,24 @@ namespace RexMagnum
                 {
                     float pulse = Mathf.Sin((1f - (telegraphUntil - Time.time) / TelegraphTime) * Mathf.PI);
                     col = Color.Lerp(col, new Color(TelegraphColor.r, TelegraphColor.g, TelegraphColor.b, col.a), pulse * 0.7f);
-                    mpb.SetColor("_EmissionColor", TelegraphColor * (0.5f + pulse * 2.5f));
-                    telegraphShown = true;
+                    glow = TelegraphColor * (0.5f + pulse * 2.5f);
+                    glowDirty = telegraphShown = true;
                 }
                 else if (telegraphShown)
                 {
                     telegraphShown = false;
-                    mpb.SetColor("_EmissionColor", baseColor * DayNight.Night * 1.5f);     // back to the night glow
+                    glow = baseColor * DayNight.Night * 1.5f;                // back to the night glow
+                    glowDirty = true;
                 }
-                mpb.SetColor("_BaseColor", col);
-                jellyRenderer.SetPropertyBlock(mpb);
+                // write the block only when something changed (most frames a blob keeps its colour)
+                if (glowDirty || col != lastCol)
+                {
+                    lastCol = col;
+                    jellyRenderer.GetPropertyBlock(mpb);
+                    if (glowDirty) mpb.SetColor("_EmissionColor", glow);
+                    mpb.SetColor("_BaseColor", col);
+                    jellyRenderer.SetPropertyBlock(mpb);
+                }
             }
 
             if (wasStunned && !IsStunned) Play("Locomotion", 0.2f);
@@ -293,7 +305,7 @@ namespace RexMagnum
             if (rex == null || (rexHealth != null && rexHealth.IsDead) || IsStunned || Time.time < busyUntil || GameFlow.Busy)   // Busy: title + intro
             {
                 if (agent.isOnNavMesh) agent.isStopped = true;
-                if (Time.time >= busyUntil) ReleaseToken();                // stunned / Rex down: give the turn to another blob
+                if (IsStunned || Time.time >= busyUntil) ReleaseToken();   // stunned / Rex down: give the turn to another blob
                 return;
             }
             if (Disguised) { Wander(); return; }
@@ -358,7 +370,11 @@ namespace RexMagnum
             busyUntil = Time.time + TelegraphTime + 0.6f;
             Telegraph();
             yield return new WaitForSeconds(TelegraphTime);
-            if (health.IsDead || IsStunned || rex == null) yield break;      // stunned in the warning: no attack
+            if (health.IsDead || IsStunned || rex == null)                   // stunned in the warning: no attack
+            {
+                ReleaseToken();                                              // and the turn goes to another blob
+                yield break;
+            }
             Play(clip);
             Sfx.Play(melee ? "blob_whip" : "blob_spit", transform.position, 0.8f);
             yield return new WaitForSeconds(melee ? 0.4f : 0.45f);
@@ -561,6 +577,10 @@ namespace RexMagnum
                     // on the NavMesh (a golf-flung bouncer pops away from it); full-size base scale (a knife kill shrank it)
                     Vector3 at = transform.position + side;
                     if (NavMesh.SamplePosition(at, out NavMeshHit nh, 6f, NavMesh.AllAreas)) at = nh.position;
+                    // popped over the pool / sea: the halves go to the dry shore (the pool floor is on the NavMesh too)
+                    if ((WaterVolume.Depth(at + Vector3.up * 0.1f) > 0.3f || WaterVolume.Depth(transform.position) > 0.3f) &&
+                        BlobSpawner.DryShore(transform.position, out NavMeshHit dry))
+                        at = dry.position + side * 0.5f;
                     var half = Instantiate(splitPrefab, at, transform.rotation);
                     half.isHalf = true;
                     half.transform.localScale = startScale * 0.5f;

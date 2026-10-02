@@ -36,7 +36,8 @@ namespace RexMagnum
         /// waves through the jelly).</summary>
         public enum Style { Orbit, Bullet, Follow, Fist, Towel }
 
-        static bool Allowed() => Setting != 0 && !Instance.running && (Setting == 2 || Random.value <= 0.35f);
+        // VR: a second camera would take the view away from the headset (and fly it around: sickness), so no kill cam
+        static bool Allowed() => Setting != 0 && !VRMode.Active && !Instance.running && (Setting == 2 || Random.value <= 0.35f);
 
         public static void Show(Transform target, Vector3 from, bool bullet) => Show(target, from, bullet ? Style.Bullet : Style.Orbit);
 
