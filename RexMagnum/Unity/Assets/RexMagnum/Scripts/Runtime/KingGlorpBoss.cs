@@ -295,6 +295,15 @@ namespace RexMagnum
             if (rex != null) RexVoice.Say(rex.gameObject, "Glorp", true);
         }
 
+        /// <summary>An armour piece within 3 m of the hit point takes this hit (the clang replaces the jelly hit).</summary>
+        public bool ArmorTakes(Vector3 point)
+        {
+            if (dead) return false;
+            foreach (var a in armor)
+                if (a.t != null && Vector3.Distance(a.t.position, point) <= 3f) return true;
+            return false;
+        }
+
         void OnDamaged(float amount, Vector3 point, GameObject by)
         {
             // a sniper shot from the ship approach (or any hit) starts the whole fight: phases, armor, minions

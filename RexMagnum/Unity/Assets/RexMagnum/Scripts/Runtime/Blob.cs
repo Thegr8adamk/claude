@@ -924,6 +924,9 @@ namespace RexMagnum
         }
 
         /// <summary>boss: true only from KingGlorpBoss's own dizzy (towel snaps and other stuns do not stop the king).</summary>
+        KingGlorpBoss bossCache; bool bossLooked;
+        KingGlorpBoss Boss { get { if (!bossLooked) { bossLooked = true; bossCache = GetComponent<KingGlorpBoss>(); } return bossCache; } }
+
         public void Stun(float seconds, bool boss = false)
         {
             if (health.IsDead || (kind == Kind.KingGlorp && !boss)) return;
@@ -972,7 +975,7 @@ namespace RexMagnum
             }
             // a light hit on the shell: a low stony clack (a door knock pitched down), not the wet jelly hit
             if (stoneHit) { if (Sfx.Get("hit_stone") != null) Sfx.Play("hit_stone", point, 0.8f, Random.Range(0.92f, 1.08f)); else Sfx.Play("door_bang", point, 0.75f, 0.6f); }
-            else Sfx.Play("blob_hit", point);
+            else if (!(kind == Kind.KingGlorp && Boss != null && Boss.ArmorTakes(point))) Sfx.Play("blob_hit", point);   // armour: its clang only
         }
 
         GameObject lastKiller;
