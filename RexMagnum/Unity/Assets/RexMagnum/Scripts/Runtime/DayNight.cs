@@ -206,10 +206,9 @@ namespace RexMagnum
         // ---- baked light probes vs day / night
         // Bake Lighting fills the probes with a flat dim ambient (all lights are realtime), so a probe only holds how
         // open it is (sky visibility / AO). Used as is, the baked SH replaced the live sky ambient: characters, LOD1
-        // and trees on probes kept one fixed brightness day and night. Each probe's baked SH is normalised against the
-        // open-air probes (L0 = 1 there, openness clamped 0.05 - 1.2) and keeps its own direction (light from the open
-        // side, dark under eaves); whenever the ambient changes it is scaled per colour channel by the live ambient L0
-        // over the open-air baked L0. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
+        // and trees on probes kept one fixed brightness day and night. Each probe keeps its baked SH (openness clamped
+        // 0.05 - 1.2) with its own direction (light from the open side, dark under eaves); whenever the ambient changes
+        // it is scaled per colour channel by the live ambient L0 over the open-air probes' baked L0. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
         // (It was the live ambient SH x openness: every probe got the sky's direction, also deep under a roof.)
         // The buildings use these probes too (Bake Lighting gives them no lightmaps: a lightmap holds one fixed
         // brightness, URP Lit cannot scale it at runtime, and lightmapped buildings stayed lit the same day and night).
@@ -248,7 +247,7 @@ namespace RexMagnum
                 probeOpen[i] = Mathf.Clamp(lum[i] / open, 0.05f, 1.2f);
                 // the clamp as a factor on the baked SH (1 for nearly all probes), so the direction stays as baked
                 probeNorm[i] = baked[i] * (lum[i] > 1e-6f ? probeOpen[i] * open / lum[i] : 0f);
-                if (lum[i] <= 1e-6f) { probeNorm[i].AddAmbientLight(Color.white * (0.05f * open)); }
+                if (lum[i] <= 1e-6f) probeNorm[i].AddAmbientLight(Color.white * (0.05f * open));   // an all-black probe: the floor
             }
             probeLive = new SphericalHarmonicsL2[baked.Length];
             probeAmb = new Vector3(-1f, -1f, -1f);

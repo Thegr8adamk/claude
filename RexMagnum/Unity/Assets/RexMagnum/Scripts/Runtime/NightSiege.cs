@@ -383,6 +383,7 @@ namespace RexMagnum
                 if ((hit.position - transform.position).sqrMagnitude < 8f * 8f) continue;      // never next to Rex
                 if (mouthFound && (hit.position - doorAt).sqrMagnitude < DoorClear * DoorClear) continue;   // not in the doorway
                 var b = Instantiate(PrefabFor(wave), hit.position, Quaternion.identity);
+                if (wave == 1 && b.kind == Blob.Kind.Lifeguard && Random.value < 0.35f) b.SetVariant(Blob.Variant.GlowSpitter);   // the cave's own spitters
                 b.Alert(6f);
                 // the wave's glow: one light in the first blob's colour (readable in the dark cave mouth)
                 if (waveLight == null && !LowTier())                          // Low tier: no extra light (DayNight's budget)

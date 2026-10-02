@@ -537,9 +537,13 @@ namespace RexMagnum
             // the bar defense set piece: its own line while the waves come (the step id stays: no NEW GOAL after it)
             if (objective != null && BarActive(out int wave, out int waves))
             {
-                objective = waves > 0 ? $"Defend the bar! Wave {Mathf.Max(1, wave)}/{waves}." : "Defend the bar!";
+                objective = (BarDefense.Replaying ? "REPLAY - " : "")
+                          + (waves > 0 ? $"Defend the bar! Wave {Mathf.Max(1, wave)}/{waves}." : "Defend the bar!");
                 side = null;
             }
+            // a set piece without a hit taken so far: a small gold tag on the goal line (the score counts it)
+            if (objective != null && (BarDefense.NoHitSoFar || NightSiege.NoHitSoFar))
+                objective += "  <color=#FFD966>NO HIT</color>";
             // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
             if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
             // touch: the known side lines shortened (an event summary stays as it is)
@@ -652,7 +656,7 @@ namespace RexMagnum
         Elevator[] elevators;
         float nextFind, drivingSince = -1f;
 
-        /// <summary>What Use (or Action) does here: pickups, guests (rescue / knock / talk), golf cart, elevator.</summary>
+        /// <summary>What Use (or Action) does here: pickups, guests (rescue / knock / talk), golf cart, elevator, an event replay.</summary>
         string UsePrompt()
         {
             int kind = PromptKind(out Object subj);
@@ -691,6 +695,8 @@ namespace RexMagnum
                 case 10: return $"{Glyph.B("Action")}: talk to {g.guestName}";
                 case 11: return $"{Glyph.B("Hands")}: hands down to talk to {g.guestName}";
                 case 12: return $"{U}: calm down {g.guestName}";
+                case 13: return BarDefense.ReplayPrompt != null ? $"{U}: {BarDefense.ReplayPrompt}" : "";
+                case 14: return NightSiege.ReplayPrompt != null ? $"{U}: {NightSiege.ReplayPrompt}" : "";
                 default: return "";
             }
         }
@@ -742,6 +748,9 @@ namespace RexMagnum
                     foreach (var door in e.landingDoors)
                         if (door != null && Vector3.Distance(door.position, p) < 3f) return 9;
             }
+            // a set piece done before, Rex at its spot: Use plays it again for the score (the events say when)
+            if (BarDefense.ReplayAvailable) return 13;
+            if (NightSiege.ReplayAvailable) return 14;
             subj = near;
             if (near != null && nearD < 2.5f)
                 return actions.controller != null && actions.controller.HandsDown ? 10 : 11;

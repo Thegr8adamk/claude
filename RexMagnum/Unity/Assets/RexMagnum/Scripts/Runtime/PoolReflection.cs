@@ -49,8 +49,9 @@ namespace RexMagnum
                     if (mats[s] == null || !mats[s].name.StartsWith("A_PoolWater")) continue;
                     var lb = mf.sharedMesh.GetSubMesh(s).bounds;
                     var wb = new Bounds(r.transform.TransformPoint(lb.center), Vector3.zero);
-                    wb.Encapsulate(r.transform.TransformPoint(lb.min));
-                    wb.Encapsulate(r.transform.TransformPoint(lb.max));
+                    for (int c = 0; c < 8; c++)             // all eight corners (the model may be rotated)
+                        wb.Encapsulate(r.transform.TransformPoint(new Vector3(
+                            (c & 1) == 0 ? lb.min.x : lb.max.x, (c & 2) == 0 ? lb.min.y : lb.max.y, (c & 4) == 0 ? lb.min.z : lb.max.z)));
                     if (!any) { pool = wb; any = true; } else pool.Encapsulate(wb);
                     if (!found.Contains(r)) found.Add(r);
                 }
