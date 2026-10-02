@@ -31,7 +31,9 @@ namespace RexMagnum
             glow.intensity = 1.2f + Mathf.Sin(Time.time * 3f) * 0.4f;
             var p = GameObject.FindGameObjectWithTag("Player");
             if (p == null) return;
-            bool near = Vector3.Distance(p.transform.position, basePos) < radius;
+            // flat distance (a pickup on a table or a rail is higher than Rex's feet) plus a height window
+            Vector3 dp = basePos - p.transform.position;
+            bool near = new Vector2(dp.x, dp.z).magnitude < radius && dp.y > -1f && dp.y < 2.2f;
             if (near) Nearby = this;
             else if (Nearby == this) Nearby = null;
             if (near && RMInput.Use)
@@ -42,6 +44,8 @@ namespace RexMagnum
                 if (ammoOnly && weapon == WeaponId.Coconut && !w.Has(weapon)) w.Give(weapon);   // a coconut is its own weapon
                 else if (ammoOnly) w.AddAmmo(weapon, ammoAmount);
                 else w.Give(weapon);
+                RexVoice.ShowSubtitle($"GOT: {WeaponDef.Get(weapon).name.ToUpper()}   ({RMInput.Btn("Wheel")}: weapon wheel)", 2.5f);
+                Sfx.Play("bottle_clink", basePos, 0.6f);
                 if (Nearby == this) Nearby = null;
                 Destroy(gameObject);
             }

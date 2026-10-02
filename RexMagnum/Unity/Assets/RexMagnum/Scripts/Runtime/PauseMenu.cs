@@ -8,61 +8,59 @@ namespace RexMagnum
     /// <summary>
     /// Pause menu (brief section 7: Pause = map, album, accomplishments, settings). Esc / Menu / touch II.
     /// Tabs: Map (zones visited, big goals), Album (photos + captions), Accomplishments (by group),
-    /// Settings (graphics, camera, look speed X/Y, invert Y, kill cam, subtitles, volume), Controls (keyboard remap).
-    /// Settings are saved in PlayerPrefs.
+    /// Settings (SettingsPanel: graphics, camera + VR, sound, controls with keyboard and controller remap).
+    /// Controller: LT / RT or keys 1-4 change the tab, B / Menu resume. Settings are saved in PlayerPrefs.
     /// </summary>
     public class PauseMenu : MonoBehaviour
     {
         public static bool Open { get; private set; }
         int tab;
         Vector2 scroll;
-        string waitingFor, waitingPad;
+        readonly SettingsPanel panel = new SettingsPanel();
         readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
-        static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS", "CONTROLS" };
+        static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS" };
         GUIStyle title, label, button, small;
 
-        void Start() => ApplySettings();
-
-        public static void ApplySettings()
+        void Start()
         {
-            RMInput.LoadOptions();
-            RMInput.MouseSensitivity = PlayerPrefs.GetFloat("RexMagnum_LookSpeed", 0.08f);
-            RMInput.LookScaleX = PlayerPrefs.GetFloat("RexMagnum_LookX", 1f);
-            RMInput.LookScaleY = PlayerPrefs.GetFloat("RexMagnum_LookY", 1f);
-            RMInput.InvertY = PlayerPrefs.GetInt("RexMagnum_InvertY", 0) == 1;
-            AudioListener.volume = PlayerPrefs.GetFloat("RexMagnum_Volume", 1f);
+            ApplySettings();
+            panel.editTouchLayout = () => SetOpen(false);
         }
+
+        public static void ApplySettings() => SettingsPanel.ApplyAll();
 
         void Update()
         {
-            if (waitingPad != null)
+            if (Open)
             {
-                var g = Gamepad.current;
-                if (g == null) { waitingPad = null; return; }
-                foreach (var b in RMInput.PadChoices)
-                    if (g[b].wasPressedThisFrame)
-                    {
-                        RMInput.RebindPad(waitingPad, b);
-                        waitingPad = null;
-                        break;
-                    }
-                return;
-            }
-            if (waitingFor != null)
-            {
+                if (tab == 3)
+                {
+                    if (panel.Update()) { SetOpen(false); return; }
+                    if (panel.Waiting) return;
+                }
+                else if (MenuNav.Back) { MenuNav.Consume(); SetOpen(false); return; }
+                var g = UnityEngine.InputSystem.Gamepad.current;
                 var k = Keyboard.current;
+                if (g != null && g.leftTrigger.wasPressedThisFrame) SetTab(tab - 1);
+                if (g != null && g.rightTrigger.wasPressedThisFrame) SetTab(tab + 1);
                 if (k != null)
-                    foreach (var key in k.allKeys)
-                        if (key.wasPressedThisFrame)
-                        {
-                            if (key.keyCode != Key.Escape || waitingFor == "Pause") RMInput.Rebind(waitingFor, key.keyCode);
-                            waitingFor = null;
-                            break;
-                        }
+                    for (int i = 0; i < Tabs.Length; i++)
+                        if (k[Key.Digit1 + i].wasPressedThisFrame) SetTab(i);
+                if (tab != 3 && g != null)
+                    scroll.y += -g.leftStick.ReadValue().y * 900f * Time.unscaledDeltaTime;   // scroll the lists with the stick
+                if (tab != 3 && (MenuNav.Left || MenuNav.PagePrev)) SetTab(tab - 1);
+                if (tab != 3 && (MenuNav.Right || MenuNav.PageNext)) SetTab(tab + 1);
+                if (RMInput.Pause && !panel.Waiting && !MenuNav.Consumed) SetOpen(false);
                 return;
             }
             if (GameFlow.Busy) return;
-            if (RMInput.Pause) SetOpen(!Open);
+            if (RMInput.Pause) SetOpen(true);
+        }
+
+        void SetTab(int t)
+        {
+            tab = (t + Tabs.Length) % Tabs.Length;
+            scroll = Vector2.zero;
         }
 
         void SetOpen(bool o)
@@ -72,9 +70,9 @@ namespace RexMagnum
             AudioListener.pause = o;
             Cursor.lockState = o ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = o;
-            var rex = FindFirstObjectByType<RexController>();
+            var rex = FindAnyObjectByType<RexController>();
             if (rex != null && GolfCart.Driven == null) rex.InputEnabled = !o;
-            var rig = FindFirstObjectByType<RexCameraRig>();
+            var rig = FindAnyObjectByType<RexCameraRig>();
             if (rig != null) rig.InputEnabled = !o;
             if (!o) { Progress.Flush(); PlayerPrefs.Save(); }
         }
@@ -100,8 +98,14 @@ namespace RexMagnum
             GUI.Label(new Rect(0, 20 * s, w, 50 * s), "PAUSED", title);
             float tw = w / Tabs.Length;
             for (int i = 0; i < Tabs.Length; i++)
-                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 46 * s), tab == i, Tabs[i], button)) tab = i;
+                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 46 * s), tab == i, Tabs[i], button) && tab != i) SetTab(i);
             var area = new Rect(w * 0.08f, 150 * s, w * 0.84f, h - 260 * s);
+            if (tab == 3)
+            {
+                panel.Draw(area, s);
+                if (GUI.Button(new Rect(w * 0.5f - 160 * s, h - 90 * s, 320 * s, 60 * s), "RESUME", button)) SetOpen(false);
+                return;
+            }
             GUILayout.BeginArea(area);
             scroll = GUILayout.BeginScrollView(scroll);
             switch (tab)
@@ -109,8 +113,6 @@ namespace RexMagnum
                 case 0: MapTab(); break;
                 case 1: AlbumTab(s, area.width); break;
                 case 2: AccomplishmentsTab(); break;
-                case 3: SettingsTab(); break;
-                case 4: ControlsTab(); break;
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -175,105 +177,6 @@ namespace RexMagnum
                 bool ok = Progress.IsUnlocked(a.id);
                 int v = Mathf.Min(Progress.Value(a.counter), a.need);
                 GUILayout.Label($"{(ok ? "[x]" : "[ ]")}  {a.name} — {a.desc}{(ok || a.need <= 1 ? "" : $"  ({v}/{a.need})")}", ok ? label : small);
-            }
-        }
-
-        void Toggle(string text, string key, int def)
-        {
-            bool v = PlayerPrefs.GetInt(key, def) == 1;
-            bool n = GUILayout.Toggle(v, text, label);
-            if (n != v) { PlayerPrefs.SetInt(key, n ? 1 : 0); ApplySettings(); }
-        }
-
-        static float Slider(string name, string key, float def, float min, float max, GUIStyle st)
-        {
-            float v = PlayerPrefs.GetFloat(key, def);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"{name}: {v:0.00}", st, GUILayout.Width(360));
-            float n = GUILayout.HorizontalSlider(v, min, max, GUILayout.Width(400));
-            GUILayout.EndHorizontal();
-            if (!Mathf.Approximately(n, v)) { PlayerPrefs.SetFloat(key, n); ApplySettings(); }
-            return n;
-        }
-
-        void SettingsTab()
-        {
-            GUILayout.Label("GRAPHICS", title);
-            int q = PlayerPrefs.GetInt(QualityAuto.PrefKey, -1);
-            int nq = GUILayout.Toolbar(q + 1, new[] { "AUTO", "LOW", "MEDIUM", "HIGH", "ULTRA" }, button) - 1;
-            if (nq != q) FindFirstObjectByType<QualityAuto>()?.SetFromSettings(nq);
-            GUILayout.Space(16);
-            GUILayout.Label("CAMERA", title);
-            int cm = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);
-            int ncm = GUILayout.Toolbar(cm, new[] { "FIRST PERSON", "THIRD PERSON", "REMEMBER LAST" }, button);
-            if (ncm != cm) PlayerPrefs.SetInt("RexMagnum_CamDefault", ncm);
-            bool bob = PlayerPrefs.GetInt("RexMagnum_HeadBob", 1) == 1;
-            bool nb = GUILayout.Toggle(bob, " Head bob (first person)", label);
-            if (nb != bob) PlayerPrefs.SetInt("RexMagnum_HeadBob", nb ? 1 : 0);
-            Slider("Look speed", "RexMagnum_LookSpeed", 0.08f, 0.02f, 0.25f, label);
-            Slider("Look speed X", "RexMagnum_LookX", 1f, 0.3f, 2f, label);
-            Slider("Look speed Y", "RexMagnum_LookY", 1f, 0.3f, 2f, label);
-            bool inv = PlayerPrefs.GetInt("RexMagnum_InvertY", 0) == 1;
-            bool ni = GUILayout.Toggle(inv, " Invert Y", label);
-            if (ni != inv) { PlayerPrefs.SetInt("RexMagnum_InvertY", ni ? 1 : 0); ApplySettings(); }
-            GUILayout.Space(16);
-            GUILayout.Label("KILL CAM", title);
-            int kc = PlayerPrefs.GetInt("RexMagnum_KillCam", 2);
-            int nkc = GUILayout.Toolbar(kc, new[] { "OFF", "LESS OFTEN", "ALWAYS" }, button);
-            if (nkc != kc) PlayerPrefs.SetInt("RexMagnum_KillCam", nkc);
-            GUILayout.Space(16);
-            GUILayout.Label("SOUND", title);
-            Slider("Volume", "RexMagnum_Volume", 1f, 0f, 1f, label);
-            GUILayout.Label("Subtitles: always on (all lines have subtitles).", small);
-        }
-
-        void ControlsTab()
-        {
-            GUILayout.Label("KEYBOARD", title);
-            GUILayout.Label("Click an action, then press the new key. If a key is in use, the two actions swap.", small);
-            foreach (var a in RMInput.Actions)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(a, label, GUILayout.Width(300));
-                string k = waitingFor == a ? "press a key..." : RMInput.KeyFor(a).ToString();
-                if (GUILayout.Button(k, button, GUILayout.Width(260))) waitingFor = a;
-                GUILayout.EndHorizontal();
-            }
-            GUILayout.Space(10);
-            if (GUILayout.Button("RESET KEYBOARD", button, GUILayout.Width(300))) RMInput.ResetKeys();
-            GUILayout.Space(10);
-            GUILayout.Space(16);
-            GUILayout.Label("CONTROLLER BUTTONS", title);
-            GUILayout.Label(Gamepad.current == null ? "Connect a controller to change its buttons." :
-                            "Click an action, then press the new button. If a button is in use, the two actions swap.", small);
-            foreach (var a in RMInput.PadActions)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(a, label, GUILayout.Width(300));
-                string b = waitingPad == a ? "press a button..." : RMInput.PadName(RMInput.PadFor(a));
-                if (GUILayout.Button(b, button, GUILayout.Width(260)) && Gamepad.current != null) waitingPad = a;
-                GUILayout.EndHorizontal();
-            }
-            if (GUILayout.Button("RESET CONTROLLER BUTTONS", button, GUILayout.Width(360))) RMInput.ResetPad();
-            GUILayout.Space(16);
-            GUILayout.Label("CONTROLLER + TOUCH", title);
-            Toggle(" Swap sticks (left-handed)", "RexMagnum_SwapSticks", 0);
-            Toggle(" Swap triggers and bumpers", "RexMagnum_SwapTriggers", 0);
-            Toggle(" Aim assist (phone + controller)", "RexMagnum_AimAssist", 1);
-            GUILayout.Space(10);
-            GUILayout.Label("HOLD OR TAP", title);
-            Toggle(" Run: tap to toggle (off = hold)", "RexMagnum_RunToggle", 0);
-            Toggle(" Aim: tap to toggle (off = hold)", "RexMagnum_AimToggle", 0);
-            Toggle(" Hands down: hold (off = tap to toggle)", "RexMagnum_HandsHold", 0);
-            GUILayout.Space(10);
-            GUILayout.Label("TOUCH BUTTONS", title);
-            if (GUILayout.Button("EDIT TOUCH LAYOUT (drag buttons, resize, opacity)", button, GUILayout.Width(620))) { TouchControls.EditMode = true; SetOpen(false); }
-            if (GUILayout.Button("RESET TOUCH LAYOUT", button, GUILayout.Width(300))) TouchControls.ResetLayout();
-            GUILayout.Space(10);
-            if (GUILayout.Button("RESET CONTROLLER + TOUCH OPTIONS", button, GUILayout.Width(460)))
-            {
-                foreach (var k in new[] { "SwapSticks", "SwapTriggers", "AimAssist", "RunToggle", "AimToggle", "HandsHold" }) PlayerPrefs.DeleteKey("RexMagnum_" + k);
-                ApplySettings();
             }
         }
     }

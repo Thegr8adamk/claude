@@ -205,7 +205,7 @@ namespace RexMagnum
                 if (label != null) GUI.Label(rect, label, style);
             }
             string word = "Punch";
-            if (actions == null) actions = FindFirstObjectByType<RexActions>();
+            if (actions == null) actions = FindAnyObjectByType<RexActions>();
             var rw = actions;
             if (rw != null && !string.IsNullOrEmpty(rw.ActionWord)) word = rw.ActionWord;
             Draw(Btn("Action"), Rad("Action"), word, opacity);

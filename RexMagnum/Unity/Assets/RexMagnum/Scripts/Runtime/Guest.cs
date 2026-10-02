@@ -40,7 +40,7 @@ namespace RexMagnum
             if (Blob.Loot == null && rewardPrefabs != null && rewardPrefabs.Length > 0) Blob.Loot = rewardPrefabs;   // ammo pickups for blob drops
             if (!TryGetComponent(out voice)) voice = gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 1f;
-            var rc = FindFirstObjectByType<RexController>();
+            var rc = FindAnyObjectByType<RexController>();
             if (rc != null) { rex = rc.transform; rexCtrl = rc; }
             home = transform.position;
             agent.speed = 1.4f;
@@ -155,7 +155,7 @@ namespace RexMagnum
                 if (best != null) target = best.position;
             }
             if (NavMesh.SamplePosition(target, out NavMeshHit hit, 6f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
-            Say(GuestLines.Scream());
+            Say(GuestLines.Scream(), -1, true);      // crowd line: does not push other subtitles off the screen
         }
 
         /// <summary>Rescue clues (brief section 3): where weapons and big goals are.</summary>
@@ -196,22 +196,25 @@ namespace RexMagnum
             var pair = security ? GuestLines.Carmen() : GuestLines.FlirtFor(guestName);
             if (security) Progress.Add("carmen_flirts");
             // Rex's flirt take, voiced (Resources/Voice/Rex/flirt_NN or carmen_NN)
-            if (rex != null) RexVoice.SayLine(rex.gameObject, "REX", pair.rex, security ? $"Voice/Rex/carmen_{pair.global + 1:00}" : $"Voice/Rex/flirt_{pair.global + 1:00}");
+            float t = 2.2f;
+            if (rex != null) t = RexVoice.SayLine(rex.gameObject, "REX", pair.rex, security ? $"Voice/Rex/carmen_{pair.global + 1:00}" : $"Voice/Rex/flirt_{pair.global + 1:00}");
             else RexVoice.Subtitle?.Invoke("REX: " + pair.rex);
-            yield return new WaitForSeconds(2.2f);
-            Say(pair.answer, pair.index);
-            yield return new WaitForSeconds(1.8f);
+            yield return new WaitForSeconds(t + 0.25f);          // the answer starts when Rex's line ends
+            t = Say(pair.answer, pair.index);
+            yield return new WaitForSeconds(t + 0.25f);
             if (!security && rex != null) RexVoice.Say(rex.gameObject, "FlirtFail", true);
         }
 
-        void Say(string line, int index = -1)
+        /// <summary>Show and play a line; returns its length in seconds (clip, or reading time).</summary>
+        float Say(string line, int index = -1, bool crowd = false)
         {
-            RexVoice.Subtitle?.Invoke($"{guestName.ToUpper()}: {line}");
-            if (index >= 0)
-            {
-                var clip = Resources.Load<AudioClip>($"Voice/Guests/{guestName}/answer_{index + 1:00}");
-                if (clip != null) voice.PlayOneShot(clip);
-            }
+            AudioClip clip = index >= 0 ? Resources.Load<AudioClip>($"Voice/Guests/{guestName}/answer_{index + 1:00}") : null;
+            if (clip != null) voice.PlayOneShot(clip, AudioMix.Voice);
+            float length = clip != null ? clip.length : Mathf.Clamp(line.Length * 0.06f, 1.5f, 6f);
+            string text = $"{guestName.ToUpper()}: {line}";
+            if (crowd && RexVoice.SubtitleCrowd != null) RexVoice.SubtitleCrowd(text);
+            else RexVoice.ShowSubtitle(text, length + 0.4f);
+            return length;
         }
     }
 

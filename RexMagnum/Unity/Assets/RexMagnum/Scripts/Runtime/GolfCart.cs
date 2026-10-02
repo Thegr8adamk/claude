@@ -31,8 +31,8 @@ namespace RexMagnum
             rb.mass = 400f;
             rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
-            rex = FindFirstObjectByType<RexController>();
-            rig = FindFirstObjectByType<RexCameraRig>();
+            rex = FindAnyObjectByType<RexController>();
+            rig = FindAnyObjectByType<RexCameraRig>();
             SetLights(false);
         }
 

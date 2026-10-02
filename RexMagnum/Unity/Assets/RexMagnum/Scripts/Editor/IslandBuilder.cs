@@ -108,10 +108,10 @@ namespace RexMagnum.EditorTools
                 var sp = data.spawn.pos;
                 Vector3 spawn = hasRoom ? U(room.wake) : U(sp[0], sp[1], sp[2]);
                 var rex = RexBuilder.AddPlayer(rexPrefab, controller, spawn, hasRoom ? 270f : data.spawn.yaw + 180f, null, 2500f);
-                var nav = UnityEngine.Object.FindFirstObjectByType<RuntimeNavMesh>();
+                var nav = UnityEngine.Object.FindAnyObjectByType<RuntimeNavMesh>();
                 Vector3 pool = data.pool != null && data.pool.Length == 3 ? U(data.pool) : spawn;
                 if (nav != null) { nav.center = pool + new Vector3(0f, 0f, -30f); nav.size = new Vector3(200f, 60f, 240f); }
-                var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+                var spawner = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
                 if (spawner != null) { spawner.transform.position = pool; spawner.radius = 18f; spawner.maxAlive = 6; }
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
                 var dn = game.AddComponent<DayNight>();
@@ -213,8 +213,8 @@ namespace RexMagnum.EditorTools
                     mi.useFileScale = true;
                     mi.addCollider = false;
                     mi.isReadable = true;          // collision meshes + baked vegetation meshes read the vertices
-                    mi.meshCompression = ModelImporterMeshCompression.Low;
-                    mi.indexFormat = ModelImporterIndexFormat.Auto;
+                    mi.meshCompression = ModelImporterMeshCompression.Off;   // full precision: big buildings (90 m) keep exact vertices
+                    mi.indexFormat = ModelImporterIndexFormat.UInt32;           // no 16-bit index wrap on the 100k-triangle buildings
                     mi.importNormals = ModelImporterNormals.Import;
                     mi.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
                     foreach (var kv in mats)
@@ -391,6 +391,7 @@ namespace RexMagnum.EditorTools
             if (asset == null) { Debug.LogWarning("Missing " + a.fbx); return; }
             var root = new GameObject(a.name);
             var model = (GameObject)PrefabUtility.InstantiatePrefab(asset, root.transform);
+            StripImportedLODs(model);
             ApplyFix(model.transform);
             var rs = model.GetComponentsInChildren<MeshRenderer>();
             var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();       // extras (_Door, _Bottle, _Core) stay outside the LODs
@@ -405,7 +406,7 @@ namespace RexMagnum.EditorTools
             {
                 r.shadowCastingMode = ShadowCastingMode.On;
                 GameObjectUtility.SetStaticEditorFlags(r.gameObject,
-                    StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+                    StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
             }
             // collision: LOD0 without water, falls, curtains, straw...
             foreach (var r in lod0)
@@ -424,6 +425,21 @@ namespace RexMagnum.EditorTools
             UnityEngine.Object.DestroyImmediate(root);
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             inst.isStatic = true;
+        }
+
+        /// <summary>The FBX importer adds its own LODGroup when meshes are named _LOD0/_LOD1. With our LODGroup on the
+        /// parent, two groups own the same renderers and Unity can draw the low (decimated) copies inside the full one:
+        /// big slanted wedges through Room 304 and the balcony. Unpack the instance and remove the imported group.</summary>
+        static void StripImportedLODs(GameObject model)
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(model))
+                PrefabUtility.UnpackPrefabInstance(model, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            foreach (var g in model.GetComponentsInChildren<LODGroup>(true)) UnityEngine.Object.DestroyImmediate(g);
+            foreach (var r in model.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null || mf.sharedMesh.triangles.Length == 0) r.enabled = false;  // empty LOD (Room304_LOD1)
+            }
         }
 
         static Mesh CollisionMesh(Mesh src, Material[] mats, string name)
@@ -522,15 +538,16 @@ namespace RexMagnum.EditorTools
             }
             // lights: lamps, ceiling, flickering TV
             var warm = new Color(1f, 0.8f, 0.55f);
-            PointLight("Lamp1", U(room.lamp1), warm, 1.2f, 4f, gp, false);
-            PointLight("Lamp2", U(room.lamp2), warm, 1.2f, 4f, gp, false);
-            PointLight("CeilingLight", U(room.ceiling), new Color(1f, 0.9f, 0.75f), 2.5f, 8f, gp, true);
+            // soft values: the bedside lamps stand close to the walls (a strong point light there burns a white spot)
+            PointLight("Lamp1", U(room.lamp1) + Vector3.down * 0.1f, warm, 0.45f, 3f, gp, false);
+            PointLight("Lamp2", U(room.lamp2) + Vector3.down * 0.1f, warm, 0.45f, 3f, gp, false);
+            PointLight("CeilingLight", U(room.ceiling), new Color(1f, 0.9f, 0.75f), 1.6f, 7f, gp, true);
             var tv = new GameObject("TVLight").AddComponent<Light>();
             tv.transform.SetParent(gp, false);
             tv.transform.position = U(room.tv);
             tv.type = LightType.Point;
             tv.range = 5f;
-            tv.gameObject.AddComponent<LightFlicker>();
+            tv.gameObject.AddComponent<LightFlicker>().baseIntensity = 0.6f;
             // wake-up points, respawn in the room (brief: Rex wakes in room 304 after dying)
             var bed = Point("BedLie", U(room.bedLie), 270f, gp);
             var wake = Point("WakePoint", U(room.wake), 270f, gp);
@@ -553,7 +570,7 @@ namespace RexMagnum.EditorTools
             tdata.renderPostProcessing = true;
             var flow = game.AddComponent<GameFlow>();
             flow.titleCamera = tc;
-            var rig = UnityEngine.Object.FindFirstObjectByType<RexCameraRig>();
+            var rig = UnityEngine.Object.FindAnyObjectByType<RexCameraRig>();
             flow.playerCamera = rig != null ? rig.GetComponent<Camera>() : Camera.main;
             flow.rex = rex.GetComponent<RexController>();
             flow.bedPoint = bed.transform;
@@ -787,7 +804,7 @@ namespace RexMagnum.EditorTools
             }
             fc.hallLights = hall.ToArray();
             // a blob spawner inside the factory (eggs hatching) until the core is destroyed
-            var spawnerSrc = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+            var spawnerSrc = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (spawnerSrc != null)
             {
                 var sp = UnityEngine.Object.Instantiate(spawnerSrc.gameObject, root).GetComponent<BlobSpawner>();
@@ -874,7 +891,7 @@ namespace RexMagnum.EditorTools
                 l.color = i % 5 == 4 ? new Color(0.4f, 1f, 0.35f) : new Color(1f, 0.75f, 0.45f);
                 l.shadows = i % 3 == 0 ? LightShadows.Soft : LightShadows.None;
             }
-            var spawner = UnityEngine.Object.FindFirstObjectByType<BlobSpawner>();
+            var spawner = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (spawner != null && main.Count >= 2)
             {
                 var sp = new GameObject("TunnelBlobs").AddComponent<BlobSpawner>();
@@ -974,6 +991,7 @@ namespace RexMagnum.EditorTools
         {
             var root = new GameObject("GolfCart");
             var model = (GameObject)PrefabUtility.InstantiatePrefab(fbx, root.transform);
+            StripImportedLODs(model);
             ApplyFix(model.transform);
             foreach (var r in model.GetComponentsInChildren<MeshRenderer>())
                 if (r.name.EndsWith("_LOD1") || r.name.EndsWith("_LOD2")) r.gameObject.SetActive(false);
@@ -1356,7 +1374,7 @@ namespace RexMagnum.EditorTools
 
         static void Lighting()
         {
-            var sun = UnityEngine.Object.FindFirstObjectByType<Light>();
+            var sun = UnityEngine.Object.FindAnyObjectByType<Light>();
             if (sun == null) sun = new GameObject("Sun").AddComponent<Light>();
             sun.name = "Sun";
             sun.type = LightType.Directional;

@@ -378,6 +378,7 @@ SHOTS_V2 = [
     ("v2_beach_tiki.png", (124, -362, None), (108, -343, 2.6), 24),
     ("v2_beach_dive.png", (-14, -364, None), (-30, -345, 3.0), 24),
     ("v2_hotel_from_beach.png", (75, -420, 28), (40, -268, 4), 24),
+    ("title_hotel_beach.png", (118, -392, 3.2), (30, -282, 12), 20),     # title screen: low on the sand, hotel + beach + pier
     ("v2_waterfall.png", (15, 110, 30), (40, 252, 40), 30),
     ("v2_cave.png", (-152, 200, None), (-160, 230, 3), 26),
     ("v2_ruins.png", (300, 30, 3), (300, 70, 11), 20),

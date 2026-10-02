@@ -81,11 +81,11 @@ namespace RexMagnum
             if (spawners != null)
                 foreach (var sp in spawners)
                     if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 2.5f, Night) * sp.factoryScale));
-            if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f, Time.deltaTime * 0.1f);
+            if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
             if (Night > 0.8f && Time.time > nextLine)
             {
                 nextLine = Time.time + 240f;
-                var rex = FindFirstObjectByType<RexController>();
+                var rex = FindAnyObjectByType<RexController>();
                 if (rex != null) RexVoice.Say(rex.gameObject, "Night", true);
             }
         }

@@ -57,7 +57,17 @@ namespace RexMagnum
 
         static readonly Dictionary<string, int> last = new Dictionary<string, int>();
         static float nextAllowed;
-        public static System.Action<string> Subtitle;   // UI hook
+        public static System.Action<string> Subtitle;   // UI hook (shown about 3 s)
+        /// <summary>UI hook with a time: the subtitle stays as long as the voice clip plays.</summary>
+        public static System.Action<string, float> SubtitleTimed;
+        /// <summary>Crowd lines (guest screams): shown only when no other subtitle is on screen.</summary>
+        public static System.Action<string> SubtitleCrowd;
+
+        public static void ShowSubtitle(string text, float seconds)
+        {
+            if (SubtitleTimed != null) SubtitleTimed(text, seconds);
+            else Subtitle?.Invoke(text);
+        }
 
         /// <summary>Voice mail to Marty (brief section 9): played in order, one per call.</summary>
         public static readonly string[] VoiceMail =
@@ -76,11 +86,11 @@ namespace RexMagnum
         /// <summary>A line with its own speaker name and clip path (Marty, voice mail).</summary>
         public static float SayLine(GameObject speaker, string who, string text, string clipPath)
         {
-            Subtitle?.Invoke(who + ": " + text);
             var clip = Resources.Load<AudioClip>(clipPath);
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
             float length = clip != null ? clip.length : Mathf.Clamp(text.Length * 0.06f, 2f, 7f);   // or reading time
-            if (clip != null && src != null) src.PlayOneShot(clip);
+            if (clip != null && src != null) src.PlayOneShot(clip, AudioMix.Voice);
+            ShowSubtitle(who + ": " + text, length + 0.4f);      // same frame as the sound, as long as the sound
             nextAllowed = Time.time + length;                    // no other line talks over it
             return length;
         }
@@ -92,11 +102,13 @@ namespace RexMagnum
             int i = Random.Range(0, lines.Length);
             if (lines.Length > 1 && last.TryGetValue(group, out int prev) && prev == i) i = (i + 1) % lines.Length;
             last[group] = i;
-            nextAllowed = Time.time + 2.5f;
-            Subtitle?.Invoke("REX: " + lines[i]);
             var clip = Resources.Load<AudioClip>($"Voice/Rex/{group.ToLowerInvariant()}_{i + 1:00}");
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
-            if (clip != null && src != null) src.PlayOneShot(clip);
+            float length = clip != null ? clip.length : Mathf.Clamp(lines[i].Length * 0.06f, 2f, 6f);
+            if (force && src != null) src.Stop();                // a forced line cuts the one before (no two Rex voices at once)
+            if (clip != null && src != null) src.PlayOneShot(clip, AudioMix.Voice);
+            nextAllowed = Time.time + length + 0.3f;             // the next line waits until this one is finished
+            ShowSubtitle("REX: " + lines[i], length + 0.4f);
         }
     }
 }

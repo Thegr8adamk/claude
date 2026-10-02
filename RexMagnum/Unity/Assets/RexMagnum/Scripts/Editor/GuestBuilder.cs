@@ -66,8 +66,9 @@ namespace RexMagnum.EditorTools
                 if (!inst.TryGetComponent<Animator>(out var an)) an = inst.AddComponent<Animator>();
                 an.runtimeAnimatorController = controller;
                 an.applyRootMotion = false;
-                var l = an.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-                var r = an.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                bool human = an.avatar != null && an.avatar.isHuman;
+                var l = human ? an.GetBoneTransform(HumanBodyBones.LeftUpperArm) : null;
+                var r = human ? an.GetBoneTransform(HumanBodyBones.RightUpperArm) : null;
                 if (l != null && r != null && Vector3.Dot(Vector3.Cross(r.position - l.position, Vector3.up), Vector3.forward) < 0f)
                     inst.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                 var agent = root.AddComponent<NavMeshAgent>();

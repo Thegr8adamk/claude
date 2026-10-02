@@ -63,7 +63,9 @@ namespace RexMagnum.EditorTools
             ConfigureTextures();
             var mats = BuildMaterials();
             ImportModel(Char + "/Rex.fbx", mats);
-            ImportModel(Char + "/Rex_FPArms.fbx", mats);
+            // the arms file has the full skeleton but only arm skin: Unity cannot auto-map its legs,
+            // so it copies Rex's avatar (same "Rex_Rig" hierarchy) instead of making its own
+            ImportModel(Char + "/Rex_FPArms.fbx", mats, AssetDatabase.LoadAllAssetsAtPath(Char + "/Rex.fbx").OfType<Avatar>().FirstOrDefault());
             ImportSwimClips();
             var controller = BuildController();
             return (BuildRexPrefab(controller), controller);
@@ -170,7 +172,7 @@ namespace RexMagnum.EditorTools
 
         // ------------------------------------------------------------ models + clips
 
-        static void ImportModel(string path, Dictionary<string, Material> mats)
+        static void ImportModel(string path, Dictionary<string, Material> mats, Avatar copyFrom = null)
         {
             var mi = (ModelImporter)AssetImporter.GetAtPath(path);
             if (mi == null) throw new Exception("Missing " + path);
@@ -180,7 +182,8 @@ namespace RexMagnum.EditorTools
             mi.importCameras = false;
             mi.importLights = false;
             mi.animationType = ModelImporterAnimationType.Human;
-            mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            mi.avatarSetup = copyFrom != null ? ModelImporterAvatarSetup.CopyFromOther : ModelImporterAvatarSetup.CreateFromThisModel;
+            if (copyFrom != null) mi.sourceAvatar = copyFrom;
             mi.importAnimation = true;
             mi.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
             mi.materialLocation = ModelImporterMaterialLocation.InPrefab;
@@ -392,8 +395,10 @@ namespace RexMagnum.EditorTools
             anim.applyRootMotion = false;
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             // A Blender model can come in facing backward: turn it to face +Z
-            var l = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
-            var r = anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            bool human = anim.avatar != null && anim.avatar.isHuman;
+            if (!human) Debug.LogWarning("[Rex Magnum] " + Path.GetFileName(fbx) + ": avatar is not humanoid");
+            var l = human ? anim.GetBoneTransform(HumanBodyBones.LeftUpperArm) : null;
+            var r = human ? anim.GetBoneTransform(HumanBodyBones.RightUpperArm) : null;
             if (l != null && r != null)
             {
                 Vector3 fwd = Vector3.Cross(r.position - l.position, Vector3.up);
@@ -460,7 +465,7 @@ namespace RexMagnum.EditorTools
             Block("Box2", new Vector3(5.2f, 0.5f, 3), Vector3.one, Quaternion.identity, bm);
             Block("Column", new Vector3(2, 2, -4), new Vector3(0.8f, 4, 0.8f), Quaternion.identity, bm);
 
-            var sun = UnityEngine.Object.FindFirstObjectByType<Light>();
+            var sun = UnityEngine.Object.FindAnyObjectByType<Light>();
             if (sun != null)
             {
                 sun.color = new Color(1f, 0.95f, 0.85f);
@@ -499,6 +504,7 @@ namespace RexMagnum.EditorTools
             data.renderPostProcessing = true;
             data.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
             var rig = camGo.AddComponent<RexCameraRig>();
+            camGo.AddComponent<VRMode>();                 // Settings > Camera & VR > VR mode (OpenXR headset)
             rig.target = rex.transform;
             rig.cam = cam;
             rig.bodyAnimator = ctrl.bodyAnimator;

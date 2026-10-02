@@ -146,7 +146,7 @@ namespace RexMagnum
             bool run = InputEnabled && RMInput.Run && input.magnitude > 0.1f;
             IsRunning = run && new Vector2(velocity.x, velocity.z).magnitude > walkSpeed;
 
-            float yaw = cameraRig != null ? cameraRig.Yaw : transform.eulerAngles.y;
+            float yaw = cameraRig != null ? cameraRig.MoveYaw : transform.eulerAngles.y;   // VR: where the head looks
             Quaternion yawRot = Quaternion.Euler(0f, yaw, 0f);
             Vector3 wish = yawRot * new Vector3(input.x, 0f, input.y);
             UpdateWater();

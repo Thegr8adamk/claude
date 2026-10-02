@@ -54,7 +54,7 @@ namespace RexMagnum
             float y = respawnPoint != null ? respawnPoint.eulerAngles.y : startYaw;
             ctrl.Teleport(p, y);
             if (ctrl.bodyAnimator) ctrl.bodyAnimator.Play("Locomotion", 0, 0f);
-            if (ctrl.armsAnimator) ctrl.armsAnimator.Play("Locomotion", 0, 0f);
+            if (ctrl.armsAnimator && ctrl.armsAnimator.gameObject.activeInHierarchy) ctrl.armsAnimator.Play("Locomotion", 0, 0f);
             health.ResetHealth();
             ctrl.Revive();
             RexVoice.Say(gameObject, "Respawn", true);

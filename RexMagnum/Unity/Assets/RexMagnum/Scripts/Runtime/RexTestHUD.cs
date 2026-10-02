@@ -29,7 +29,10 @@ namespace RexMagnum
             subtitle = MakeText(go.transform, font, new Vector2(0.5f, 0), new Vector2(0, 120), 34, TextAnchor.LowerCenter);
             subtitle.rectTransform.sizeDelta = new Vector2(1600, 200);
             hp = MakeText(go.transform, font, new Vector2(0, 0), new Vector2(40, 40), 36, TextAnchor.LowerLeft);
-            RexVoice.Subtitle = line => { subtitle.text = line; subtitleUntil = Time.time + 3f; };
+            RexVoice.Subtitle = line => ShowLine(line, 3f);
+            RexVoice.SubtitleTimed = ShowLine;
+            RexVoice.SubtitleCrowd = line => { if (Time.time > subtitleUntil - 0.2f) ShowLine(line, 1.6f); };   // never over a real line
+            weapon = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 92), 26, TextAnchor.LowerRight);
             prompt = MakeText(go.transform, font, new Vector2(0.5f, 0.5f), new Vector2(0, -80), 28, TextAnchor.MiddleCenter);
             prompt.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             scope = new GameObject("Scope", typeof(RectTransform), typeof(Image));
@@ -63,9 +66,22 @@ namespace RexMagnum
             return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f));
         }
 
+        Text weapon;
+
+        void ShowLine(string line, float seconds)
+        {
+            if (!AudioMix.Subtitles) return;        // Settings > Sound > Subtitles
+            subtitle.text = line;
+            subtitleUntil = Time.time + Mathf.Max(1.2f, seconds);
+        }
+
         Text MakeText(Transform parent, Font font, Vector2 anchor, Vector2 pos, int size, TextAnchor align)
         {
-            var g = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(Shadow));
+            // black outline: the text stays readable on a bright sky, sand or a white wall
+            var g = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(Outline));
+            var ol = g.GetComponent<Outline>();
+            ol.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            ol.effectDistance = new Vector2(2f, -2f);
             g.transform.SetParent(parent, false);
             var rt = g.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = rt.pivot = anchor;
@@ -80,6 +96,21 @@ namespace RexMagnum
         }
 
         Canvas canvas;
+
+        void OnEnable() => VRMode.Changed += OnVR;
+        void OnDisable() => VRMode.Changed -= OnVR;
+
+        /// <summary>VR: a screen overlay is not drawn in the headset, so the HUD moves onto a plane 1 m in front of the eyes.</summary>
+        void OnVR(bool on)
+        {
+            if (canvas == null) canvas = GetComponentInChildren<Canvas>(true);
+            if (canvas == null) return;
+            canvas.renderMode = on ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = on && rig != null ? rig.cam : null;
+            canvas.planeDistance = 1f;
+            var sc = canvas.GetComponent<CanvasScaler>();
+            if (sc != null) sc.referenceResolution = on ? new Vector2(2600, 1460) : new Vector2(1920, 1080);   // VR: keep text inside the view
+        }
 
         void Update()
         {
@@ -101,6 +132,13 @@ namespace RexMagnum
                         $"{B("Action")}: tap = light, hold = heavy · {B("Wheel")}: weapon wheel\n" +
                         $"{B("Taunt")} taunt · {B("Photo")} photo · {B("Hands")} hands down/up · {B("Shoulder")} swap shoulder · {B("Pause")} pause";
             action.text = actions.ActionWord;
+            if (actions.weapons != null)
+            {
+                var w = actions.weapons;
+                var d = w.Current;
+                weapon.text = d.isGun ? $"{d.name.ToUpper()}  {w.Ammo(d.id)}" : d.name.ToUpper();
+                weapon.color = d.color;
+            }
             if (Time.time > subtitleUntil) subtitle.text = "";
             prompt.text = WeaponPickup.Nearby != null ? WeaponPickup.Nearby.Label : FoodPickup.Nearby != null ? FoodPickup.Nearby.Label : "";
             if (actions.weapons != null) scope.SetActive(actions.weapons.Scoped);

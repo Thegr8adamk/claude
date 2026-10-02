@@ -145,29 +145,29 @@ Claude can see your ElevenLabs flows, but it can't download the audio files. Dow
 
 | Item in your flow | File name |
 |---|---|
-| Title theme v2 | `title_theme.mp3` |
-| Day resort v2 | `day_resort.mp3` |
-| Night jungle v1 | `night_jungle.mp3` |
-| Fight v2 | `fight.mp3` |
-| King Glorp power ballad v1 | `glorp_ballad.mp3` |
-| Rex lounge act v1 | `lounge_act.mp3` |
-| Elevator music (optional, not in your flow yet: soft hotel elevator music) | `elevator.mp3` |
+| Title theme v2 | `title_theme.ogg` |
+| Day resort v2 | `day_resort.ogg` |
+| Night jungle v1 | `night_jungle.ogg` |
+| Fight v2 | `fight.ogg` |
+| King Glorp power ballad v1 | `glorp_ballad.ogg` |
+| Rex lounge act v1 | `lounge_act.ogg` |
+| Elevator music (optional, not in your flow yet: soft hotel elevator music) | `elevator.ogg` |
 
 **Sound effects** → `Unity/Assets/RexMagnum/Resources/Sfx/`
 
 | Item | File name |
 |---|---|
-| Blob idle gurgle / slide / spit / angry / hit / pop (v2) | `blob_idle.mp3`, `blob_slide.mp3`, `blob_spit.mp3`, `blob_angry.mp3`, `blob_hit.mp3`, `blob_pop.mp3` |
-| Towel crack 1 | `towel_crack.mp3` |
-| Bottle break 1 | `bottle_break.mp3` |
-| Knife stab + leak 1 | `knife_stab.mp3` |
-| Golf swing 2 | `golf_swing.mp3` |
-| Swordfish freeze/break 2 | `swordfish.mp3` |
-| Pistol 1 | `pistol.mp3` |
-| Harpoon 2 | `harpoon.mp3` |
-| Sniper + slow bullet 1 | `sniper.mp3` |
-| Coconut fuse + boom 2 | `coconut.mp3` |
+| Blob idle gurgle / slide / spit / angry / hit / pop (v2) | `blob_idle.ogg`, `blob_slide.ogg`, `blob_spit.ogg`, `blob_angry.ogg`, `blob_hit.ogg`, `blob_pop.ogg` |
+| Towel crack 1 | `towel_crack.ogg` |
+| Bottle break 1 | `bottle_break.ogg` |
+| Knife stab + leak 1 | `knife_stab.ogg` |
+| Golf swing 2 | `golf_swing.ogg` |
+| Swordfish freeze/break 2 | `swordfish.ogg` |
+| Pistol 1 | `pistol.ogg` |
+| Harpoon 2 | `harpoon.ogg` |
+| Sniper + slow bullet 1 | `sniper.ogg` |
+| Coconut fuse + boom 2 | `coconut.ogg` |
 
 **Rex voice lines** → `Unity/Assets/RexMagnum/Resources/Voice/Rex/`
 
-Use the line group in lower case and the line number in the group, for example `wake_01.mp3` = "Who put the floor so close to my face?". Groups: wake, fists, bottle, towel, knife, golfclub, swordfish, pistol, harpoon, sniper, coconut, taunt, photo, photoalone, slip, slime, hurt, death, respawn, mirror, door, idle, rescue, weaponfound, tourist.
+Use the line group in lower case and the line number in the group, for example `wake_01.ogg (or .mp3; the game reads both)` = "Who put the floor so close to my face?". Groups: wake, fists, bottle, towel, knife, golfclub, swordfish, pistol, harpoon, sniper, coconut, taunt, photo, photoalone, slip, slime, hurt, death, respawn, mirror, door, idle, rescue, weaponfound, tourist.

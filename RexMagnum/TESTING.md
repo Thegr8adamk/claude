@@ -27,6 +27,32 @@
 ## Getting a newer version later
 Download the ZIP again. Close Unity. Delete the old `Assets\RexMagnum` folder, copy in the new one, open Unity, then do step 4.3 and 4.4 again.
 
+### Fixes from your bug report + new things to try (2026-10-02, second test)
+**Important:** the sound files are now `.ogg` (they were `.mp3`). Delete the old `Assets\RexMagnum` folder first.
+If you keep old `.mp3` files next to the new `.ogg` files, Unity finds two files with one name.
+Also delete `Assets\New Shader Graph.shadergraph` (our scripts did not make it; it is safe to delete).
+
+| Your bug | What I changed | What you should see |
+|---|---|---|
+| 1, 2: giant slanted walls in Room 304 and on the balcony | Each building had two LOD groups, so the low-detail copies showed inside the room. The builder now removes the FBX's own LOD group. Mesh compression is off. | A normal square room. A small balcony with a rail. |
+| 3: 26 "registered with more than one LODGroup" warnings | Same fix | 0 of these warnings |
+| 4, 8: rig errors, no arms in first person | The arms copy Rex's avatar. The swim file has the right "Rex_Rig" parent now. | 0 "Rig Error" lines. Press **V**: arms and the held weapon show and punch. |
+| 5: obsolete `FindFirstObjectByType` | Changed to `FindAnyObjectByType` everywhere | No CS0618 warning |
+| 7: subtitles change very fast | Crowd screams show only when no other line is on screen. Each line stays as long as its voice clip. | Lines are readable |
+| 7: hint text small, help text hard to read | Bigger hint box with a dark back. All HUD text has a black outline. | Easy to read on bright sky |
+| 7: "Whip" vs "Punch" | Correct: Rex starts with fists ("Punch"). "Whip" is the towel. A new label above the action word shows the weapon name. | FISTS / BEER BOTTLE / BEACH TOWEL label |
+| 9: white glare on the wall | Bedside lamps, ceiling and TV lights are softer | No white spot |
+| 10: bottle pick-up | Pick-up range ignores height (bottle is on the table). "GOT: BEER BOTTLE" shows. The hints now wait for you to do each step. | Label changes to SWING; Tab shows the bottle |
+| Camera inside Rex's head at a wall | Your fix, built in: body hides (shadow stays) when the camera is closer than 0.9 m | Clean view at walls |
+
+| New | How to try it |
+|---|---|
+| Title screen | A picture of the hotel and the beach. **PLAY**, **SETTINGS**, **QUIT**. Mouse, arrow keys + Enter, or controller (D-pad / stick + A). |
+| Settings (title screen and pause menu) | 4 pages: **GRAPHICS** (quality, render scale, frame limit, V-sync, full screen, field of view), **CAMERA & VR** (third / first person, head bob, look speeds, invert, kill cam, VR mode), **SOUND** (master, music, voices, effects, subtitles), **CONTROLS** (change keys and controller buttons). Controller: LB / RB page, D-pad choose and change, A press, B back. |
+| Controller | Plug in an Xbox / PlayStation controller. All menus and the game work with it. |
+| VR mode | One time: menu **Rex Magnum > Add VR Support**, then follow the box (tick OpenXR). Start your headset app (Quest Link or SteamVR). Settings > CAMERA & VR > VR mode **ON**. |
+| Sound sync | Voices start at once (silence cut from the start of each file). Rex's lines no longer talk over each other. Flirt answers wait for Rex's line to end. |
+
 ### New things to try (2026-10-02)
 | Try this | What you should see |
 |---|---|

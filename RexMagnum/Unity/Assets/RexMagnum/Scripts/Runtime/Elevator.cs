@@ -25,7 +25,7 @@ namespace RexMagnum
 
         void Start()
         {
-            var rc = FindFirstObjectByType<RexController>();
+            var rc = FindAnyObjectByType<RexController>();
             if (rc != null) rex = rc.GetComponent<CharacterController>();
             doorClosed = new Vector3[landingDoors.Length];
             for (int i = 0; i < landingDoors.Length; i++) doorClosed[i] = landingDoors[i].localPosition;
@@ -34,7 +34,7 @@ namespace RexMagnum
             music.loop = true;
             music.spatialBlend = 1f;
             music.maxDistance = 6f;
-            music.volume = 0.5f;
+            music.volume = 0.5f * AudioMix.Music;
             if (music.clip != null) music.Play();
         }
 

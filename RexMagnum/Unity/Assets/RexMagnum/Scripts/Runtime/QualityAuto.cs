@@ -84,8 +84,31 @@ namespace RexMagnum
                 ter.basemapDistance = t >= QualityTier.High ? 400f : 150f;
                 ter.drawInstanced = true;
             }
+            ApplyDisplay();
             Debug.Log($"[Rex Magnum] Graphics: {t} (GPU {SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB, " +
                       $"RAM {SystemInfo.systemMemorySize} MB, {SystemInfo.processorCount} cores)");
+        }
+
+        // ---- Settings > Graphics extras (saved in PlayerPrefs; 0 / default = follow the quality tier)
+        public static readonly string[] RenderScaleNames = { "FROM QUALITY", "50%", "67%", "75%", "85%", "100%", "125%" };
+        static readonly float[] RenderScales = { 0f, 0.5f, 0.67f, 0.75f, 0.85f, 1f, 1.25f };
+        public static readonly string[] FpsNames = { "30", "60", "120", "NO LIMIT" };
+        static readonly int[] FpsValues = { 30, 60, 120, -1 };
+        public static int FpsDefault => Application.isMobilePlatform ? 0 : 1;
+
+        /// <summary>Render scale, frame limit, V-sync and full screen on top of the tier.</summary>
+        public static void ApplyDisplay()
+        {
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            int rs = Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_RenderScale", 0), 0, RenderScales.Length - 1);
+            if (rs > 0 && urp != null) urp.renderScale = RenderScales[rs];
+            QualitySettings.vSyncCount = PlayerPrefs.GetInt("RexMagnum_VSync", Application.isMobilePlatform ? 0 : 1);
+            Application.targetFrameRate = FpsValues[Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_FpsLimit", FpsDefault), 0, FpsValues.Length - 1)];
+            if (!Application.isMobilePlatform && !Application.isEditor)
+            {
+                var mode = PlayerPrefs.GetInt("RexMagnum_Fullscreen", 1) == 1 ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+                if (Screen.fullScreenMode != mode) Screen.fullScreenMode = mode;
+            }
         }
 
         /// <summary>Settings menu: -1 = auto, 0..3 = fixed tier.</summary>

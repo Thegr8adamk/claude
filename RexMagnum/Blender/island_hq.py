@@ -997,7 +997,8 @@ def setup_render(samples, res):
             break
         except TypeError:
             continue
-    for attr, val in (("sun_elevation", math.radians(32)), ("sun_rotation", math.radians(215)),
+    elev = float(os.environ.get("SUN_ELEV", "32"))          # title picture: low golden-hour sun
+    for attr, val in (("sun_elevation", math.radians(elev)), ("sun_rotation", math.radians(215)),
                       ("air_density", 1.0), ("dust_density", 2.0), ("altitude", 10.0)):
         if hasattr(sky, attr):
             setattr(sky, attr, val)
@@ -1005,10 +1006,10 @@ def setup_render(samples, res):
     bg.inputs[1].default_value = 0.25
     sc.world = w
     sun = bpy.data.objects.new("SunHQ", bpy.data.lights.new("SunHQ", "SUN"))
-    sun.data.energy = 3.2
-    sun.data.color = (1.0, 0.93, 0.82)
+    sun.data.energy = 3.2 if elev > 20 else 2.6
+    sun.data.color = (1.0, 0.93, 0.82) if elev > 20 else (1.0, 0.78, 0.55)
     sun.data.angle = math.radians(0.8)
-    sun.rotation_euler = (math.radians(58), 0, math.radians(215 + 180 - 90))
+    sun.rotation_euler = (math.radians(90 - elev), 0, math.radians(215 + 180 - 90))
     sc.collection.objects.link(sun)
     cam = bpy.data.objects.new("CamHQ", bpy.data.cameras.new("CamHQ"))
     cam.data.clip_end = 6000

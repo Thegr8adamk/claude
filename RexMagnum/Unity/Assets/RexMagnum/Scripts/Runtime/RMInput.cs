@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace RexMagnum
 {
@@ -221,6 +222,10 @@ namespace RexMagnum
         }
 
         /// <summary>Look change in degrees for this frame (x = yaw, y = pitch).</summary>
+        /// <summary>VR snap turn: the look stick's left/right value (-1..1).</summary>
+        public static float LookStickX => LookBlocked || G == null ? 0f : LookStick.x;
+        public static bool LookIsStick => LastDevice == DeviceKind.Gamepad;
+
         public static Vector2 LookDelta
         {
             get

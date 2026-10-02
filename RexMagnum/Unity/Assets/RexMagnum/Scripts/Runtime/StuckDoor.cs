@@ -13,6 +13,8 @@ namespace RexMagnum
         public AudioClip bang;
         Health health;
         bool open;
+        /// <summary>True once the door has been punched open (the tutorial waits for it).</summary>
+        public static bool AnyOpen { get; private set; }
 
         void Awake()
         {
@@ -35,6 +37,7 @@ namespace RexMagnum
         IEnumerator Open(GameObject by)
         {
             open = true;
+            AnyOpen = true;
             var src = GetComponent<AudioSource>();
             if (src != null && bang != null) src.PlayOneShot(bang);
             else Sfx.Play("door_bang", transform.position);

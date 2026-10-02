@@ -44,7 +44,7 @@ namespace RexMagnum
             var mat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
             mat.SetTexture("_BaseMap", rt);
             rend.material = mat;
-            var rex = FindFirstObjectByType<RexController>();
+            var rex = FindAnyObjectByType<RexController>();
             if (rex != null) player = rex.transform;
         }
 

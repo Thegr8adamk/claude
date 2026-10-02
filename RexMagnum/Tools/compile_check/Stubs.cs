@@ -34,14 +34,16 @@ namespace UnityEngine.InputSystem {
   public class Keyboard : InputDevice { public static Keyboard current; public KeyControl this[Key key] => null; public AnyKeyControl anyKey; public UnityEngine.InputSystem.Utilities.ReadOnlyArray<KeyControl> allKeys; }
   public class Pointer : InputDevice { public Vector2Control position; public DeltaControl delta; }
   public class Mouse : Pointer { public static new Mouse current; public ButtonControl leftButton, rightButton, middleButton; public DeltaControl scroll; }
-  public enum GamepadButton { DpadUp = 0, DpadDown = 1, DpadLeft = 2, DpadRight = 3, North = 4, East = 5, South = 6, West = 7,
-    LeftStick = 8, RightStick = 9, LeftShoulder = 10, RightShoulder = 11, Start = 12, Select = 13, LeftTrigger = 32, RightTrigger = 33,
-    X = West, Y = North, A = South, B = East }
-  public class Gamepad : InputDevice { public static Gamepad current; public ButtonControl this[GamepadButton button] => null; public StickControl leftStick, rightStick; public DpadControl dpad;
+  public class Gamepad : InputDevice { public static Gamepad current; public ButtonControl this[UnityEngine.InputSystem.LowLevel.GamepadButton button] => null; public StickControl leftStick, rightStick; public DpadControl dpad;
     public ButtonControl leftShoulder, rightShoulder, leftTrigger, rightTrigger, buttonSouth, buttonNorth, buttonEast, buttonWest,
       startButton, selectButton, leftStickButton, rightStickButton; public void SetMotorSpeeds(float low, float high) {} }
   public class Touchscreen : Pointer { public static new Touchscreen current; public TouchControl primaryTouch;
     public UnityEngine.InputSystem.Utilities.ReadOnlyArray<TouchControl> touches; }
+}
+namespace UnityEngine.InputSystem.LowLevel {
+  public enum GamepadButton { DpadUp = 0, DpadDown = 1, DpadLeft = 2, DpadRight = 3, North = 4, East = 5, South = 6, West = 7,
+    LeftStick = 8, RightStick = 9, LeftShoulder = 10, RightShoulder = 11, Start = 12, Select = 13, LeftTrigger = 32, RightTrigger = 33,
+    X = West, Y = North, A = South, B = East }
 }
 namespace UnityEngine.InputSystem.Utilities {
   public struct ReadOnlyArray<T> : IEnumerable<T> { public int Count => 0; public T this[int i] => default;

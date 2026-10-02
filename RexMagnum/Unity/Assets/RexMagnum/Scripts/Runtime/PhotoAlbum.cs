@@ -35,7 +35,7 @@ namespace RexMagnum
             Camera selfie = null;
             var hidden = new System.Collections.Generic.List<Renderer>();
             var arms = new System.Collections.Generic.List<Renderer>();
-            var rig = Object.FindFirstObjectByType<RexCameraRig>();
+            var rig = Object.FindAnyObjectByType<RexCameraRig>();
             if (rex != null)
             {
                 // pull the subject to Rex's side (a stunned blob or a guest comes along; NavMesh agents warp)

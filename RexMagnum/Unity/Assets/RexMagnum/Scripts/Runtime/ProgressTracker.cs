@@ -19,7 +19,7 @@ namespace RexMagnum
         void OnDisable() => Progress.Unlocked -= Show;
         void Show(Progress.Def d) { toast = $"ACCOMPLISHMENT: {d.name}\n{d.desc}"; toastUntil = Time.unscaledTime + 4f; }
 
-        void Start() { var r = FindFirstObjectByType<RexController>(); if (r != null) rex = r.transform; }
+        void Start() { var r = FindAnyObjectByType<RexController>(); if (r != null) rex = r.transform; }
 
         float nextFlush;
         void OnApplicationPause(bool p) { if (p) Progress.Flush(); }

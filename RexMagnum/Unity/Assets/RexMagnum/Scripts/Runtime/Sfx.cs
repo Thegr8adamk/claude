@@ -26,7 +26,7 @@ namespace RexMagnum
         public static void Play(string name, Vector3 pos, float volume = 1f)
         {
             var c = Get(name);
-            if (c != null) AudioSource.PlayClipAtPoint(c, pos, volume);
+            if (c != null) AudioSource.PlayClipAtPoint(c, pos, volume * AudioMix.Effects);
         }
     }
 }

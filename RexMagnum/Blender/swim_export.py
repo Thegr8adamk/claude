@@ -38,12 +38,17 @@ def main():
             a.use_fake_user = False
             bpy.data.actions.remove(a)
     arm.animation_data.action = acts[0]
+    # A second top-level node: with the armature alone, Unity folds "Rex_Rig" into the file root and the copied
+    # avatar from Rex.fbx no longer matches ("Rex_Swim was found instead of Rex_Rig").
+    anchor = bpy.data.objects.new("Rex_SwimAnchor", None)
+    bpy.context.scene.collection.objects.link(anchor)
     for x in bpy.context.view_layer.objects:
         x.select_set(False)
     arm.select_set(True)
+    anchor.select_set(True)
     bpy.context.view_layer.objects.active = arm
     bpy.ops.export_scene.fbx(
-        filepath=os.path.abspath(OUT), use_selection=True, object_types={"ARMATURE"},
+        filepath=os.path.abspath(OUT), use_selection=True, object_types={"ARMATURE", "EMPTY"},
         apply_scale_options="FBX_SCALE_ALL", axis_forward="-Z", axis_up="Y", add_leaf_bones=False,
         primary_bone_axis="Y", secondary_bone_axis="X", armature_nodetype="NULL", bake_anim=True,
         bake_anim_use_all_actions=True, bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True,

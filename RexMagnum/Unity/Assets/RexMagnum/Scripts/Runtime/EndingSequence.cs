@@ -32,7 +32,7 @@ namespace RexMagnum
 
         void Start()
         {
-            rex = FindFirstObjectByType<RexController>();
+            rex = FindAnyObjectByType<RexController>();
             if (rex != null) { hadInput = rex.InputEnabled; rex.InputEnabled = false; }
             var main = Camera.main;
             cam = new GameObject("EndingCam").AddComponent<Camera>();

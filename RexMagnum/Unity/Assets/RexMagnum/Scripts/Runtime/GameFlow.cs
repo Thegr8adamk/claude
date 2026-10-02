@@ -5,10 +5,12 @@ namespace RexMagnum
 {
     /// <summary>
     /// First playable flow (brief section 2 "Opening"):
-    ///  1. Title screen over a slow island shot: title, content warning, "press any key", title music.
+    ///  1. Title screen: picture of the hotel and the beach (Resources/UI/title_bg), title, PLAY / SETTINGS / QUIT
+    ///     (mouse, keyboard or controller), content warning, title music. SETTINGS opens the shared SettingsPanel.
     ///  2. Chaos sounds, fade in on Rex face-down on the bed in room 304, wake-up line.
     ///  3. Rex stands next to the bed; controls are taught one hint at a time (look/walk, punch the stuck door,
-    ///     pick up the beer, taunt at the mirror, camera switch, towel on the balcony rail). Day music loops.
+    ///     pick up the beer, taunt at the mirror, camera switch, towel on the balcony rail). A hint stays until the player
+    ///     does it (or a time-out), then the next one shows. Day music loops.
     /// Music and sounds load from Resources/Music and Resources/Sfx when the ElevenLabs files are added
     /// (title_theme, day_resort, chaos); without them the flow still works, silently.
     /// </summary>
@@ -25,6 +27,14 @@ namespace RexMagnum
         State state = State.Title;
         float fade = 1f, fadeTarget;
         AudioSource music, fight;
+        float fightLevel, dayLevel = DayVolume;
+        Texture2D titleBg;
+        int menuSel;
+        bool inSettings;
+        readonly SettingsPanel settings = new SettingsPanel();
+        RexWeapons weapons;
+        Vector3 hintStartPos;
+        static readonly string[] MenuItems = { "PLAY", "SETTINGS", "QUIT" };
         const float DayVolume = 0.35f, FightVolume = 0.55f;
         int hint;
         float hintTime;
@@ -34,12 +44,12 @@ namespace RexMagnum
 
         static readonly string[] Hints =
         {
-            "Mouse / right stick: look.   W A S D / left stick: walk.   Shift: run.",
+            "Mouse / right stick: look.   W A S D / left stick: walk.   Shift / L-stick click: run.",
             "The door is stuck. Left click / RT: punch it.",
             "F / X: pick up the full beer bottle on the table. It is your first weapon.",
             "T / D-pad up: taunt. Try it at the mirror.",
-            "V / R-stick click: first person or third person.   C: other shoulder.",
-            "The beach towel is on the balcony rail. Look at the pool. Something is wrong.",
+            "V / R-stick click: first person or third person.   C / D-pad left: other shoulder.",
+            "The beach towel is on the balcony rail (F / X). Look at the pool. Something is wrong.",
         };
 
         public static bool Busy { get; private set; }
@@ -47,10 +57,13 @@ namespace RexMagnum
         void Start()
         {
             Busy = !skipTitle;
+            SettingsPanel.ApplyAll();
+            titleBg = Resources.Load<Texture2D>("UI/title_bg");
+            if (rex != null) weapons = rex.GetComponent<RexWeapons>();
             music = gameObject.AddComponent<AudioSource>();
             music.loop = true;
             music.spatialBlend = 0f;
-            music.volume = 0.7f;
+            music.volume = 0.7f * AudioMix.Music;
             // fight music (80s hair metal) fades in when 2+ living blobs are near Rex, day music ducks under it
             fight = gameObject.AddComponent<AudioSource>();
             fight.clip = Resources.Load<AudioClip>("Music/fight");
@@ -58,6 +71,13 @@ namespace RexMagnum
             fight.spatialBlend = 0f;
             fight.volume = 0f;
             if (titleCamera != null) titleOrbitCenter = titleCamera.transform.position;
+            if (titleCamera != null && titleBg != null)
+            {
+                // the picture covers the screen: the title camera draws nothing (no GPU cost behind the menu)
+                titleCamera.cullingMask = 0;
+                titleCamera.clearFlags = CameraClearFlags.SolidColor;
+                titleCamera.backgroundColor = Color.black;
+            }
             if (skipTitle) { StartCoroutine(Intro()); return; }
             SetPlayerActive(false);
             Play("Music/title_theme");
@@ -91,17 +111,57 @@ namespace RexMagnum
                     titleAngle += Time.deltaTime * 1.5f;
                     titleCamera.transform.rotation = Quaternion.Euler(8f, -16f + Mathf.Sin(titleAngle * 0.05f) * 12f, 0f);
                 }
-                if (RMInput.AnyKey && fade < 0.05f) StartCoroutine(Intro());
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                music.volume = 0.7f * AudioMix.Music;
+                if (fade < 0.05f) TitleMenu();
             }
             else if (state == State.Play)
             {
-                if (hint < Hints.Length && Time.time - hintTime > 9f)
-                {
-                    hint++;
-                    hintTime = Time.time;
-                }
+                UpdateHint();
                 FightMusic();
             }
+        }
+
+        void TitleMenu()
+        {
+            if (inSettings)
+            {
+                if (settings.Update()) { inSettings = false; PlayerPrefs.Save(); }
+                return;
+            }
+            int n = Application.isMobilePlatform ? 2 : 3;      // phones have no QUIT
+            if (MenuNav.Up) menuSel = (menuSel + n - 1) % n;
+            if (MenuNav.Down) menuSel = (menuSel + 1) % n;
+            var g = UnityEngine.InputSystem.Gamepad.current;
+            if (MenuNav.Ok || (g != null && g.startButton.wasPressedThisFrame)) { MenuNav.Consume(); Choose(menuSel); }
+        }
+
+        void Choose(int i)
+        {
+            if (state != State.Title) return;
+            Sfx.Play("bottle_clink", titleCamera != null ? titleCamera.transform.position : Vector3.zero, 0.5f);
+            if (i == 0) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; StartCoroutine(Intro()); }
+            else if (i == 1) { inSettings = true; settings.page = 0; }
+            else if (i == 2) Application.Quit();
+        }
+
+        /// <summary>The next hint shows when the player has done this one (or after a time-out).</summary>
+        void UpdateHint()
+        {
+            if (hint >= Hints.Length) return;
+            float t = Time.time - hintTime;
+            bool done;
+            switch (hint)
+            {
+                case 0: done = (rex != null && Vector3.Distance(rex.transform.position, hintStartPos) > 2.5f && t > 4f) || t > 14f; break;
+                case 1: done = StuckDoor.AnyOpen || t > 45f; break;
+                case 2: done = (weapons != null && weapons.Has(WeaponId.Bottle)) || t > 45f; break;
+                case 3: done = (RMInput.Taunt && t > 1f) || t > 25f; break;
+                case 4: done = (RMInput.CameraToggle && t > 1f) || t > 20f; break;
+                default: done = (weapons != null && weapons.Has(WeaponId.Towel)) || t > 60f; break;
+            }
+            if (done) { hint++; hintTime = Time.time; }
         }
 
         void FightMusic()
@@ -110,10 +170,11 @@ namespace RexMagnum
             bool battle = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;
             float target = battle ? FightVolume : 0f;
             // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
-            fight.volume = Mathf.MoveTowards(fight.volume, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
-            if (fight.volume > 0f && !fight.isPlaying) fight.Play();
-            else if (fight.volume <= 0f && fight.isPlaying) fight.Pause();
-            music.volume = KingGlorpBoss.Fighting ? 0f : DayVolume * (1f - fight.volume / FightVolume);
+            fightLevel = Mathf.MoveTowards(fightLevel, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
+            fight.volume = fightLevel * AudioMix.Music;
+            if (fightLevel > 0f && !fight.isPlaying) fight.Play();
+            else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
+            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - fightLevel / FightVolume) * AudioMix.Music;
         }
 
         IEnumerator Intro()
@@ -145,15 +206,102 @@ namespace RexMagnum
                 rex.Revive();
                 rex.Teleport(wakePoint.position, wakePoint.eulerAngles.y);
                 if (rex.bodyAnimator) rex.bodyAnimator.Play("Locomotion", 0, 0f);
-                if (rex.armsAnimator) rex.armsAnimator.Play("Locomotion", 0, 0f);
+                if (rex.armsAnimator && rex.armsAnimator.gameObject.activeInHierarchy) rex.armsAnimator.Play("Locomotion", 0, 0f);
             }
             state = State.Play;
             Busy = false;
             SetPlayerActive(true);
             Play("Music/day_resort");
-            music.volume = DayVolume;
+            music.volume = DayVolume * AudioMix.Music;
             fadeTarget = 0f;
             hintTime = Time.time;
+            if (rex != null) hintStartPos = rex.transform.position;
+        }
+
+        GUIStyle menuBtn, menuSelStyle;
+
+        void DrawTitle(float w, float h, float s)
+        {
+            if (titleBg != null)
+            {
+                // slow push-in on the picture (aspect fill)
+                float t = Time.unscaledTime * 0.012f;
+                float zoom = 1.04f + Mathf.Sin(t) * 0.03f;
+                float ia = (float)titleBg.width / titleBg.height, sa = w / h;
+                float uw = ia > sa ? sa / ia : 1f, uh = ia > sa ? 1f : ia / sa;
+                uw /= zoom; uh /= zoom;
+                var uv = new Rect(0.5f - uw / 2f + Mathf.Sin(t * 0.7f) * 0.01f, 0.5f - uh / 2f, uw, uh);
+                GUI.DrawTextureWithTexCoords(new Rect(0, 0, w, h), titleBg, uv);
+            }
+            // dark band on the left: the menu reads on any picture
+            for (int i = 0; i < 24; i++)
+            {
+                GUI.color = new Color(0f, 0f, 0f, 0.62f * (1f - i / 24f));
+                GUI.DrawTexture(new Rect(i * w * 0.025f, 0, w * 0.025f + 1, h), Texture2D.whiteTexture);
+            }
+            GUI.color = Color.white;
+            var bl = new GUIStyle(big) { alignment = TextAnchor.MiddleLeft, fontSize = (int)(96 * s) };
+            var sh = new GUIStyle(bl);
+            sh.normal.textColor = new Color(0, 0, 0, 0.7f);
+            float x = w * 0.06f;
+            GUI.Label(new Rect(x + 5 * s, h * 0.12f + 5 * s, w, 130 * s), "REX MAGNUM", sh);
+            GUI.Label(new Rect(x, h * 0.12f, w, 130 * s), "REX MAGNUM", bl);
+            var md = new GUIStyle(mid) { alignment = TextAnchor.MiddleLeft, fontSize = (int)(40 * s) };
+            GUI.Label(new Rect(x + 6 * s, h * 0.12f + 118 * s, w, 60 * s), "VACATION VIOLENCE", md);
+
+            if (menuBtn == null || menuBtn.fontSize != (int)(40 * s))
+            {
+                menuBtn = new GUIStyle(GUI.skin.label) { fontSize = (int)(40 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+                menuBtn.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
+                menuSelStyle = new GUIStyle(menuBtn);
+                menuSelStyle.normal.textColor = new Color(1f, 0.8f, 0.25f);
+            }
+
+            if (inSettings)
+            {
+                var area = new Rect(x, h * 0.3f, w * 0.88f - x, h * 0.56f);
+                GUI.color = new Color(0f, 0f, 0f, 0.75f);
+                GUI.DrawTexture(new Rect(area.x - 20 * s, area.y - 20 * s, area.width + 40 * s, area.height + 110 * s), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                settings.Draw(area, s);
+                var back = new Rect(area.x, area.yMax + 20 * s, 300 * s, 60 * s);
+                GUI.Label(back, "< BACK", back.Contains(Event.current.mousePosition) ? menuSelStyle : menuBtn);
+                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && back.Contains(Event.current.mousePosition))
+                {
+                    Event.current.Use();
+                    inSettings = false;
+                    PlayerPrefs.Save();
+                }
+                return;
+            }
+
+            int n = Application.isMobilePlatform ? 2 : 3;
+            for (int i = 0; i < n; i++)
+            {
+                var r = new Rect(x, h * 0.42f + i * 78 * s, 420 * s, 66 * s);
+                bool hover = r.Contains(Event.current.mousePosition);
+                if (hover && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) menuSel = i;
+                bool on = i == menuSel;
+                if (on)
+                {
+                    GUI.color = new Color(1f, 0.75f, 0.2f, 0.9f);
+                    GUI.DrawTexture(new Rect(r.x - 22 * s, r.y + 14 * s, 8 * s, r.height - 28 * s), Texture2D.whiteTexture);
+                    GUI.color = Color.white;
+                }
+                GUI.Label(r, (on ? "  " : "") + MenuItems[i], on ? menuSelStyle : menuBtn);
+                if (fade < 0.05f && Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
+                {
+                    menuSel = i;
+                    Event.current.Use();
+                    Choose(i);
+                }
+            }
+            var sm = new GUIStyle(small) { alignment = TextAnchor.LowerLeft, fontSize = (int)(19 * s) };
+            var g = UnityEngine.InputSystem.Gamepad.current;
+            GUI.Label(new Rect(x, h * 0.42f + n * 78 * s + 16 * s, w * 0.5f, 40 * s),
+                      g != null ? "Controller: " + g.displayName + "   (D-pad / stick, A = OK)" : "Mouse, or arrow keys + Enter. Controllers work too.", sm);
+            GUI.Label(new Rect(x, h - 80 * s, w * 0.6f, 60 * s),
+                      "CONTENT WARNING: crude adult humor, rude gestures, strong language, cartoon slime violence.", sm);
         }
 
         void Styles()
@@ -173,25 +321,17 @@ namespace RexMagnum
         {
             Styles();
             float w = Screen.width, h = Screen.height, s = h / 1080f;
-            if (state == State.Title)
-            {
-                var sh = new GUIStyle(big);
-                sh.normal.textColor = new Color(0, 0, 0, 0.6f);
-                big.fontSize = (int)(84 * s); sh.fontSize = big.fontSize;
-                GUI.Label(new Rect(4 * s, h * 0.22f + 4 * s, w, 120 * s), "REX MAGNUM", sh);
-                GUI.Label(new Rect(0, h * 0.22f, w, 120 * s), "REX MAGNUM", big);
-                mid.fontSize = (int)(40 * s);
-                GUI.Label(new Rect(0, h * 0.33f, w, 60 * s), "VACATION VIOLENCE", mid);
-                small.fontSize = (int)(20 * s);
-                GUI.Label(new Rect(w * 0.2f, h * 0.72f, w * 0.6f, 80 * s),
-                    "CONTENT WARNING: crude adult humor, rude gestures, strong language, cartoon slime violence.", small);
-                if (Mathf.Repeat(Time.unscaledTime, 1.2f) < 0.8f)
-                    GUI.Label(new Rect(0, h * 0.82f, w, 50 * s), "PRESS ANY KEY", mid);
-            }
+            if (state == State.Title) DrawTitle(w, h, s);
             else if (state == State.Play && hint < Hints.Length)
             {
-                box.fontSize = (int)(22 * s);
-                GUI.Box(new Rect(w * 0.25f, h * 0.06f, w * 0.5f, 70 * s), Hints[hint], box);
+                box.fontSize = (int)(30 * s);
+                var r = new Rect(w * 0.18f, h * 0.05f, w * 0.64f, 92 * s);
+                GUI.color = new Color(0f, 0f, 0f, 0.7f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f);
+                GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                GUI.Label(r, Hints[hint], box);
             }
             if (fade > 0.001f)
             {

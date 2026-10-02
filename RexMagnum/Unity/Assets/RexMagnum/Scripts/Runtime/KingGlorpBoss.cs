@@ -42,7 +42,7 @@ namespace RexMagnum
         {
             blob = GetComponent<Blob>();
             health = GetComponent<Health>();
-            var rc = FindFirstObjectByType<RexController>();
+            var rc = FindAnyObjectByType<RexController>();
             if (rc != null) rex = rc.transform;
             health.Died += by =>
             {
@@ -55,7 +55,7 @@ namespace RexMagnum
             music.clip = Resources.Load<AudioClip>("Music/glorp_ballad");
             music.loop = true;
             music.spatialBlend = 0f;
-            music.volume = 0.6f;
+            music.volume = 0.6f * AudioMix.Music;
             if (PlayerPrefs.GetInt(SaveKey, 0) == 1) gameObject.SetActive(false);   // already beaten
             health.Damaged += OnDamaged;
         }

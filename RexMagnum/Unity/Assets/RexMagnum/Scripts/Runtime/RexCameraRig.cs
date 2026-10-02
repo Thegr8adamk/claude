@@ -48,9 +48,17 @@ namespace RexMagnum
         public float Pitch { get; private set; }
         public bool IsAiming { get; private set; }
         public bool InputEnabled { get; set; } = true;
+        /// <summary>VR mode: the headset turns the view (VRMode adds the head pose after this script).</summary>
+        public bool VRControlled { get; set; }
+        /// <summary>VR mode: head turn left/right from straight ahead, degrees.</summary>
+        public float HeadYaw { get; set; }
+        /// <summary>Direction for walking: the view's yaw (in VR the head counts too).</summary>
+        public float MoveYaw => Yaw + (VRControlled ? HeadYaw : 0f);
+        /// <summary>Field of view from Settings (third person; first person is 10 more).</summary>
+        public static float FovSetting = 65f;
 
         float side = 1f, currentDist, blend;
-        bool wasScoped;
+        bool wasScoped, snapHeld, bodyHiddenNear;
         Transform head;
         Vector3 armsHeadLocal;
         readonly List<(Renderer r, ShadowCastingMode m)> saved = new List<(Renderer, ShadowCastingMode)>();
@@ -70,6 +78,7 @@ namespace RexMagnum
             {
                 var arm = fpArms.GetComponentInChildren<Animator>();
                 Transform armsHead = arm != null && arm.isHuman ? arm.GetBoneTransform(HumanBodyBones.Head) : null;
+                if (armsHead == null) armsHead = FindDeep(fpArms.transform, "mixamorig:Head");     // not humanoid: find the bone by name
                 if (armsHead != null) armsHeadLocal = fpArms.transform.InverseTransformPoint(armsHead.position);
                 foreach (var r in fpArms.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off;
             }
@@ -80,9 +89,14 @@ namespace RexMagnum
             Cursor.visible = false;
         }
 
+        /// <summary>Settings: change the view now (first or third person). VR stays first person.</summary>
+        public void SetModeFromSettings(CameraMode m) { if (!VRControlled) SetMode(m); }
+
         public void SetMode(CameraMode m, bool instant = false)
         {
+            if (VRControlled) m = CameraMode.FirstPerson;
             Mode = m;
+            bodyHiddenNear = false;
             PlayerPrefs.SetInt(PrefKey, m == CameraMode.FirstPerson ? 0 : 1);
             bool fp = m == CameraMode.FirstPerson;
             foreach (var (r, mode) in saved)
@@ -101,8 +115,24 @@ namespace RexMagnum
                     SetMode(Mode == CameraMode.FirstPerson ? CameraMode.ThirdPerson : CameraMode.FirstPerson);
                 if (RMInput.SwapShoulder) side = -side;
                 Vector2 look = RMInput.LookDelta;
-                Yaw += look.x;
-                Pitch = Mathf.Clamp(Pitch - look.y, -75f, 80f);
+                if (VRControlled)
+                {
+                    // the headset does up/down; the stick or mouse turns Rex (smooth, or 30-degree snaps: less sickness)
+                    Pitch = 0f;
+                    if (PlayerPrefs.GetInt(VRMode.SnapKey, 1) == 1)
+                    {
+                        float stick = RMInput.LookStickX;
+                        if (Mathf.Abs(stick) > 0.7f && !snapHeld) { Yaw += Mathf.Sign(stick) * 30f; snapHeld = true; }
+                        else if (Mathf.Abs(stick) < 0.3f) snapHeld = false;
+                        if (!RMInput.LookIsStick) Yaw += look.x;
+                    }
+                    else Yaw += look.x;
+                }
+                else
+                {
+                    Yaw += look.x;
+                    Pitch = Mathf.Clamp(Pitch - look.y, -75f, 80f);
+                }
             }
             IsAiming = InputEnabled && RMInput.Aim;
             bool scoped = weapons != null && weapons.Scoped;
@@ -153,7 +183,19 @@ namespace RexMagnum
 
             float b = blend * blend * (3f - 2f * blend);
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);
-            cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, IsAiming ? 1f : 0f), fpFov, b);
+            fov = FovSetting; fpFov = FovSetting + 10f; aimFov = FovSetting - 15f;
+            if (!VRControlled)      // in VR the headset sets the field of view
+                cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, IsAiming ? 1f : 0f), fpFov, b);
+
+            // third person against a wall: the camera comes very close to Rex; hide his body (shadow stays) so the
+            // view is not inside his head
+            bool near = !fp && b < 0.5f && Vector3.Distance(transform.position, pivot) < 0.9f;
+            if (near != bodyHiddenNear)
+            {
+                bodyHiddenNear = near;
+                foreach (var (r, mode) in saved)
+                    if (r != null) r.shadowCastingMode = near ? ShadowCastingMode.ShadowsOnly : mode;
+            }
 
             if (fpArms != null && fpArms.activeSelf)
             {
@@ -161,6 +203,13 @@ namespace RexMagnum
                 fpArms.transform.localRotation = Quaternion.identity;
                 fpArms.transform.localPosition = -armsHeadLocal + armsOffset;
             }
+        }
+
+        static Transform FindDeep(Transform t, string name)
+        {
+            if (t.name == name) return t;
+            foreach (Transform c in t) { var f = FindDeep(c, name); if (f != null) return f; }
+            return null;
         }
 
         static Quaternion rot0(float yaw) => Quaternion.Euler(0f, yaw, 0f);
