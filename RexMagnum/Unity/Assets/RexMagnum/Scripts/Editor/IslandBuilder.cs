@@ -888,6 +888,53 @@ namespace RexMagnum.EditorTools
             }
         }
 
+        /// <summary>King Glorp's crown (brief: spikes grow from his head). The spikes in his body mesh are part of the
+        /// one smooth skin, so they cannot scale; this ring of gold spikes sits on the top bone, starts small and grows
+        /// each fight phase (KingGlorpBoss.PhaseChange scales it).</summary>
+        static Transform GlorpCrown(Blob g)
+        {
+            var smr = g.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (smr == null) return null;
+            Transform top = smr.bones != null && smr.bones.Length > 0
+                ? smr.bones.Where(b => b != null).OrderByDescending(b => b.position.y).First()
+                : g.transform;
+            var b = smr.bounds;
+            var crown = new GameObject("Crown").transform;
+            crown.SetParent(top, false);
+            crown.position = new Vector3(b.center.x, b.max.y - b.size.y * 0.04f, b.center.z);
+            crown.rotation = Quaternion.identity;
+            crown.localScale = Vector3.one * 0.45f;
+            float r = Mathf.Min(b.extents.x, b.extents.z) * 0.38f, hgt = b.size.y * 0.16f, w = b.size.y * 0.04f;
+            // one mesh: 7 spikes, 8-sided cones leaning out a little
+            var v = new List<Vector3>();
+            var tri = new List<int>();
+            for (int i = 0; i < 7; i++)
+            {
+                float a = i / 7f * Mathf.PI * 2f;
+                var dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                Vector3 c0 = dir * r, tip = c0 + dir * hgt * 0.25f + Vector3.up * hgt;
+                int start = v.Count;
+                for (int k = 0; k < 8; k++)
+                {
+                    float q = k / 8f * Mathf.PI * 2f;
+                    v.Add(c0 + new Vector3(Mathf.Cos(q), 0f, Mathf.Sin(q)) * w);
+                }
+                v.Add(tip);
+                for (int k = 0; k < 8; k++) { tri.Add(start + k); tri.Add(start + 8); tri.Add(start + (k + 1) % 8); }
+            }
+            var mesh = new Mesh { name = "GlorpCrown" };
+            mesh.SetVertices(v);
+            mesh.SetTriangles(tri, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            const string crownPath = "Assets/RexMagnum/Prefabs/Blobs/GlorpCrown.asset";
+            AssetDatabase.DeleteAsset(crownPath);                // rebuilds replace the old mesh
+            AssetDatabase.CreateAsset(mesh, crownPath);
+            crown.gameObject.AddComponent<MeshFilter>().sharedMesh = mesh;
+            crown.gameObject.AddComponent<MeshRenderer>().sharedMaterial = smr.sharedMaterial;   // same gold jelly
+            return crown;
+        }
+
         static void Boss(Terrain terrain)
         {
             var glorp = AssetDatabase.LoadAssetAtPath<Blob>("Assets/RexMagnum/Prefabs/Blobs/Blob_KingGlorp.prefab");
@@ -899,6 +946,7 @@ namespace RexMagnum.EditorTools
             g.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 200f, 0f));
             var boss = g.gameObject.AddComponent<KingGlorpBoss>();
             boss.crown = g.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.Contains("Crown") || t.name.Contains("Spike"));
+            if (boss.crown == null) boss.crown = GlorpCrown(g);
             var tourist = AssetDatabase.LoadAssetAtPath<Blob>("Assets/RexMagnum/Prefabs/Blobs/Blob_Tourist.prefab");
             boss.minionPrefabs = tourist != null ? new[] { tourist } : new Blob[0];
             // props for him to absorb as armor: deck chairs, barrels, crates around the crash site
