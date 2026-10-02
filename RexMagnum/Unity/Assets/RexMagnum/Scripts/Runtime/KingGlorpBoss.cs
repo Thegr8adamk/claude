@@ -60,7 +60,13 @@ namespace RexMagnum
             health.Damaged += OnDamaged;
         }
 
-        void Say(string line) => RexVoice.Subtitle?.Invoke("KING GLORP: " + line);
+        /// <summary>King Glorp's lines, voiced when Resources/Voice/Glorp/line_NN exists (index in GlorpLines).</summary>
+        void Say(string line)
+        {
+            int i = System.Array.IndexOf(GlorpLines, line);
+            if (i < 0) { RexVoice.Subtitle?.Invoke("KING GLORP: " + line); return; }
+            RexVoice.SayLine(gameObject, "KING GLORP", line, $"Voice/Glorp/line_{i + 1:00}");
+        }
 
         void OnDisable() { Fighting = false; }
 

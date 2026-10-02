@@ -195,7 +195,9 @@ namespace RexMagnum
         {
             var pair = security ? GuestLines.Carmen() : GuestLines.FlirtFor(guestName);
             if (security) Progress.Add("carmen_flirts");
-            RexVoice.Subtitle?.Invoke("REX: " + pair.rex);
+            // Rex's flirt take, voiced (Resources/Voice/Rex/flirt_NN or carmen_NN)
+            if (rex != null) RexVoice.SayLine(rex.gameObject, "REX", pair.rex, security ? $"Voice/Rex/carmen_{pair.global + 1:00}" : $"Voice/Rex/flirt_{pair.global + 1:00}");
+            else RexVoice.Subtitle?.Invoke("REX: " + pair.rex);
             yield return new WaitForSeconds(2.2f);
             Say(pair.answer, pair.index);
             yield return new WaitForSeconds(1.8f);
@@ -216,7 +218,7 @@ namespace RexMagnum
     /// <summary>Lines from the brief (section 9): Rex's flirt take -> the guest's answer; Carmen's answers.</summary>
     public static class GuestLines
     {
-        public struct Pair { public string rex, answer; public int index; }
+        public struct Pair { public string rex, answer; public int index, global; }
         static readonly (string who, string rex, string answer)[] Flirts =
         {
             ("Callie", "I'm Rex Magnum.", "Who?"),
@@ -249,14 +251,14 @@ namespace RexMagnum
             int pick = mine[Random.Range(0, mine.Count)];
             if (mine.Count > 1 && last.TryGetValue(who, out int prev) && prev == pick) pick = mine[(mine.IndexOf(pick) + 1) % mine.Count];
             last[who] = pick;
-            return new Pair { rex = Flirts[pick].rex, answer = Flirts[pick].answer, index = mine.IndexOf(pick) };
+            return new Pair { rex = Flirts[pick].rex, answer = Flirts[pick].answer, index = mine.IndexOf(pick), global = pick };
         }
 
         public static Pair Carmen()
         {
             int i = (carmenLast + 1) % CarmenLines.Length;
             carmenLast = i;
-            return new Pair { rex = CarmenLines[i].rex, answer = CarmenLines[i].answer, index = i };
+            return new Pair { rex = CarmenLines[i].rex, answer = CarmenLines[i].answer, index = i, global = i };
         }
 
         static readonly string[] Screams = { "(screams)", "Help!", "It's in the pool!", "Not the face!", "Run!" };

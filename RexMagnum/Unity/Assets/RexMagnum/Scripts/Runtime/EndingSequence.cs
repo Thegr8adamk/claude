@@ -14,6 +14,7 @@ namespace RexMagnum
         Camera cam;
         RexController rex;
         bool slipped, heroed, hadInput;
+        int lastCall = -1;
 
         static readonly string[] Marty =
         {
@@ -69,11 +70,17 @@ namespace RexMagnum
             else
             {
                 // "I'm back.": low hero angle, hero pose
-                if (!heroed) { heroed = true; if (rex.bodyAnimator != null) rex.bodyAnimator.Play("Locomotion", 0, 0f); RexVoice.Subtitle?.Invoke("REX: I'm back."); }
+                if (!heroed) { heroed = true; if (rex.bodyAnimator != null) rex.bodyAnimator.Play("Locomotion", 0, 0f); RexVoice.Subtitle?.Invoke("REX: I'm back."); PlayLine("Voice/Ending/imback_01"); }
                 cam.transform.position = p + f * 3.2f - r * 0.8f + Vector3.up * 0.5f;
                 cam.transform.LookAt(p + Vector3.up * 1.4f);
             }
             if (t > 26f) Destroy(gameObject);
+        }
+
+        void PlayLine(string path)
+        {
+            var clip = Resources.Load<AudioClip>(path);
+            if (clip != null) AudioSource.PlayClipAtPoint(clip, cam != null ? cam.transform.position : Vector3.zero, 1f);
         }
 
         void OnGUI()
@@ -109,6 +116,7 @@ namespace RexMagnum
                 GUI.DrawTexture(new Rect(0, h * 0.72f, w, h * 0.2f), Texture2D.whiteTexture);
                 GUI.color = Color.white;
                 int i = Mathf.Clamp((int)((t - 7f) / 1.75f), 0, Marty.Length - 1);
+                if (i != lastCall) { lastCall = i; PlayLine($"Voice/Ending/call_{i + 1:00}"); }
                 mid.normal.textColor = new Color(1f, 0.85f, 0.4f);
                 GUI.Label(new Rect(w * 0.1f, h * 0.72f, w * 0.8f, h * 0.2f), (t < 7.8f ? "(phone rings) " : "") + Marty[i], mid);
                 return;
