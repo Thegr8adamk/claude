@@ -45,3 +45,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 05:10 | River banks: ferns and boulders along both banks (1,462 plants), exported to Unity. Next: mud/moss ground colour on the lower bank slope (still sandy) | 2026-10-02_0510_river_banks.png |
 | 2026-10-02 05:30 | Dresses (Marge, Heather, Rosa): skirt flares smoothly from the waist, no step at the hip line. Re-exported to Unity | 2026-10-02_0530_dresses_smooth.png |
 | 2026-10-02 05:45 | Cave exported to Unity with the new detail (148k triangles, about the same budget as before after a smart reduce). New fast export for the cave alone | (see 2026-10-02_0500_cave_detail.png) |
+| 2026-10-02 06:40 | 8 guests re-exported with the fixed tops (Justin, Dwayne, Priya, Chad, Heather, Marge, Rosa, Lucy) | 2026-10-02_0615_tank_tops.png |

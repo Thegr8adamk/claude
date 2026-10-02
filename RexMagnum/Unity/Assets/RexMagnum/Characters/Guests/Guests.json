@@ -914,89 +914,6 @@
    ]
   },
   {
-   "name": "Lucy",
-   "fbx": "Lucy.fbx",
-   "voice": "lcMyyd2HUfFzxdCaC4Ta",
-   "security": false,
-   "materials": [
-    {
-     "name": "Lucy_Skin",
-     "baseMap": "Textures/Lucy_Skin_BC.png",
-     "normalMap": "Textures/Lucy_Skin_N.png",
-     "maskMap": "Textures/Lucy_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Lucy_Bottom",
-     "color": [
-      0.9200000166893005,
-      0.9200000166893005,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Lucy_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.3304975,
-      0.163266,
-      0.076864,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_HairCap",
-     "color": [
-      0.33049750328063965,
-      0.16326600313186646,
-      0.07686399668455124,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_Sole",
-     "color": [
-      0.8999999761581421,
-      0.8999999761581421,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Lucy_Top",
-     "color": [
-      0.10000000149011612,
-      0.550000011920929,
-      0.550000011920929,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Justin",
    "fbx": "Justin.fbx",
    "voice": "fV5vDeUO8ghvK7ntjiVC",
@@ -1329,79 +1246,6 @@
    ]
   },
   {
-   "name": "Marge",
-   "fbx": "Marge.fbx",
-   "voice": "MnUw1cSnpiLoLhpd3Hqp",
-   "security": false,
-   "materials": [
-    {
-     "name": "Marge_Skin",
-     "baseMap": "Textures/Marge_Skin_BC.png",
-     "normalMap": "Textures/Marge_Skin_N.png",
-     "maskMap": "Textures/Marge_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Marge_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.5417372500000001,
-      0.5231866000000001,
-      0.49659640000000005,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_HairCap",
-     "color": [
-      0.5417372584342957,
-      0.5231866240501404,
-      0.49659639596939087,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_Sole",
-     "color": [
-      0.8500000238418579,
-      0.8500000238418579,
-      0.8199999928474426,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Marge_Top",
-     "color": [
-      0.8500000238418579,
-      0.30000001192092896,
-      0.44999998807907104,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Heather",
    "fbx": "Heather.fbx",
    "voice": "MnUw1cSnpiLoLhpd3Hqp",
@@ -1475,6 +1319,79 @@
    ]
   },
   {
+   "name": "Marge",
+   "fbx": "Marge.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Marge_Skin",
+     "baseMap": "Textures/Marge_Skin_BC.png",
+     "normalMap": "Textures/Marge_Skin_N.png",
+     "maskMap": "Textures/Marge_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Marge_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.5417372500000001,
+      0.5231866000000001,
+      0.49659640000000005,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_HairCap",
+     "color": [
+      0.5417372584342957,
+      0.5231866240501404,
+      0.49659639596939087,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_Sole",
+     "color": [
+      0.8500000238418579,
+      0.8500000238418579,
+      0.8199999928474426,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Marge_Top",
+     "color": [
+      0.8500000238418579,
+      0.30000001192092896,
+      0.44999998807907104,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
    "name": "Rosa",
    "fbx": "Rosa.fbx",
    "voice": "MnUw1cSnpiLoLhpd3Hqp",
@@ -1541,6 +1458,89 @@
       0.6000000238418579,
       0.019999999552965164,
       0.029999999329447746,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Lucy",
+   "fbx": "Lucy.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Lucy_Skin",
+     "baseMap": "Textures/Lucy_Skin_BC.png",
+     "normalMap": "Textures/Lucy_Skin_N.png",
+     "maskMap": "Textures/Lucy_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Lucy_Bottom",
+     "color": [
+      0.9200000166893005,
+      0.9200000166893005,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Lucy_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.3304975,
+      0.163266,
+      0.076864,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_HairCap",
+     "color": [
+      0.33049750328063965,
+      0.16326600313186646,
+      0.07686399668455124,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_Sole",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Lucy_Top",
+     "color": [
+      0.10000000149011612,
+      0.550000011920929,
+      0.550000011920929,
       1
      ],
      "smoothness": 0.25
