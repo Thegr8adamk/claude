@@ -325,22 +325,6 @@ def build_ocean():
 
 # ------------------------------------------------------------------ vegetation
 
-def tube(bm, pts, radii, segs=8):
-    rings = []
-    prev = None
-    for i, (p, r) in enumerate(zip(pts, radii)):
-        t = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
-        nrm = (prev if prev is not None else t.orthogonal()).normalized()
-        nrm = (nrm - t * nrm.dot(t)).normalized()
-        prev = nrm
-        b = t.cross(nrm)
-        rings.append([bm.verts.new(p + (nrm * math.cos(a) + b * math.sin(a)) * r)
-                      for a in [math.tau * k / segs for k in range(segs)]])
-    for j in range(len(rings) - 1):
-        for k in range(segs):
-            bm.faces.new((rings[j][k], rings[j][(k + 1) % segs], rings[j + 1][(k + 1) % segs], rings[j + 1][k]))
-
-
 def bark_material(name, c0, c1, rings=False):
     m = bpy.data.materials.new(name)
     n = N(m)

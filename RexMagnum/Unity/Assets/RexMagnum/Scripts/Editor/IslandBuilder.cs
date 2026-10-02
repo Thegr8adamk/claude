@@ -429,11 +429,46 @@ namespace RexMagnum.EditorTools
                         break;
                 }
                 if (r.twoSided && m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+                if (WindMats.Contains(r.name)) ToFoliage(m, r.kind == "foliage");
                 m.enableInstancing = true;
                 EditorUtility.SetDirty(m);
                 d[r.name] = m;
             }
             return d;
+        }
+
+        // palm / jungle tree materials: the trees carry wind weights in their vertex colour (Blender island_hq), so
+        // leaves, bark and coconuts all sway together in RexMagnum/Foliage. Ferns have no wind colours: they stay Lit.
+        static readonly HashSet<string> WindMats = new HashSet<string> { "PalmLeaf", "BroadLeaf", "PalmBark", "JungleBark", "CoconutRaw" };
+
+        /// <summary>Moves a Lit material to RexMagnum/Foliage (keeps base map / colour / normal / mask / cutoff). Leaves
+        /// clip and are two-sided; bark stays opaque. Keeps the Lit shader when the foliage shader is missing.</summary>
+        static void ToFoliage(Material m, bool leaf)
+        {
+            var sh = Shader.Find("RexMagnum/Foliage");
+            if (sh == null) return;
+            var baseMap = m.GetTexture("_BaseMap");
+            var scale = m.GetTextureScale("_BaseMap");
+            var col = m.GetColor("_BaseColor");
+            var nrm = m.IsKeywordEnabled("_NORMALMAP") ? m.GetTexture("_BumpMap") : null;
+            var mask = m.IsKeywordEnabled("_METALLICSPECGLOSSMAP") ? m.GetTexture("_MetallicGlossMap") : null;
+            float smooth = m.GetFloat("_Smoothness"), metal = m.GetFloat("_Metallic");
+            m.shader = sh;
+            m.shaderKeywords = new string[0];
+            m.SetTexture("_BaseMap", baseMap);
+            m.SetTextureScale("_BaseMap", scale);
+            m.SetColor("_BaseColor", col);
+            m.SetTexture("_BumpMap", nrm);
+            if (nrm != null) m.EnableKeyword("_NORMALMAP");
+            m.SetTexture("_MetallicGlossMap", mask);       // null = the shader's white default (smoothness = slider)
+            m.SetFloat("_Smoothness", smooth);
+            m.SetFloat("_Metallic", metal);
+            m.SetFloat("_Cutoff", FoliageCutoff);
+            m.SetFloat("_AlphaClip", leaf ? 1f : 0f);
+            if (leaf) m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Cull", leaf ? 0f : 2f);
+            m.SetFloat("_Translucency", leaf ? 0.6f : 0f);
+            m.renderQueue = leaf ? (int)RenderQueue.AlphaTest : (int)RenderQueue.Geometry;
         }
 
         // ---------------------------------------------------------------- buildings
@@ -1910,6 +1945,7 @@ namespace RexMagnum.EditorTools
             var rt = new RenderTexture(Res, Res, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None).Where(l => l.enabled).ToArray();
             bool fog = RenderSettings.fog;
+            float wind = Shader.GetGlobalFloat("_RMWind");
             var probe = RenderSettings.ambientProbe;
             var prevActive = RenderTexture.active;
             var aoOff = new List<ScriptableRendererFeature>();      // SSAO darkened the picture (baked-in, doubled in game)
@@ -1924,6 +1960,7 @@ namespace RexMagnum.EditorTools
                 mr.shadowCastingMode = ShadowCastingMode.Off;
                 foreach (var l in lights) l.enabled = false;
                 RenderSettings.fog = false;
+                Shader.SetGlobalFloat("_RMWind", -1f);     // RexMagnum/Foliage: no sway in the picture
                 foreach (var f in AOFeatures()) if (FeatureOn(f)) { SetFeature(f, false); aoOff.Add(f); }
                 var sh = new SphericalHarmonicsL2();
                 sh.AddAmbientLight(Color.white);
@@ -1955,6 +1992,7 @@ namespace RexMagnum.EditorTools
                 foreach (var l in lights) if (l != null) l.enabled = true;
                 foreach (var f in aoOff) SetFeature(f, true);
                 RenderSettings.fog = fog;
+                Shader.SetGlobalFloat("_RMWind", wind);
                 RenderSettings.ambientProbe = probe;
                 UnityEngine.Object.DestroyImmediate(cam.gameObject);
                 UnityEngine.Object.DestroyImmediate(go);
@@ -2290,6 +2328,8 @@ namespace RexMagnum.EditorTools
                 var tp = TreePrefab(pr);
                 if (tp == null) continue;
                 treeIndex[i] = treeProtos.Count;
+                // bendFactor only drives the terrain's own wind on Nature / SpeedTree shaders; our trees sway in
+                // RexMagnum/Foliage (vertex colour wind weights)
                 treeProtos.Add(new TreePrototype { prefab = tp, bendFactor = pr.kind == "palm" ? 0.3f : 0.1f });
             }
             td.treePrototypes = treeProtos.ToArray();
