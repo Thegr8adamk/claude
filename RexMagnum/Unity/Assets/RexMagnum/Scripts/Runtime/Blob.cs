@@ -474,6 +474,14 @@ namespace RexMagnum
             return true;
         }
 
+        /// <summary>A sound with the warning glow of a signature move, so it reads by ear too: a lifeguard's whistle
+        /// (a swish pitched far up), a bouncer's low grunt (its angry sound pitched down). No new clips.</summary>
+        void SignatureCue()
+        {
+            if (kind == Kind.Lifeguard) Sfx.Play("swing", transform.position, 0.9f, 2.3f);
+            else Sfx.Play("blob_angry", transform.position, 1f, 0.55f);
+        }
+
         /// <summary>Water near the lifeguard and water near Rex on the same level (one pool / the sea), with a dry
         /// shore point close to Rex to come out on.</summary>
         bool DiveRoute(out Vector3 inAt, out Vector3 outAt, out Vector3 shore)
@@ -501,6 +509,7 @@ namespace RexMagnum
             busyUntil = Time.time + 8f;                                    // Update leaves it alone while it swims
             ReleaseToken();                                                // no attack turn held while it swims (Update skips it)
             Telegraph();
+            SignatureCue();
             yield return new WaitForSeconds(TelegraphTime);
             if (health.IsDead || IsStunned) { busyUntil = 0f; yield break; }
             agent.enabled = false;
@@ -557,6 +566,7 @@ namespace RexMagnum
             nextAttack = Mathf.Max(nextAttack, Time.time + 1.7f);
             // two warning pulses like the slam (0.6 s): a 6 m lunge needs time to read
             Telegraph();
+            SignatureCue();
             yield return new WaitForSeconds(TelegraphTime);
             Telegraph();
             yield return new WaitForSeconds(TelegraphTime);
@@ -585,6 +595,7 @@ namespace RexMagnum
             nextAttack = Mathf.Max(nextAttack, Time.time + 2.2f);
             // two warning pulses (longer than a whip's): the slam hits hard
             Telegraph();
+            SignatureCue();
             yield return new WaitForSeconds(TelegraphTime);
             Telegraph();
             squashUntil = Time.time + SquashTime; squashAmount = 0.35f;    // crouch before the hop

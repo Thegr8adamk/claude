@@ -204,15 +204,45 @@ namespace RexMagnum
             GUI.Label(new Rect(r.x, r.y - 26 * s, r.width, 24 * s), $"KING GLORP   {(armor.Count > 0 ? $"ARMOR x{armor.Count}" : "")}", st);
         }
 
+        const float PhaseBeat = 1.5f;
+
+        /// <summary>A short beat (PhaseBeat s): he holds still, the crown pulses and grows, the screen shakes, a big
+        /// notice; Rex cannot be hit meanwhile. Then the new phase's moves come.</summary>
         IEnumerator PhaseChange()
         {
             Say(phase == 2 ? "Rise, my subjects!" : "NOW YOU SEE MY FINAL FORM!");
             nextPools = Mathf.Max(nextPools, Time.time + 6f);       // not on top of the phase change and the minions
+            // nothing new starts inside the beat (a move already running ends by itself)
+            blob.Hold(PhaseBeat);
+            nextVolley = Mathf.Max(nextVolley, Time.time + PhaseBeat + 1f);
+            nextWave = Mathf.Max(nextWave, Time.time + PhaseBeat + 2f);
+            nextAbsorb = Mathf.Max(nextAbsorb, Time.time + PhaseBeat + 1f);
+            nextMinions = Mathf.Max(nextMinions, Time.time + PhaseBeat);
+            nextSweep = Mathf.Max(nextSweep, Time.time + PhaseBeat);
+            nextHop = Mathf.Max(nextHop, Time.time + PhaseBeat);
+            RexTestHUD.Notice(phase == 2 ? "PHASE 2!" : "FINAL PHASE!", 2f);
+            Sfx.Play("shockwave", transform.position, 0.9f, 0.7f);
+            if (rex != null)
+            {
+                var rh = rex.GetComponent<Health>();
+                if (rh != null && !rh.IsDead) rh.Invulnerable(PhaseBeat);
+                var rcon = rex.GetComponent<RexController>();
+                if (rcon != null && rcon.cameraRig != null) rcon.cameraRig.Shake(0.3f);
+            }
             if (crown != null)
             {
+                // grows to 1.35x with three pulses on the way (sin bumps), over the beat
                 Vector3 a = crown.localScale, b = a * 1.35f;
-                for (float t = 0; t < 1f; t += Time.deltaTime) { crown.localScale = Vector3.Lerp(a, b, t); yield return null; }
+                for (float t = 0; t < PhaseBeat; t += Time.deltaTime)
+                {
+                    float k = t / PhaseBeat;
+                    crown.localScale = Vector3.Lerp(a, b, k) * (1f + 0.12f * Mathf.Abs(Mathf.Sin(k * Mathf.PI * 3f)));
+                    yield return null;
+                }
+                crown.localScale = b;
+                SlimeFX.Splat(crown.position, Vector3.up, new Color(1f, 0.9f, 0.3f), 16);
             }
+            else yield return new WaitForSeconds(PhaseBeat);
             if (phase == 3) blob.speed *= 1.4f;
             if (phase == 2) nextSweep = Mathf.Max(nextSweep, Time.time + 4f);   // the new moves come a little after the line
             if (phase == 3) nextHop = Mathf.Max(nextHop, Time.time + 5f);

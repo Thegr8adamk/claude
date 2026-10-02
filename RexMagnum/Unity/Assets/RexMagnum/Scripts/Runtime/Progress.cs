@@ -197,11 +197,12 @@ namespace RexMagnum
         // ------------------------------------------------------------ stats (pause menu, after the ending)
 
         /// <summary>The run in numbers: play time ("play_s", GameFlow counts it), blobs popped, guests rescued, photos,
-        /// deaths, big goals and accomplishments.</summary>
+        /// deaths, big goals and accomplishments. A new list per call: callers keep it while their page is open.</summary>
         public static List<(string what, string value)> Stats()
         {
             int sec = Value("play_s"), min = sec / 60;
-            int goals = (Value("factory") > 0 ? 1 : 0) + (Value("glorp") > 0 ? 1 : 0) + (Value("bar_defended") > 0 ? 1 : 0);
+            int goals = (Value("factory") > 0 ? 1 : 0) + (Value("glorp") > 0 ? 1 : 0) + (Value("bar_defended") > 0 ? 1 : 0)
+                      + (Value("cave_siege") > 0 ? 1 : 0);      // GameFlow's GoalKeys: factory, King Glorp, the bar, the cave siege
             int done = 0;
             foreach (var a in All) if (IsUnlocked(a.id)) done++;
             return new List<(string, string)>
@@ -211,7 +212,7 @@ namespace RexMagnum
                 ("Guests rescued", Value("rescues").ToString()),
                 ("Photos", Value("photos").ToString()),
                 ("Deaths", Value("deaths").ToString()),
-                ("Big goals", $"{goals} / 3"),
+                ("Big goals", $"{goals} / 4"),
                 ("Accomplishments", $"{done} / {All.Length}"),
             };
         }

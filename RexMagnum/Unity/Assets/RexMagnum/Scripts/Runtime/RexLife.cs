@@ -56,7 +56,7 @@ namespace RexMagnum
             if (hasCheckpoint && key != "boss" && (transform.position - checkpointPos).sqrMagnitude < 900f) { checkpointKey = key; return; }
             // not next to a running blob spawner (the factory core hall): waking up among fresh blobs is a death loop.
             // Keep the old checkpoint; the next check (Rex moved on) tries again.
-            if (key != "boss" && NearActiveSpawner(transform.position, 15f)) return;
+            if (key != "boss" && NearActiveSpawner(transform.position)) return;
             checkpointKey = key;
             checkpointZone = key;
             hasCheckpoint = true;
@@ -86,11 +86,15 @@ namespace RexMagnum
             PlayerPrefs.Save();
         }
 
-        /// <summary>A running blob spawner within r metres: waking up among fresh blobs is a death loop.</summary>
-        static bool NearActiveSpawner(Vector3 p, float r)
+        /// <summary>A running blob spawner whose spawn circle (its radius + 5 m) holds p: waking up among fresh
+        /// blobs is a death loop.</summary>
+        static bool NearActiveSpawner(Vector3 p)
         {
             foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            {
+                float r = sp.radius + 5f;
                 if (sp.isActiveAndEnabled && (sp.transform.position - p).sqrMagnitude < r * r) return true;
+            }
             return false;
         }
 
@@ -113,7 +117,23 @@ namespace RexMagnum
             if (!r.ctrl.Grounded || r.ctrl.IsSwimming || r.ctrl.WaterDepth > 0f || r.ctrl.Locked) return;
             Vector3 p = r.transform.position;
             if (Blob.LivingNear(p, 20f) > 0) return;
+            if (!CalmGround(r.transform, p) || NearActiveSpawner(p)) return;
             WriteSaved(p, r.transform.eulerAngles.y, "spot");
+        }
+
+        /// <summary>A quit spot Rex can wake at again: not on something that moves (an elevator cab wakes him in the
+        /// shaft, a rigidbody or the cart moves away) and not in / next to a zone door trigger (wakes him mid-load).</summary>
+        static bool CalmGround(Transform rex, Vector3 p)
+        {
+            foreach (var g in Physics.RaycastAll(p + Vector3.up * 0.5f, Vector3.down, 2f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (g.transform.IsChildOf(rex)) continue;                     // Rex's own capsule
+                if (g.rigidbody != null || g.collider.GetComponentInParent<Elevator>() != null ||
+                    g.collider.GetComponentInParent<GolfCart>() != null) return false;
+            }
+            foreach (var c in Physics.OverlapSphere(p + Vector3.up, 1.5f, ~0, QueryTriggerInteraction.Collide))
+                if (c.GetComponentInParent<ZoneDoor>() != null) return false;
+            return true;
         }
 
         void OnApplicationQuit() => SaveQuitSpot();
@@ -137,13 +157,13 @@ namespace RexMagnum
         }
 
         /// <summary>The saved checkpoint to wake a returning player at, if any: stale ones (goal done, old boss saves)
-        /// are deleted, one within 15 m of a running blob spawner is skipped. A hit gives Rex 3 s of wake grace
+        /// are deleted, one within a running blob spawner's radius + 5 m is skipped. A hit gives Rex 3 s of wake grace
         /// (GameFlow calls this right before the wake teleport).</summary>
         public static bool TryLoadSavedCheckpoint(out Vector3 pos, out float yaw)
         {
             if (!ParseSaved(out pos, out yaw, out string zone)) return false;
             if (zone == "boss" || Stale(zone)) { ClearSavedCheckpoint(); return false; }
-            if (NearActiveSpawner(pos, 15f)) return false;
+            if (NearActiveSpawner(pos)) return false;
             WakeGrace(3f);
             return true;
         }
@@ -188,9 +208,10 @@ namespace RexMagnum
         void Start()
         {
             UpdateMaxHealth();
-            // a returning player: a death near the saved checkpoint wakes there too (not only in this session)
+            // a returning player: a death near the saved checkpoint wakes there too (not only in this session).
+            // Not the quit "spot": that is only for the one wake after PLAY (GameFlow); deaths use cave / ruins / ship or 304.
             if (!hasCheckpoint && ParseSaved(out Vector3 cp, out float cpYaw, out string cpZone) && cpZone != "boss"
-                && !Stale(cpZone) && !NearActiveSpawner(cp, 15f))
+                && cpZone != "spot" && !Stale(cpZone) && !NearActiveSpawner(cp))
             { hasCheckpoint = true; checkpointPos = cp; checkpointYaw = cpYaw; checkpointZone = cpZone; }
         }
 
@@ -235,7 +256,10 @@ namespace RexMagnum
             Vector3 p = respawnPoint != null ? respawnPoint.position : startPos;
             float y = respawnPoint != null ? respawnPoint.eulerAngles.y : startYaw;
             // the checkpoint only when Rex died nearer to it than to his room (a death back at the resort wakes in 304)
-            if (hasCheckpoint && (transform.position - checkpointPos).sqrMagnitude < (transform.position - p).sqrMagnitude)
+            // and not into a crowd: 3+ living blobs within 20 m of it (a siege or wave still there) wakes him in 304.
+            // The boss checkpoint stays (the king and his adds are always there; the fight resets around it).
+            if (hasCheckpoint && (transform.position - checkpointPos).sqrMagnitude < (transform.position - p).sqrMagnitude
+                && (checkpointZone == "boss" || Blob.LivingNear(checkpointPos, 20f) < 3))
             { p = checkpointPos; y = checkpointYaw; }
             ctrl.Teleport(p, y);
             if (ctrl.cameraRig != null) ctrl.cameraRig.SetYaw(y);      // the view faces the way Rex wakes up

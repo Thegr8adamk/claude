@@ -17,8 +17,21 @@ namespace RexMagnum
         /// <summary>True while the ending plays (GolfCart: no driving input, Rex may be at the wheel).</summary>
         public static bool Playing { get; private set; }
 
+        /// <summary>The ending has played (ended or skipped) in this scene: GameFlow's King Glorp banner and the
+        /// stats card wait for it (King Glorp pops ~5 s before the ending starts). Cleared on every scene load.</summary>
+        public static bool Finished { get; private set; }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => Playing = false;      // editor with Domain Reload off
+        static void ResetStatics() { Playing = false; Finished = false; }      // editor with Domain Reload off
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void HookSceneLoad()
+        {
+            // QUIT TO TITLE / NEW GAME reload the scene but statics stay: a new run has not seen the ending (-= first: once)
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m) => Finished = false;
         RexController rex;
         bool slipped, heroed;
         int lastCall = -1, nextCall;
@@ -119,6 +132,7 @@ namespace RexMagnum
         void OnDestroy()
         {
             Playing = false;
+            Finished = true;
             if (cam != null) Destroy(cam.gameObject);
             if (hiddenMain != null) hiddenMain.enabled = true;      // the game view is back
             foreach (var b in stunned) if (b != null && !b.IsDead) b.Stun(0f);     // ending skipped: blobs move again with Rex
