@@ -63,6 +63,7 @@ namespace RexMagnum
         public bool IsAngry => Time.time < angryUntil;
 
         NavMeshAgent agent;
+        float nextSlideSfx;
         Health health;
         Transform rex;
         Health rexHealth;
@@ -115,6 +116,12 @@ namespace RexMagnum
             if (!health.IsDead && Random.value < Time.deltaTime * 0.06f) Sfx.Play("blob_idle", transform.position, 0.5f);
             if (health.IsDead) return;
             if (animator != null) animator.SetFloat(SpeedHash, agent.enabled ? agent.velocity.magnitude : 0f);
+            // wet squelch now and then while sliding fast (not every frame: one blob every ~1.5-3 s)
+            if (agent.enabled && agent.velocity.sqrMagnitude > 2.25f && Time.time > nextSlideSfx)
+            {
+                nextSlideSfx = Time.time + Random.Range(1.5f, 3f);
+                Sfx.Play("blob_slide", transform.position, 0.45f);
+            }
             if (!agent.enabled) return;            // rising out of the water (BlobSpawner)
 
             // Angry: darker color + shake (brief); a little faster

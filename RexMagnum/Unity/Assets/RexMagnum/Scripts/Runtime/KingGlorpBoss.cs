@@ -25,6 +25,8 @@ namespace RexMagnum
         Health health;
         Transform rex;
         bool started, dead;
+        /// <summary>True while the boss fight runs (its power ballad plays; the normal fight music stays quiet).</summary>
+        public static bool Fighting { get; private set; }
         int phase = 1;
         float nextAbsorb, nextWave, nextMinions, nextLine;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
@@ -54,6 +56,8 @@ namespace RexMagnum
 
         void Say(string line) => RexVoice.Subtitle?.Invoke("KING GLORP: " + line);
 
+        void OnDisable() { Fighting = false; }
+
         void Update()
         {
             if (dead || rex == null) return;
@@ -62,6 +66,7 @@ namespace RexMagnum
             {
                 if (d > 40f) return;
                 started = true;
+                Fighting = true;
                 if (music.clip != null) music.Play();
                 Say(GlorpLines[0]);
                 RexVoice.Say(rex.gameObject, "Glorp", true);
@@ -204,6 +209,7 @@ namespace RexMagnum
         IEnumerator Victory(GameObject by)
         {
             dead = true;
+            Fighting = false;
             music.Stop();
             Say("Glorp... is... not... eternaaal...");
             for (int i = 0; i < 10; i++)

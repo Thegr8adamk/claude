@@ -24,7 +24,8 @@ namespace RexMagnum
         enum State { Title, Intro, Play }
         State state = State.Title;
         float fade = 1f, fadeTarget;
-        AudioSource music;
+        AudioSource music, fight;
+        const float DayVolume = 0.35f, FightVolume = 0.55f;
         int hint;
         float hintTime;
         Vector3 titleOrbitCenter;
@@ -50,6 +51,12 @@ namespace RexMagnum
             music.loop = true;
             music.spatialBlend = 0f;
             music.volume = 0.7f;
+            // fight music (80s hair metal) fades in when 2+ living blobs are near Rex, day music ducks under it
+            fight = gameObject.AddComponent<AudioSource>();
+            fight.clip = Resources.Load<AudioClip>("Music/fight");
+            fight.loop = true;
+            fight.spatialBlend = 0f;
+            fight.volume = 0f;
             if (titleCamera != null) titleOrbitCenter = titleCamera.transform.position;
             if (skipTitle) { StartCoroutine(Intro()); return; }
             SetPlayerActive(false);
@@ -86,11 +93,27 @@ namespace RexMagnum
                 }
                 if (RMInput.AnyKey && fade < 0.05f) StartCoroutine(Intro());
             }
-            else if (state == State.Play && hint < Hints.Length && Time.time - hintTime > 9f)
+            else if (state == State.Play)
             {
-                hint++;
-                hintTime = Time.time;
+                if (hint < Hints.Length && Time.time - hintTime > 9f)
+                {
+                    hint++;
+                    hintTime = Time.time;
+                }
+                FightMusic();
             }
+        }
+
+        void FightMusic()
+        {
+            if (fight == null || fight.clip == null || rex == null) return;
+            bool battle = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;
+            float target = battle ? FightVolume : 0f;
+            // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
+            fight.volume = Mathf.MoveTowards(fight.volume, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
+            if (fight.volume > 0f && !fight.isPlaying) fight.Play();
+            else if (fight.volume <= 0f && fight.isPlaying) fight.Pause();
+            music.volume = KingGlorpBoss.Fighting ? 0f : DayVolume * (1f - fight.volume / FightVolume);
         }
 
         IEnumerator Intro()
@@ -128,7 +151,7 @@ namespace RexMagnum
             Busy = false;
             SetPlayerActive(true);
             Play("Music/day_resort");
-            music.volume = 0.35f;
+            music.volume = DayVolume;
             fadeTarget = 0f;
             hintTime = Time.time;
         }
