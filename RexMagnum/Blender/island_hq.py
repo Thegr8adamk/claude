@@ -369,43 +369,140 @@ def bark_material(name, c0, c1, rings=False):
     return m
 
 
+# Wind colour on every tree vertex (vertex colour, exported linear, read by the RexMagnum/Foliage shader):
+#   R = main bend weight: 0 at the trunk base, grows up the trunk and on out to the leaf tips (continuous, so leaves
+#       stay on their branch), G = per-branch random phase, B = branch / leaf flutter weight (0 on the trunk).
+WIND = "Wind"
+
+
+def _wind_layer(bm):
+    return bm.verts.layers.float_color.get(WIND) or bm.verts.layers.float_color.new(WIND)
+
+
+def bark_tube(bm, pts, radii, segs, cols, bulge=None, cap=False):
+    """Tube along pts with a wind colour per ring; bulge(i, angle) scales the radius (bark rings, buttresses)."""
+    cl = _wind_layer(bm)
+    rings = []
+    prev = None
+    for i, (p, r) in enumerate(zip(pts, radii)):
+        t = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        nrm = (prev if prev is not None else t.orthogonal()).normalized()
+        nrm = (nrm - t * nrm.dot(t)).normalized()
+        prev = nrm
+        b = t.cross(nrm)
+        ring = []
+        for k in range(segs):
+            a = math.tau * k / segs
+            v = bm.verts.new(p + (nrm * math.cos(a) + b * math.sin(a)) * r * (bulge(i, a) if bulge else 1.0))
+            v[cl] = (*cols[i], 1.0)
+            ring.append(v)
+        rings.append(ring)
+    for j in range(len(rings) - 1):
+        for k in range(segs):
+            bm.faces.new((rings[j][k], rings[j][(k + 1) % segs], rings[j + 1][(k + 1) % segs], rings[j + 1][k]))
+    if cap:
+        tip = bm.verts.new(pts[-1] + (pts[-1] - pts[-2]).normalized() * radii[-1])
+        tip[cl] = (*cols[-1], 1.0)
+        for k in range(segs):
+            bm.faces.new((rings[-1][k], rings[-1][(k + 1) % segs], tip))
+
+
+def leaf_card(bm, uv, pts_rows, cols_rows):
+    """Grid of quads: pts_rows[j][i] = vertex (row j along the leaf, column i across), UV 0..1 over the grid."""
+    cl = _wind_layer(bm)
+    nj, ni = len(pts_rows), len(pts_rows[0])
+    vs = []
+    for j in range(nj):
+        row = []
+        for i in range(ni):
+            v = bm.verts.new(pts_rows[j][i])
+            v[cl] = (*cols_rows[j][i], 1.0)
+            row.append(v)
+        vs.append(row)
+    for j in range(nj - 1):
+        for i in range(ni - 1):
+            f = bm.faces.new((vs[j][i], vs[j][i + 1], vs[j + 1][i + 1], vs[j + 1][i]))
+            for lp, (a, c) in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
+                lp[uv].uv = (a / (ni - 1), c / (nj - 1))
+
+
 def make_palm(seed, protos):
+    """Coconut palm, ~3.5-4.5k tris: ringed, curved, tapering trunk and 12-16 arching fronds of drooping leaflets."""
     rng = random.Random(seed)
+    up = Vector((0, 0, 1))
     bm = bmesh.new()
     H = rng.uniform(9, 13)
     lean = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)).normalized() * rng.uniform(0.8, 2.2)
-    pts = [Vector((0, 0, 0)) + lean * (t / 10) ** 2 + Vector((0, 0, H * t / 10)) for t in range(11)]
-    tube(bm, pts, [0.28 - 0.1 * t / 10 + (0.06 if t == 0 else 0) for t in range(11)], segs=10)
+    wob = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)) * 0.25
+    NR = 30
+    ts = [i / (NR - 1) for i in range(NR)]
+    pts = [lean * t * t + wob * math.sin(t * math.pi * 1.5) + up * (H * t) for t in ts]
+    # taper with a swollen base and a slightly thicker crown shaft; every other ring a raised leaf scar
+    radii = [0.29 - 0.11 * t + 0.14 * max(0.0, 1 - t * 12) ** 2 + 0.03 * max(0.0, t - 0.9) * 10 for t in ts]
+    RT = 0.4                                       # main bend weight at the crown
+    cols = [(RT * t * t, 0.0, 0.0) for t in ts]
+    bark_tube(bm, pts, radii, 12, cols, bulge=lambda i, a: 1.0 + (0.07 if i % 2 == 0 and 0 < i < NR - 2 else 0.0))
     trunk = mesh_ob(f"PalmTrunk{seed}", bm, protos["palm_bark"], "Protos")
-    top = pts[-1]
+    top = pts[-1] + up * 0.15
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
-    nf = rng.randint(11, 15)
+    nf = rng.randint(12, 16)
+    NS = 16
     for f in range(nf):
-        a = f / nf * math.tau + rng.uniform(-0.15, 0.15)
-        droop = rng.uniform(0.2, 0.9)
-        L = rng.uniform(3.6, 4.8)
+        g = rng.random()                           # this frond's wind phase
+        a = f / nf * math.tau * 2.618 + rng.uniform(-0.12, 0.12)    # golden-angle spiral: no gaps in the crown
+        tier = (f % 3) / 2                         # 0 = upper (steep) .. 1 = lower (droops)
+        elev = rng.uniform(0.45, 0.8) - 0.55 * tier
+        droop = rng.uniform(0.55, 0.85) + 0.5 * tier
+        L = rng.uniform(3.8, 5.0)
         d = Vector((math.cos(a), math.sin(a), 0))
-        side = Vector((-math.sin(a), math.cos(a), 0))
-        spine = [top + d * (L * t) + Vector((0, 0, 0.9 * math.sin(t * math.pi * 0.6) - droop * 2.2 * t * t))
-                 for t in [k / 14 for k in range(15)]]
-        for k in range(1, 14):            # leaflets on both sides
+        spine = [top + d * (L * t * math.cos(elev * 0.6)) + up * (L * t * math.sin(elev) - droop * L * 0.5 * t * t)
+                 for t in [k / NS for k in range(NS + 1)]]
+        # rachis: a narrow strip down the middle of the leaflet texture (its vein)
+        side = d.cross(up).normalized()
+        rows, crow = [], []
+        for k, p in enumerate(spine):
+            t = k / NS
+            w = 0.05 * (1 - 0.7 * t)
+            rows.append([p - side * w, p + side * w])
+            c = (RT + 0.3 * t, g, 0.6 * t)
+            crow.append([c, c])
+        # squeeze the strip's UVs onto the vein: rebuild with explicit UVs
+        cl = _wind_layer(bm)
+        vs = [[bm.verts.new(q) for q in r] for r in rows]
+        for r, cr in zip(vs, crow):
+            for v, c in zip(r, cr):
+                v[cl] = (*c, 1.0)
+        for k in range(NS):
+            fc = bm.faces.new((vs[k][0], vs[k][1], vs[k + 1][1], vs[k + 1][0]))
+            for lp, c in zip(fc.loops, ((0.44, k / NS), (0.56, k / NS), (0.56, (k + 1) / NS), (0.44, (k + 1) / NS))):
+                lp[uv].uv = c
+        for k in range(1, NS - 1):                 # leaflets on both sides, three bent segments each
+            tk = k / NS
+            T = (spine[k + 1] - spine[k - 1]).normalized()
+            S = T.cross(up).normalized()
+            ll = (0.3 + 0.95 * math.sin(tk * math.pi * 0.95)) * L / 4.4
+            hw = 0.075 + 0.04 * math.sin(tk * math.pi)
             for s in (-1, 1):
-                base = spine[k]
-                ll = 0.9 * math.sin((k / 14) * math.pi) + 0.25
-                tip = base + (side * s * 0.85 + (spine[k + 1] - spine[k - 1]).normalized() * 0.5).normalized() * ll \
-                    + Vector((0, 0, -0.35 * ll))
-                w = (spine[k + 1] - spine[k]).normalized() * 0.06
-                v = [bm.verts.new(base - w), bm.verts.new(base + w), bm.verts.new(tip + w * 0.4), bm.verts.new(tip - w * 0.4)]
-                fc = bm.faces.new(v)
-                for lp, c in zip(fc.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
-                    lp[uv].uv = c
+                d0 = (S * s * 0.85 + T * 0.55 + up * 0.22).normalized()
+                bend = rng.uniform(0.35, 0.6)
+                pr, cr = [], []
+                for j in range(4):
+                    u = j / 3
+                    p = spine[k] + d0 * (ll * u) - up * (bend * ll * u * u)
+                    pr.append([p - T * hw, p + T * hw])
+                    c = (RT + 0.3 * tk + 0.05 * u, g, min(1.0, 0.6 * tk + 0.4 * u + 0.15))
+                    cr.append([c, c])
+                leaf_card(bm, uv, pr, cr)
     fronds = mesh_ob(f"PalmFronds{seed}", bm, protos["palm_leaf"], "Protos", smooth=False)
-    # coconuts
+    # coconuts (wind weight of the crown, so they ride along with the trunk)
     bm = bmesh.new()
-    for k in range(rng.randint(2, 5)):
+    for k in range(rng.randint(3, 5)):
         bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.13, matrix=Matrix.Translation(
-            top + Vector((rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), -0.25))))
+            pts[-1] + Vector((rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), -0.2))))
+    cl = _wind_layer(bm)
+    for v in bm.verts:
+        v[cl] = (RT, 0.0, 0.0, 1.0)
     nuts = mesh_ob(f"PalmNuts{seed}", bm, protos["coconut"], "Protos")
     c = bpy.data.collections.new(f"Palm{seed}")
     for o in (trunk, fronds, nuts):
@@ -414,35 +511,75 @@ def make_palm(seed, protos):
 
 
 def make_jungle_tree(seed, protos):
+    """Broadleaf canopy tree, ~4-5k tris: buttressed curved trunk, arching branches with twigs, layered leaf clumps."""
     rng = random.Random(seed + 100)
+    up = Vector((0, 0, 1))
     bm = bmesh.new()
     H = rng.uniform(14, 22)
-    pts = [Vector((math.sin(t * 0.5) * 0.4, math.cos(t * 0.3) * 0.3, H * t / 10)) for t in range(11)]
-    tube(bm, pts, [0.7 * (1 - 0.6 * t / 10) + (0.5 if t == 0 else 0) for t in range(11)], segs=10)
-    branches_end = []
-    for b in range(rng.randint(4, 6)):
-        a = rng.uniform(0, math.tau)
-        start = pts[rng.randint(6, 9)]
-        d = Vector((math.cos(a), math.sin(a), rng.uniform(0.4, 0.9))).normalized()
-        L = rng.uniform(3, 6)
-        bp = [start + d * (L * t / 5) for t in range(6)]
-        tube(bm, bp, [0.3 * (1 - t / 6) + 0.05 for t in range(6)], segs=6)
-        branches_end.append(bp[-1])
-    branches_end.append(pts[-1])
+    NR = 20
+    ts = [i / (NR - 1) for i in range(NR)]
+    ph = rng.uniform(0, math.tau)
+    pts = [Vector((math.sin(t * 5 + ph) * 0.4, math.cos(t * 3 + ph) * 0.3, H * t)) for t in ts]
+    radii = [0.7 * (1 - 0.6 * t) + 0.45 * max(0.0, 1 - t * 8) ** 2 for t in ts]
+    RT = 0.25                                       # big trees bend less
+    cols = [(RT * t * t, 0.0, 0.0) for t in ts]
+    nb = rng.randint(4, 6)
+    buttress = lambda i, a: 1.0 + 0.7 * max(0.0, math.cos(a * nb + ph)) ** 3 * max(0.0, 1 - ts[i] * 5) ** 2 \
+        + (0.04 if i % 3 == 0 else 0.0)            # flared roots at the base, faint growth rings above
+    bark_tube(bm, pts, radii, 14, cols, bulge=buttress)
+    ends = []                                       # (point, wind colour, cards) of every leaf clump
+    nbr = rng.randint(5, 7)
+    for bi in range(nbr):
+        g = rng.random()
+        a = bi / nbr * math.tau + rng.uniform(-0.3, 0.3)
+        i0 = rng.randint(11, NR - 3)
+        start = pts[i0]
+        r0 = RT * ts[i0] ** 2
+        d = Vector((math.cos(a), math.sin(a), rng.uniform(0.25, 0.6))).normalized()
+        L = rng.uniform(3.5, 6.5)
+        bp = [start + d * (L * t / 7) + up * (L * 0.18 * (t / 7) ** 2) for t in range(8)]
+        bcols = [(r0 + 0.12 * t / 7, g, 0.35 * t / 7) for t in range(8)]
+        bark_tube(bm, bp, [radii[i0] * 0.45 * (1 - 0.8 * t / 7) + 0.04 for t in range(8)], 7, bcols, cap=True)
+        ends.append((bp[-1], bcols[-1], 20))
+        for tw in range(2):                         # two twigs off the outer half of each branch
+            j = rng.randint(3, 5)
+            sd = (d + Vector((rng.uniform(-0.9, 0.9), rng.uniform(-0.9, 0.9), rng.uniform(0.1, 0.6)))).normalized()
+            tl = rng.uniform(1.5, 2.6)
+            tp = [bp[j] + sd * (tl * t / 3) for t in range(4)]
+            tc = [(bcols[j][0] + 0.06 * t / 3, (g + 0.13 * (tw + 1)) % 1.0, bcols[j][2] + 0.15 * t / 3) for t in range(4)]
+            bark_tube(bm, tp, [0.09 * (1 - 0.6 * t / 3) + 0.02 for t in range(4)], 5, tc, cap=True)
+            ends.append((tp[-1], tc[-1], 14))
+    ends.append((pts[-1] + up * 0.6, (RT, rng.random(), 0.3), 28))
     trunk = mesh_ob(f"JTrunk{seed}", bm, protos["bark"], "Protos")
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
-    for c in branches_end:                 # leaf cards in a crown around each branch end
-        for k in range(28):
-            p = c + Vector((rng.gauss(0, 2.2), rng.gauss(0, 2.2), rng.gauss(0.5, 1.2)))
-            nrm = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.2, 1))).normalized()
-            t1 = nrm.orthogonal().normalized()
-            t2 = nrm.cross(t1)
-            s = rng.uniform(1.6, 2.6)
-            v = [bm.verts.new(p + (t1 * x + t2 * y) * s) for x, y in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-            fc = bm.faces.new(v)
-            for lp, cc in zip(fc.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
-                lp[uv].uv = cc
+    for c, (r0, g, b0), n in ends:                  # leaf cards in two layers on a dome around each clump centre
+        rc = rng.uniform(1.7, 2.5) * (1.15 if n > 20 else 1.0)
+        for k in range(n):
+            inner = k % 3 == 0
+            z = rng.uniform(-0.35, 1.0)
+            az = rng.uniform(0, math.tau)
+            dirv = Vector((math.cos(az) * math.sqrt(1 - z * z), math.sin(az) * math.sqrt(1 - z * z), z))
+            p = c + dirv * rc * (0.55 if inner else 1.0) * rng.uniform(0.85, 1.1)
+            nrm = (dirv + up * 0.8 + Vector((rng.gauss(0, 0.25), rng.gauss(0, 0.25), 0))).normalized()
+            t1 = nrm.cross(up)
+            t1 = (t1 if t1.length > 1e-3 else Vector((1, 0, 0))).normalized()
+            t2 = nrm.cross(t1).normalized()          # along the card, pointing outward / down
+            if t2.dot(dirv) < 0:
+                t2 = -t2
+            s = rng.uniform(0.9, 1.5) * (0.8 if inner else 1.0)
+            pr, cr = [], []
+            for j in range(3):                      # 3 x 3 grid: cupped across, drooping at the outer edge
+                v = j - 1
+                row, crow = [], []
+                for i in range(3):
+                    u = i - 1
+                    q = p + (t1 * u + t2 * v) * s + nrm * (0.18 * s * (1 - u * u)) - up * (0.3 * s * max(0, v) ** 2)
+                    row.append(q)
+                    crow.append((r0 + 0.05 * (v + 1), (g + 0.07 * (k % 4)) % 1.0, min(1.0, max(b0, 0.45) + 0.25 * (v + 1))))
+                pr.append(row)
+                cr.append(crow)
+            leaf_card(bm, uv, pr, cr)
     leaves = mesh_ob(f"JLeaves{seed}", bm, protos["broad_leaf"], "Protos", smooth=False)
     c = bpy.data.collections.new(f"Jungle{seed}")
     c.objects.link(trunk)

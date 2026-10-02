@@ -33,7 +33,7 @@ namespace RexMagnum
         float baseCover = 0.45f;
         QualityAuto quality;
         float nextLine, nextEnv, glowNight = -1f;
-        int probeBand = -1, probeJumps;     // the island probe's day band (InteriorProbes' bands) / ZoneStreamer.Jumps seen
+        int probeBand = -1, probeId = -1;     // the island probe's day band (InteriorProbes' bands) / pass in flight
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
@@ -194,15 +194,21 @@ namespace RexMagnum
                     }
                 }
                 // the 2.4 km probe renders the whole island: it rendered once on awake (OnAwake), then again only when
-                // the day band changes (day / dawn-dusk / night, the same bands as InteriorProbes) or after a fast
-                // travel (the zones far from the old spot were culled by ZoneStreamer). It was every 30 s all day.
+                // the day band changes (day / dawn-dusk / night, the same bands as InteriorProbes). It was every 30 s all
+                // day. ZoneStreamer shows every zone while a pass is in flight (it culls the far ones for the player's
+                // camera, and the probe would bake an island with holes); a pass is ~9 frames, a few times a day.
                 int band = Night < 0.3f ? 0 : Night < 0.7f ? 1 : 2;
-                if (probeBand < 0) { probeBand = band; probeJumps = ZoneStreamer.Jumps; }
-                if (islandProbe != null && islandProbe.isActiveAndEnabled && (band != probeBand || ZoneStreamer.Jumps != probeJumps))
+                if (probeBand < 0) probeBand = band;
+                if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId)))
                 {
-                    islandProbe.RenderProbe();
+                    probeId = -1;
+                    ZoneStreamer.HoldAll = false;
+                }
+                if (islandProbe != null && islandProbe.isActiveAndEnabled && probeId < 0 && band != probeBand)
+                {
+                    ZoneStreamer.ShowAllNow();
+                    probeId = islandProbe.RenderProbe();
                     probeBand = band;
-                    probeJumps = ZoneStreamer.Jumps;
                 }
             }
             if (Night > 0.8f && Time.time > nextLine)

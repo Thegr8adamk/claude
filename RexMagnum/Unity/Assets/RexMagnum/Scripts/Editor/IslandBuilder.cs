@@ -106,6 +106,7 @@ namespace RexMagnum.EditorTools
 
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Buildings", 0.35f);
                 var world = new GameObject("Island").transform;
+                hotelFloors = data.hotel != null ? data.hotel.elevatorFloors : null;     // the hotel's LOD parts per floor
                 foreach (var a in data.assets)
                     if (a.name != "GolfCart") BuildingPrefab(a, data.materials, world);
 
@@ -158,6 +159,7 @@ namespace RexMagnum.EditorTools
                 Beach(world);
                 foreach (var leg in walkLegs) CheckWalk(leg.name, leg.path);      // every entrance, walls and glass included
                 LightProbeGrid(terrain, data.hotel != null ? data.hotel.elevatorFloors : null);
+                ZoneStreaming(world);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -487,11 +489,33 @@ namespace RexMagnum.EditorTools
             var lod0 = Level("_LOD0");       // extras (_Door, _Bottle, _Core) stay outside the LODs
             var lod1 = Level("_LOD1");
             var lod2 = Level("_LOD2");      // heavy buildings: middle level for phones
-            var lg = root.AddComponent<LODGroup>();
-            lg.SetLODs(lod2.Length > 0 ? new[] { new LOD(0.3f, lod0), new LOD(0.1f, lod1), new LOD(0.006f, lod2) }
-                : lod1.Length > 0 ? new[] { new LOD(0.18f, lod0), new LOD(0.006f, lod1) }
-                : new[] { new LOD(0.006f, lod0) });
-            lg.RecalculateBounds();
+            var levels = lod2.Length > 0 ? new[] { lod0, lod1, lod2 } : lod1.Length > 0 ? new[] { lod0, lod1 } : new[] { lod0 };
+            var heights = lod2.Length > 0 ? new[] { 0.3f, 0.1f, 0.006f } : lod1.Length > 0 ? new[] { 0.18f, 0.006f } : new[] { 0.006f };
+            // a big building as one LOD group drew all of it at LOD0 and was culled as a whole (the hotel: 187k
+            // triangles): split per floor / 30 m cell, one group each, so far parts drop detail and cull on their own
+            var wholeBox = new Bounds();
+            bool wholeAny = false;
+            foreach (var r in lod0)
+                if (r.enabled) { if (!wholeAny) { wholeBox = r.bounds; wholeAny = true; } else wholeBox.Encapsulate(r.bounds); }
+            float wholeSize = Mathf.Max(wholeBox.size.x, wholeBox.size.y, wholeBox.size.z);
+            var parts = SplitParts(a, levels) ?? new List<MeshRenderer[][]> { levels };
+            for (int pi = 0; pi < parts.Count; pi++)
+            {
+                var owner = root;
+                if (parts.Count > 1) { owner = new GameObject($"{a.name}_Part{pi}"); owner.transform.SetParent(root.transform, false); }
+                var lg = owner.AddComponent<LODGroup>();
+                lg.SetLODs(parts[pi].Select((rl, li) => new LOD(heights[li], rl)).ToArray());
+                lg.RecalculateBounds();
+                // a part is smaller than the building: its screen height drops sooner. Scaled by part / building size
+                // (at least 0.35), each part switches at about the distance the whole building did (one factor for all
+                // levels: still strictly decreasing, > 0)
+                if (parts.Count > 1 && wholeSize > 0f)
+                {
+                    float scale = Mathf.Clamp(lg.size / wholeSize, 0.35f, 1f);
+                    lg.SetLODs(parts[pi].Select((rl, li) => new LOD(heights[li] * scale, rl)).ToArray());
+                }
+            }
+            MarkUnreadable();
             string path = $"{Prefabs}/{a.name}.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             UnityEngine.Object.DestroyImmediate(root);
@@ -541,58 +565,7 @@ namespace RexMagnum.EditorTools
                 if (clear.Count == 0) r.gameObject.layer = PoolReflection.WaterLayer;
                 return none;
             }
-            Mesh Part(List<int> subs, string tag)
-            {
-                // only the vertices these sub-meshes use (a whole copy kept every vertex in both parts: double memory),
-                // every channel the source has (UV2 lightmap UVs, colours...)
-                var map = new int[src.vertexCount];
-                for (int k = 0; k < map.Length; k++) map[k] = -1;
-                var used = new List<int>();
-                var subTris = new List<int[]>();
-                foreach (int sub in subs)
-                {
-                    var t = src.GetTriangles(sub);
-                    for (int k = 0; k < t.Length; k++)
-                    {
-                        if (map[t[k]] < 0) { map[t[k]] = used.Count; used.Add(t[k]); }
-                        t[k] = map[t[k]];
-                    }
-                    subTris.Add(t);
-                }
-                List<T> Pick<T>(List<T> all) => all.Count == 0 ? all : used.Select(k => all[k]).ToList();
-                var m = new Mesh { name = $"{building}_{r.name}_{tag}" };
-                m.indexFormat = used.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
-                var v3 = new List<Vector3>();
-                src.GetVertices(v3); m.SetVertices(Pick(v3));
-                src.GetNormals(v3); if (v3.Count > 0) m.SetNormals(Pick(v3));
-                var v4 = new List<Vector4>();
-                src.GetTangents(v4); if (v4.Count > 0) m.SetTangents(Pick(v4));
-                var col = new List<Color>();
-                src.GetColors(col); if (col.Count > 0) m.SetColors(Pick(col));
-                for (int ch = 0; ch < 8; ch++)
-                {
-                    var attr = VertexAttribute.TexCoord0 + ch;
-                    if (!src.HasVertexAttribute(attr)) continue;
-                    src.GetUVs(ch, v4);
-                    var uvs = Pick(v4);
-                    int dim = src.GetVertexAttributeDimension(attr);
-                    if (dim <= 2) m.SetUVs(ch, uvs.Select(u => (Vector2)u).ToList());
-                    else if (dim == 3) m.SetUVs(ch, uvs.Select(u => (Vector3)u).ToList());
-                    else m.SetUVs(ch, uvs);
-                }
-                m.subMeshCount = subs.Count;
-                for (int i = 0; i < subs.Count; i++) m.SetTriangles(subTris[i], i);    // with sub-mesh bounds (WaterVolume reads them)
-                m.RecalculateBounds();
-                string p = $"{Gen}/{m.name}.asset";
-                AssetDatabase.DeleteAsset(p);
-                AssetDatabase.CreateAsset(m, p);
-                // no CPU copy in the build: nothing reads these at runtime (WaterVolume only reads the sub-mesh bounds,
-                // the colliders use their own CollisionMesh); the editor (lightmap UVs) can still read the asset
-                var mso = new SerializedObject(m);
-                var rp = mso.FindProperty("m_IsReadable");
-                if (rp != null) { rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); }
-                return m;
-            }
+            Mesh Part(List<int> subs, string tag) => SubsetMesh(src, subs.Select(sub => src.GetTriangles(sub)).ToList(), $"{building}_{r.name}_{tag}");
             MeshRenderer Child(List<int> subs, string tag)
             {
                 var child = new GameObject(r.name.Replace("_LOD", $"_{tag}LOD"));     // no "_LOD0" suffix: not a lightmap / collision part
@@ -617,6 +590,197 @@ namespace RexMagnum.EditorTools
             mf.sharedMesh = Part(keep, solid.Count > 0 ? "Solid" : "SeeThrough");
             r.sharedMaterials = keep.Select(i => mats[i]).ToArray();
             return made.ToArray();
+        }
+
+        static float[] hotelFloors;      // Island.json hotel floor heights: the hotel's LOD parts are split per floor
+        const float PartCell = 30f;
+        const int PartMinTris = 2000;    // smaller parts join the "shell" part (one more group is not worth it)
+
+        /// <summary>Splits a big building's LOD renderers (> 50k triangles, or taller than 12 m with > 15k) into parts:
+        /// per floor band (the hotel's floors from Island.json, else 3.5 m; 12 m bands when taller than 25 m, like the
+        /// cave rock) and per 30 m cell, by triangle centre, on the same grid for every LOD level. Returns parts x levels
+        /// (each part gets its own LOD group with the building's screen heights), or null when it stays one group.
+        /// A piece keeps its source's materials, static / occluder flags, layer and shadows; the source renderer keeps
+        /// its first piece, the others are its children. Water renderers (pool water layer, RexMagnum/Water: WaterVolume
+        /// and PoolReflection read their sub-mesh bounds) stay whole, in the part of their centre.</summary>
+        static List<MeshRenderer[][]> SplitParts(AssetRow a, MeshRenderer[][] levels)
+        {
+            var box = new Bounds();
+            bool any = false;
+            foreach (var r in levels[0])
+                if (r.enabled) { if (!any) { box = r.bounds; any = true; } else box.Encapsulate(r.bounds); }
+            if (!any || !(a.tris > 50000 || (box.size.y > 12f && a.tris > 15000))) return null;
+            var floors = a.name == "Hotel" ? hotelFloors : null;
+            float bandH = box.size.y <= 25f ? 3.5f : 12f;
+            int Key(Vector3 w)
+            {
+                int fb = 0;
+                if (floors != null && floors.Length > 0) { while (fb < floors.Length && w.y >= floors[fb] - 0.3f) fb++; }
+                else fb = Mathf.Clamp(Mathf.FloorToInt((w.y - box.min.y) / bandH), 0, 99);
+                return fb * 10000 + Mathf.Clamp(Mathf.FloorToInt((w.x - box.min.x) / PartCell), 0, 99) * 100
+                    + Mathf.Clamp(Mathf.FloorToInt((w.z - box.min.z) / PartCell), 0, 99);
+            }
+            bool Splittable(MeshRenderer sr)
+            {
+                var smf = sr.GetComponent<MeshFilter>();
+                return sr.enabled && smf != null && smf.sharedMesh != null && sr.gameObject.layer != PoolReflection.WaterLayer &&
+                    !sr.sharedMaterials.Any(sm => sm != null && sm.shader != null && sm.shader.name == "RexMagnum/Water");
+            }
+            // pass 1 (nothing changed yet): the key of every triangle, per renderer key -> triangles per sub-mesh
+            var cut = new Dictionary<MeshRenderer, Dictionary<int, List<int>[]>>();
+            var whole = new Dictionary<MeshRenderer, int>();
+            var size0 = new Dictionary<int, int>();
+            for (int li = 0; li < levels.Length; li++)
+                foreach (var r in levels[li])
+                {
+                    if (cut.ContainsKey(r) || whole.ContainsKey(r)) continue;
+                    if (!Splittable(r)) { whole[r] = r.enabled ? Key(r.bounds.center) : -1; continue; }
+                    var mesh = r.GetComponent<MeshFilter>().sharedMesh;
+                    var verts = mesh.vertices;
+                    var l2w = r.transform.localToWorldMatrix;
+                    var byKey = new Dictionary<int, List<int>[]>();
+                    int subs = Mathf.Min(mesh.subMeshCount, r.sharedMaterials.Length);
+                    for (int s = 0; s < subs; s++)
+                    {
+                        var t = mesh.GetTriangles(s);
+                        for (int k = 0; k + 2 < t.Length; k += 3)
+                        {
+                            int key = Key(l2w.MultiplyPoint3x4((verts[t[k]] + verts[t[k + 1]] + verts[t[k + 2]]) / 3f));
+                            if (!byKey.TryGetValue(key, out var lists))
+                            {
+                                lists = new List<int>[subs];
+                                for (int q = 0; q < subs; q++) lists[q] = new List<int>();
+                                byKey[key] = lists;
+                            }
+                            lists[s].Add(t[k]); lists[s].Add(t[k + 1]); lists[s].Add(t[k + 2]);
+                            if (li == 0) size0[key] = (size0.TryGetValue(key, out int had) ? had : 0) + 1;
+                        }
+                    }
+                    cut[r] = byKey;
+                }
+            // the parts: every LOD0 floor / cell with enough triangles; the rest (and LOD1/2-only bits) is the shell
+            var big = size0.Where(kv => kv.Value >= PartMinTris).Select(kv => kv.Key).OrderBy(k => k).ToList();
+            if (big.Count == 0 || (big.Count == 1 && size0.Count == 1)) return null;
+            var index = new Dictionary<int, int>();
+            for (int i = 0; i < big.Count; i++) index[big[i]] = i;
+            int PartOf(int key) => index.TryGetValue(key, out int found) ? found : big.Count;
+            var parts = new List<MeshRenderer>[big.Count + 1][];
+            for (int i = 0; i < parts.Length; i++) parts[i] = levels.Select(l => new List<MeshRenderer>()).ToArray();
+            int pieces = 0;
+            // pass 2: one mesh per part and renderer
+            for (int li = 0; li < levels.Length; li++)
+                foreach (var r in levels[li])
+                {
+                    if (whole.TryGetValue(r, out int wk)) { parts[PartOf(wk)][li].Add(r); pieces++; continue; }
+                    if (!cut.TryGetValue(r, out var byKey)) continue;
+                    var byPart = new SortedDictionary<int, List<int>[]>();
+                    foreach (var kv in byKey)
+                    {
+                        int pn = PartOf(kv.Key);
+                        if (!byPart.TryGetValue(pn, out var acc)) byPart[pn] = acc = kv.Value.Select(x => new List<int>()).ToArray();
+                        for (int q = 0; q < acc.Length; q++) acc[q].AddRange(kv.Value[q]);
+                    }
+                    pieces += byPart.Count;
+                    if (byPart.Count == 1) { parts[byPart.Keys.First()][li].Add(r); continue; }
+                    var src = r.GetComponent<MeshFilter>().sharedMesh;
+                    var mats = r.sharedMaterials;
+                    var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                    bool first = true;
+                    foreach (var kv in byPart)
+                    {
+                        var tris = kv.Value;
+                        var keep = Enumerable.Range(0, tris.Length).Where(q => tris[q].Count > 0).ToList();
+                        var piece = SubsetMesh(src, keep.Select(q => tris[q].ToArray()).ToList(), $"{a.name}_{r.name}_P{kv.Key}");
+                        var pr = r;
+                        if (!first)
+                        {
+                            var go = new GameObject($"{r.name}_P{kv.Key}");    // "LOD" stays in the name (ZoneStreamer); no _LOD0 suffix
+                            go.transform.SetParent(r.transform, false);
+                            go.layer = r.gameObject.layer;
+                            go.AddComponent<MeshFilter>();
+                            pr = go.AddComponent<MeshRenderer>();
+                            pr.shadowCastingMode = r.shadowCastingMode;
+                            GameObjectUtility.SetStaticEditorFlags(go, flags);
+                        }
+                        pr.GetComponent<MeshFilter>().sharedMesh = piece;
+                        pr.sharedMaterials = keep.Select(q => mats[q]).ToArray();
+                        parts[kv.Key][li].Add(pr);
+                        first = false;
+                    }
+                    // the see-through split's whole mesh is not used any more
+                    var oldPath = AssetDatabase.GetAssetPath(src);
+                    if (!string.IsNullOrEmpty(oldPath) && oldPath.StartsWith(Gen + "/")) AssetDatabase.DeleteAsset(oldPath);
+                }
+            var result = parts.Where(p => p.Any(l => l.Count > 0)).Select(p => p.Select(l => l.ToArray()).ToArray()).ToList();
+            Debug.Log($"[Rex Magnum] LOD split: {a.name} -> {result.Count} groups ({pieces} renderers, {a.tris} triangles)");
+            return result;
+        }
+
+        /// <summary>A mesh asset with only the given triangle lists (source vertex indices; one sub-mesh each) and only
+        /// the vertices they use, every channel the source has. Saved in Gen, without a CPU copy in the build.</summary>
+        static Mesh SubsetMesh(Mesh src, List<int[]> tris, string name)
+        {
+            // only the vertices these sub-meshes use (a whole copy kept every vertex in both parts: double memory),
+            // every channel the source has (UV2 lightmap UVs, colours...)
+            var map = new int[src.vertexCount];
+            for (int k = 0; k < map.Length; k++) map[k] = -1;
+            var used = new List<int>();
+            var subTris = new List<int[]>();
+            foreach (var srcTris in tris)
+            {
+                var t = (int[])srcTris.Clone();
+                for (int k = 0; k < t.Length; k++)
+                {
+                    if (map[t[k]] < 0) { map[t[k]] = used.Count; used.Add(t[k]); }
+                    t[k] = map[t[k]];
+                }
+                subTris.Add(t);
+            }
+            List<T> Pick<T>(List<T> all) => all.Count == 0 ? all : used.Select(k => all[k]).ToList();
+            var m = new Mesh { name = name };
+            m.indexFormat = used.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+            var v3 = new List<Vector3>();
+            src.GetVertices(v3); m.SetVertices(Pick(v3));
+            src.GetNormals(v3); if (v3.Count > 0) m.SetNormals(Pick(v3));
+            var v4 = new List<Vector4>();
+            src.GetTangents(v4); if (v4.Count > 0) m.SetTangents(Pick(v4));
+            var col = new List<Color>();
+            src.GetColors(col); if (col.Count > 0) m.SetColors(Pick(col));
+            for (int ch = 0; ch < 8; ch++)
+            {
+                var attr = VertexAttribute.TexCoord0 + ch;
+                if (!src.HasVertexAttribute(attr)) continue;
+                src.GetUVs(ch, v4);
+                var uvs = Pick(v4);
+                int dim = src.GetVertexAttributeDimension(attr);
+                if (dim <= 2) m.SetUVs(ch, uvs.Select(u => (Vector2)u).ToList());
+                else if (dim == 3) m.SetUVs(ch, uvs.Select(u => (Vector3)u).ToList());
+                else m.SetUVs(ch, uvs);
+            }
+            m.subMeshCount = tris.Count;
+            for (int i = 0; i < tris.Count; i++) m.SetTriangles(subTris[i], i);    // with sub-mesh bounds (WaterVolume reads them)
+            m.RecalculateBounds();
+            string p = $"{Gen}/{m.name}.asset";
+            AssetDatabase.DeleteAsset(p);
+            AssetDatabase.CreateAsset(m, p);
+            newMeshes.Add(m);           // made non-readable when the building is done (SplitParts may still read it)
+            return m;
+        }
+
+        static readonly List<Mesh> newMeshes = new List<Mesh>();
+
+        /// <summary>No CPU copy in the build: nothing reads these at runtime (WaterVolume only reads the sub-mesh
+        /// bounds, the colliders use their own CollisionMesh); the editor (lightmap UVs) can still read the assets.</summary>
+        static void MarkUnreadable()
+        {
+            foreach (var m in newMeshes)
+            {
+                if (m == null) continue;
+                var mso = new SerializedObject(m);
+                var rp = mso.FindProperty("m_IsReadable");
+                if (rp != null) { rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); }
+            }
+            newMeshes.Clear();
         }
 
         static Mesh CollisionMesh(Mesh src, Material[] mats, string name)
@@ -969,6 +1133,47 @@ namespace RexMagnum.EditorTools
             for (int f = 1; f < h.elevatorFloors.Length - 1; f++)
                 BoxProbe("CorridorProbe" + f, new Vector3((xa + xb) * 0.5f, h.elevatorFloors[f] + 1.6f, hc.z),
                          new Vector3(xb - xa, 3.3f, 3.2f), 0.6f, root);
+        }
+
+        /// <summary>The zones for ZoneStreamer (on the "Island" root): building instances by asset name (they stay where
+        /// they are: "Island/PoolArea", "Island/Ruins"... are found by path), plus the zone's own lamps (tunnel lamps,
+        /// factory hall lights: nothing else switches them). Buildings not listed get a zone of their own.</summary>
+        static void ZoneStreaming(Transform world)
+        {
+            var map = new (string zone, string[] assets)[]
+            {
+                ("Resort", new[] { "Hotel", "PoolArea", "Room304", "DiveShop", "TikiBar", "BeachProps", "Pier" }),
+                ("Golf", new[] { "Golf" }),
+                ("Jungle", new[] { "JungleFalls", "Waterfall", "RiverRocks", "Bridges", "River" }),
+                ("Ruins", new[] { "Ruins" }),
+                ("Cave", new[] { "Cave" }),
+                ("Tunnels", new[] { "CaveTunnels" }),
+                ("Ship", new[] { "Ship" }),
+            };
+            Light[] Lamps(string gameplay, string lamp)
+            {
+                var g = GameObject.Find(gameplay);
+                return g == null ? new Light[0] : g.GetComponentsInChildren<Light>(true).Where(l => l.name == lamp).ToArray();
+            }
+            var zones = new List<ZoneStreamer.Zone>();
+            var listed = new HashSet<string>();
+            foreach (var (zone, assets) in map)
+            {
+                var roots = assets.Select(n => world.Find(n)).Where(t => t != null).ToArray();
+                foreach (var n in assets) listed.Add(n);
+                if (roots.Length == 0) continue;
+                zones.Add(new ZoneStreamer.Zone
+                {
+                    name = zone, roots = roots,
+                    lights = zone == "Ruins" ? Lamps("Factory_Gameplay", "HallLight") : zone == "Tunnels" ? Lamps("Tunnels_Gameplay", "TunnelLamp") : new Light[0],
+                });
+            }
+            foreach (Transform t in world)
+                if (!listed.Contains(t.name) && t.GetComponentInChildren<LODGroup>() != null)
+                    zones.Add(new ZoneStreamer.Zone { name = t.name, roots = new[] { t }, lights = new Light[0] });
+            var zs = world.gameObject.AddComponent<ZoneStreamer>();
+            zs.zones = zones.ToArray();
+            Debug.Log($"[Rex Magnum] Zone streaming: {string.Join(", ", zones.Select(z => $"{z.name} ({z.roots.Length} roots, {z.lights.Length} lamps)"))}");
         }
 
         /// <summary>Small realtime box-projected reflection probe for an interior, rendered once on load (64 px, short

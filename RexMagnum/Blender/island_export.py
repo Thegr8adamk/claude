@@ -8,7 +8,7 @@ Reads Island_v02.blend (built by build_island_v2.py) and writes Unity/Assets/Rex
   Island.json                materials, assets, vegetation instances, terrain + spawn data for IslandBuilder.cs
   AxisProbe.fbx              3 empties that let Unity check the Blender -> Unity axis mapping
 
-Run:  python island_export.py [--res 1024] [--skip-bake]
+Run:  python island_export.py [--res 1024] [--skip-bake]       (--trees: only the palm / jungle tree FBXs)
 UVs: box projection in metres / tile size, so every texture tile keeps its real-world size.
 """
 import argparse
@@ -515,7 +515,7 @@ def decimate(ob, max_tris):
     bpy.data.meshes.remove(old)
 
 
-def export_fbx(objs, path):
+def export_fbx(objs, path, colors="SRGB"):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
@@ -523,7 +523,7 @@ def export_fbx(objs, path):
     bpy.ops.export_scene.fbx(filepath=path, use_selection=True, axis_forward="-Z", axis_up="Y",
                              apply_scale_options="FBX_SCALE_ALL", object_types={"MESH", "EMPTY"},
                              use_mesh_modifiers=True, mesh_smooth_type="FACE", add_leaf_bones=False,
-                             bake_anim=False, path_mode="STRIP")
+                             bake_anim=False, path_mode="STRIP", colors_type=colors)
 
 
 def temp_collection():
@@ -605,16 +605,16 @@ def export_assets(mats_used, names=None):
     return rows
 
 
-def export_vegetation(mats_used):
+def export_vegetation(mats_used, kinds=("Palm", "Jungle", "FernC", "BoulderC", "GrassClump")):
     tmp = temp_collection()
     protos = []
-    names = [c.name for c in bpy.data.collections
-             if c.name.startswith(("Palm", "Jungle", "FernC", "BoulderC", "GrassClump")) and c.objects]
+    names = [c.name for c in bpy.data.collections if c.name.startswith(kinds) and c.objects]
     for n in sorted(names):
         coll = bpy.data.collections[n]
         ob = bpy.data.objects.new(n, joined_mesh(list(coll.objects), n, mats_used))
         tmp.objects.link(ob)
-        export_fbx([ob], os.path.join(VEG, f"{n}.fbx"))
+        # trees carry their wind weights as vertex colour: linear, so the shader reads the values as written
+        export_fbx([ob], os.path.join(VEG, f"{n}.fbx"), "LINEAR")
         kind = ("palm" if n.startswith("Palm") else "tree" if n.startswith("Jungle") else
                 "fern" if n.startswith("Fern") else "rock" if n.startswith("Boulder") else "grass")
         protos.append(dict(name=n, fbx=f"Vegetation/{n}.fbx", kind=kind))
@@ -830,13 +830,47 @@ def rebuild_assets(names, res):
     print(f"[Export] rebuilt {names}; {len(new_rows)} new materials", flush=True)
 
 
+def rebuild_trees(blend):
+    """--trees: regenerate the palm / jungle tree prototypes (island_hq.make_palm / make_jungle_tree) in the saved
+    blend, keep every placed instance, save, and re-export only Vegetation/Palm*.fbx + Jungle*.fbx (no bakes).
+    Prints the triangle count of each tree."""
+    import island_hq as HQ
+    bpy.ops.wm.open_mainfile(filepath=blend)
+    mats = bpy.data.materials
+    protos = dict(palm_bark=mats["PalmBark"], bark=mats["JungleBark"], palm_leaf=mats["PalmLeaf"],
+                  broad_leaf=mats["BroadLeaf"], coconut=mats["CoconutRaw"])
+    import re
+    for c in [c for c in bpy.data.collections if re.fullmatch(r"(Palm|Jungle)\d+", c.name) and c.objects]:
+        seed = int(re.sub(r"\D", "", c.name))
+        new = (HQ.make_palm if c.name.startswith("Palm") else HQ.make_jungle_tree)(seed, protos)
+        for o in list(c.objects):                  # swap the meshes inside the collection the instances point at
+            me = o.data
+            bpy.data.objects.remove(o)
+            if me.users == 0:
+                bpy.data.meshes.remove(me)
+        for o in list(new.objects):
+            c.objects.link(o)
+        bpy.data.collections.remove(new)
+    bpy.ops.wm.save_mainfile()
+    mats_used = set()
+    export_vegetation(mats_used, ("Palm", "Jungle"))
+    for n in sorted(c.name for c in bpy.data.collections if c.name.startswith(("Palm", "Jungle")) and c.objects):
+        tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.collections[n].objects)
+        print(f"[Export] {n}: {tris} tris", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--res", type=int, default=1024)
     ap.add_argument("--blend", default=os.path.join(HERE, "Island_v02.blend"))
     ap.add_argument("--skip-bake", action="store_true")
     ap.add_argument("--rebuild", default="", help="only rebuild these assets, e.g. Hotel,Room304")
+    ap.add_argument("--trees", action="store_true", help="only regenerate + re-export the palm / jungle trees")
     a = ap.parse_args()
+    if a.trees:
+        os.makedirs(VEG, exist_ok=True)
+        rebuild_trees(a.blend)
+        return
     if a.rebuild:
         for d in (OUT, TEX, BLD, VEG):
             os.makedirs(d, exist_ok=True)
