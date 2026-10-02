@@ -107,7 +107,13 @@ namespace RexMagnum
             if (!Application.isMobilePlatform && !Application.isEditor)
             {
                 var mode = PlayerPrefs.GetInt("RexMagnum_Fullscreen", 1) == 1 ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-                if (Screen.fullScreenMode != mode) Screen.fullScreenMode = mode;
+                if (Screen.fullScreenMode != mode)
+                {
+                    // full screen at the monitor's own size; a window at 3/4 of it (not a window as big as the screen)
+                    int w = Display.main.systemWidth, h = Display.main.systemHeight;
+                    if (mode == FullScreenMode.Windowed) { w = w * 3 / 4; h = h * 3 / 4; }
+                    Screen.SetResolution(w, h, mode);
+                }
             }
         }
 

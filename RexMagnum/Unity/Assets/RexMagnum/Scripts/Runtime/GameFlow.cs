@@ -42,15 +42,24 @@ namespace RexMagnum
         float titleAngle;
         GUIStyle big, mid, small, box;
 
-        static readonly string[] Hints =
+        const int HintCount = 6;
+
+        /// <summary>The tutorial hint with the keys / buttons the player uses now (remapped ones too).</summary>
+        static string Hint(int i)
         {
-            "Mouse / right stick: look.   W A S D / left stick: walk.   Shift / L-stick click: run.",
-            "The door is stuck. Left click / RT: punch it.",
-            "F / X: pick up the full beer bottle on the table. It is your first weapon.",
-            "T / D-pad up: taunt. Try it at the mirror.",
-            "V / R-stick click: first person or third person.   C / D-pad left: other shoulder.",
-            "The beach towel is on the balcony rail (F / X). Look at the pool. Something is wrong.",
-        };
+            string B(string a) => RMInput.Btn(a);
+            bool kb = RMInput.LastDevice == RMInput.DeviceKind.Keyboard;
+            switch (i)
+            {
+                case 0: return kb ? $"Mouse: look.   {B("Forward")} {B("Left")} {B("Back")} {B("Right")}: walk.   {B("Run")}: run."
+                                  : $"Right stick: look.   Left stick: walk.   {B("Run")}: run.";
+                case 1: return $"The door is stuck. {B("Action")}: punch it.";
+                case 2: return $"{B("Use")}: pick up the full beer bottle on the table. It is your first weapon.";
+                case 3: return $"{B("Taunt")}: taunt. Try it at the mirror.";
+                case 4: return $"{B("Camera")}: first person or third person.   {B("Shoulder")}: other shoulder.";
+                default: return $"The beach towel is on the balcony rail ({B("Use")}). Look at the pool. Something is wrong.";
+            }
+        }
 
         public static bool Busy { get; private set; }
 
@@ -152,7 +161,7 @@ namespace RexMagnum
         /// <summary>The next hint shows when the player has done this one (or after a time-out).</summary>
         void UpdateHint()
         {
-            if (hint >= Hints.Length) return;
+            if (hint >= HintCount) return;
             float t = Time.time - hintTime;
             bool done;
             switch (hint)
@@ -177,7 +186,7 @@ namespace RexMagnum
             fight.volume = fightLevel * AudioMix.Music;
             if (fightLevel > 0f && !fight.isPlaying) fight.Play();
             else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
-            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - fightLevel / FightVolume) * AudioMix.Music;
+            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music;   // night jungle music takes over
         }
 
         IEnumerator Intro()
@@ -323,10 +332,11 @@ namespace RexMagnum
 
         void OnGUI()
         {
+            if (PhotoAlbum.Capturing) return;
             Styles();
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             if (state == State.Title) DrawTitle(w, h, s);
-            else if (state == State.Play && hint < Hints.Length && !PauseMenu.Open)
+            else if (state == State.Play && hint < HintCount && !PauseMenu.Open)
             {
                 box.fontSize = (int)(30 * s);
                 var r = new Rect(w * 0.18f, h * 0.05f, w * 0.64f, 92 * s);
@@ -335,7 +345,7 @@ namespace RexMagnum
                 GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f);
                 GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                GUI.Label(r, Hints[hint], box);
+                GUI.Label(r, Hint(hint), box);
             }
             if (fade > 0.001f)
             {

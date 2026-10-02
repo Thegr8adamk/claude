@@ -24,6 +24,7 @@ namespace RexMagnum
             var sc = go.GetComponent<CanvasScaler>();
             sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             sc.referenceResolution = new Vector2(1920, 1080);
+            sc.matchWidthOrHeight = 0.5f;          // ultrawide and tall phones: text does not grow with width only
             info = MakeText(go.transform, font, new Vector2(0, 1), new Vector2(30, -30), 24, TextAnchor.UpperLeft);
             action = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 40), 40, TextAnchor.LowerRight);
             subtitle = MakeText(go.transform, font, new Vector2(0.5f, 0), new Vector2(0, 120), 34, TextAnchor.LowerCenter);
@@ -122,6 +123,7 @@ namespace RexMagnum
                 foreach (Transform c in canvas.transform)
                     if (c != subtitle.transform && c != scope.transform) c.gameObject.SetActive(!hudHidden);
             }
+            if (canvas != null) canvas.enabled = !PhotoAlbum.Capturing;
             if (false && RMInput.Pause)   // PauseMenu handles pause now
             {
                 paused = !paused;

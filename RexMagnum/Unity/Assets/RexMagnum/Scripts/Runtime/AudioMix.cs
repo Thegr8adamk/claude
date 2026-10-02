@@ -8,6 +8,10 @@ namespace RexMagnum
         public static float Music = 1f, Voice = 1f, Effects = 1f;
         public static bool Subtitles = true;
 
+        // before any Start: the boss / elevator / music sources read the saved volumes, not the defaults
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Init() => Load();
+
         public static void Load()
         {
             AudioListener.volume = PlayerPrefs.GetFloat("RexMagnum_Volume", 1f);

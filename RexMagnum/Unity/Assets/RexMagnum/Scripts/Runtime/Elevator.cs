@@ -33,7 +33,9 @@ namespace RexMagnum
             music.clip = Resources.Load<AudioClip>("Music/elevator");
             music.loop = true;
             music.spatialBlend = 1f;
-            music.maxDistance = 6f;
+            music.rolloffMode = AudioRolloffMode.Linear;      // silent beyond 8 m (log rolloff never reaches 0)
+            music.minDistance = 1.5f;
+            music.maxDistance = 8f;
             music.volume = 0.5f * AudioMix.Music;
             if (music.clip != null) music.Play();
         }
@@ -71,6 +73,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (music != null) music.volume = 0.5f * AudioMix.Music;      // the Music setting, also when changed in play
             bool moving = Mathf.Abs(cab.position.y - floorHeights[target]) > 0.01f;
             if (RMInput.Use && Time.time > nextUse && rex != null && !PauseMenu.Open && !GameFlow.Busy)
             {

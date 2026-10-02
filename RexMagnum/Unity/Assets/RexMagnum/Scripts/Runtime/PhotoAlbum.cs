@@ -7,6 +7,9 @@ namespace RexMagnum
     /// <summary>Photo button (brief section 8): saves a real screenshot to the album with a caption from the brief.</summary>
     public static class PhotoAlbum
     {
+        /// <summary>A photo is being taken this frame: HUD, hints and touch buttons stay out of the picture.</summary>
+        public static bool Capturing { get; private set; }
+
         static readonly string[] Captions =
         {
             "Me and a fan. #blessed #hireme", "New co-star. Less slimy than my last agent.",
@@ -77,8 +80,11 @@ namespace RexMagnum
                 yield return new WaitForSeconds(0.8f);      // the pose
             }
             else yield return new WaitForSeconds(1.1f);
+            Capturing = true;                       // HUD, hints and touch buttons hide for the picture
+            yield return null;
             yield return new WaitForEndOfFrame();
             var tex = ScreenCapture.CaptureScreenshotAsTexture();
+            Capturing = false;
             Directory.CreateDirectory(Progress.AlbumDir);
             string file = $"photo_{System.DateTime.Now:yyyyMMdd_HHmmss}.jpg";
             File.WriteAllBytes(Path.Combine(Progress.AlbumDir, file), tex.EncodeToJPG(85));

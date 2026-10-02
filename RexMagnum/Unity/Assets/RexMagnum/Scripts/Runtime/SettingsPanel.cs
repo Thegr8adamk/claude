@@ -95,7 +95,7 @@ namespace RexMagnum
                     Note("AUTO picks from this computer: " + QualityAuto.Detect().ToString().ToUpper() + ".");
                     Choice("Render scale", QualityAuto.RenderScaleNames, () => PlayerPrefs.GetInt("RexMagnum_RenderScale", 0),
                         v => { PlayerPrefs.SetInt("RexMagnum_RenderScale", v); ReapplyQuality(); });
-                    Choice("Frame limit", QualityAuto.FpsNames, () => PlayerPrefs.GetInt("RexMagnum_FpsLimit", QualityAuto.FpsDefault),
+                    Choice("Frame limit (V-sync off)", QualityAuto.FpsNames, () => PlayerPrefs.GetInt("RexMagnum_FpsLimit", QualityAuto.FpsDefault),
                         v => { PlayerPrefs.SetInt("RexMagnum_FpsLimit", v); QualityAuto.ApplyDisplay(); });
                     Choice("V-sync (no tearing)", new[] { "OFF", "ON" }, () => PlayerPrefs.GetInt("RexMagnum_VSync", Application.isMobilePlatform ? 0 : 1),
                         v => { PlayerPrefs.SetInt("RexMagnum_VSync", v); QualityAuto.ApplyDisplay(); });
@@ -199,6 +199,8 @@ namespace RexMagnum
 
         static int ViewIndex()
         {
+            var rig = UnityEngine.Object.FindAnyObjectByType<RexCameraRig>();
+            if (rig != null && rig.isActiveAndEnabled) return rig.Mode == RexCameraRig.CameraMode.FirstPerson ? 1 : 0;   // in game: what is on screen
             int def = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);       // 0 FP, 1 TP, 2 remember last
             bool fp = def == 0 || (def == 2 && PlayerPrefs.GetInt("RexMagnum_CameraMode", 1) == 0);
             return fp ? 1 : 0;
@@ -247,6 +249,9 @@ namespace RexMagnum
             if (waitKey != null)
             {
                 if (Time.frameCount == waitFrame) return false;
+                var gp = Gamepad.current;      // a controller player chose a keyboard row: B / Start cancels the wait
+                if (gp != null && (gp.buttonEast.wasPressedThisFrame || gp.startButton.wasPressedThisFrame))
+                { waitKey = null; MenuNav.Consume(); return false; }
                 var k = Keyboard.current;
                 if (k == null) { waitKey = null; return false; }
                 foreach (var key in k.allKeys)

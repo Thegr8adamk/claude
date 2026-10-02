@@ -78,7 +78,19 @@ namespace RexMagnum
         {
             if (!dirty) return;
             dirty = false;
-            try { File.WriteAllText(PathFile, JsonUtility.ToJson(Get())); } catch (Exception e) { Debug.LogWarning(e); }
+            try
+            {
+                // write a new file, then swap it in: a crash during the write cannot leave a broken save
+                string tmp = PathFile + ".tmp";
+                File.WriteAllText(tmp, JsonUtility.ToJson(Get()));
+                if (!File.Exists(PathFile)) File.Move(tmp, PathFile);
+                else
+                {
+                    try { File.Replace(tmp, PathFile, null); }
+                    catch (PlatformNotSupportedException) { File.Copy(tmp, PathFile, true); File.Delete(tmp); }   // some phones
+                }
+            }
+            catch (Exception e) { Debug.LogWarning(e); }
         }
 
         public static int Value(string key)

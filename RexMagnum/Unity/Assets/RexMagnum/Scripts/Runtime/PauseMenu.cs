@@ -61,6 +61,7 @@ namespace RexMagnum
         }
 
         int pendingTab = -1;
+        float scaleBefore = 1f;
         bool rexHadInput = true;
 
         void LateUpdate()
@@ -79,7 +80,8 @@ namespace RexMagnum
         {
             panel.CancelWait();
             Open = o;
-            Time.timeScale = o ? 0f : 1f;
+            if (o) scaleBefore = Time.timeScale;
+            Time.timeScale = o ? 0f : (scaleBefore > 0f ? scaleBefore : 1f);      // back to the weapon wheel / kill cam slow motion
             AudioListener.pause = o;
             Cursor.lockState = o ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = o;
@@ -175,7 +177,7 @@ namespace RexMagnum
             if (thumbs.TryGetValue(file, out var t)) return t;
             string path = Path.Combine(Progress.AlbumDir, file);
             t = null;
-            if (File.Exists(path)) { t = new Texture2D(2, 2); t.LoadImage(File.ReadAllBytes(path)); }
+            if (File.Exists(path)) { t = new Texture2D(2, 2, TextureFormat.RGB24, false); t.LoadImage(File.ReadAllBytes(path), true); }   // no mip maps, no CPU copy
             thumbs[file] = t;
             return t;
         }

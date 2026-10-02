@@ -187,7 +187,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (GameFlow.Busy || (!TouchState.Active && !EditMode)) return;
+            if (GameFlow.Busy || PhotoAlbum.Capturing || (!TouchState.Active && !EditMode)) return;
             var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
                 fontSize = Mathf.RoundToInt(H * 0.028f) };
             style.normal.textColor = Color.white;
