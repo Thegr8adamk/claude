@@ -6,7 +6,8 @@ namespace RexMagnum
     /// <summary>
     /// HUD: crosshair + hit marker, health bar (smooth drain), action word, weapon + ammo, compass with the next goal,
     /// "NEXT:" objective line (GameGuide), Use prompts (pickups, guests, golf cart, elevator), damage flash and
-    /// direction arc, subtitles and notices. The control list shows for the first minute of play (then Pause > HELP).
+    /// direction arc, subtitles and notices, a diamond + distance over the goal in the world, a "NEW GOAL" notice + click.
+    /// The first 15 s say where the control list is (Pause > HELP); the room hints teach the controls.
     /// Touch: compass, objective and health move to the top left (the move stick and the top buttons need the space).
     /// </summary>
     public class RexTestHUD : MonoBehaviour
@@ -263,11 +264,13 @@ namespace RexMagnum
             compassW = touch ? 420f : 640f;
             compass.sizeDelta = new Vector2(compassW, 44);
             Place(compass, touch ? new Vector2(0f, 1f) : new Vector2(0.5f, 1f), touch ? new Vector2(24, -10) : new Vector2(0, -8));
+            // touch: the objective wraps under the compass (420 wide, up to 3 lines), clear of the top button row
             Place(objectiveText.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0.5f, 1f), touch ? new Vector2(24, -84) : new Vector2(0, -84));
             objectiveText.alignment = touch ? TextAnchor.UpperLeft : TextAnchor.UpperCenter;
-            objectiveText.rectTransform.sizeDelta = new Vector2(touch ? 900 : 1400, 80);
-            Place(hpBar, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -170) : new Vector2(40, 40));
-            Place(hp.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -134) : new Vector2(40, 72));
+            objectiveText.fontSize = touch ? 22 : 26;
+            objectiveText.rectTransform.sizeDelta = new Vector2(touch ? 420 : 1400, touch ? 84 : 80);
+            Place(hpBar, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -214) : new Vector2(40, 40));
+            Place(hp.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -178) : new Vector2(40, 72));
         }
 
         static Sprite ScopeSprite()
@@ -376,21 +379,17 @@ namespace RexMagnum
             Compass();
         }
 
-        // ------------------------------------------------------------ control list (first minute of play)
+        // ------------------------------------------------------------ where the controls are (first 15 s of play)
 
-        float nextInfo;
-
+        /// <summary>No control list over the first minute: the room hints teach the controls one at a time, and
+        /// Pause > HELP has the full list. One line says so for 15 s.</summary>
         void ControlList()
         {
             float t = GameFlow.PlaySeconds;
-            if (GameFlow.Busy || t > 60f) { info.text = ""; return; }
-            info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((60f - t) / 3f));      // fades out at the end
-            if (Time.unscaledTime < nextInfo) return;
-            nextInfo = Time.unscaledTime + 0.5f;                                      // follows the device used last
-            var sb = new System.Text.StringBuilder("CONTROLS  (Pause > HELP shows them again)\n");
-            foreach (var c in GameGuide.Controls())
-                sb.Append(c.what.Length > 0 ? c.what + ": " + c.how : c.how).Append('\n');
-            info.text = sb.ToString();
+            if (GameFlow.Busy || t > 15f) { info.text = ""; return; }
+            info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((15f - t) / 2f));      // fades out at the end
+            string p = RMInput.LastDevice == RMInput.DeviceKind.Touch ? "II button" : RMInput.Btn("Pause");
+            info.text = $"{p}: pause.  Pause > HELP shows all controls.";
         }
 
         // ------------------------------------------------------------ health bar
@@ -501,6 +500,46 @@ namespace RexMagnum
             if (GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
             else objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas);
             objectiveText.text = objective != null ? "NEXT: " + objective : "";
+            AnnounceGoal(objective != null ? GameGuide.StepId : null);
+        }
+
+        string goalShown, goalPending;
+        float goalPendingSince;
+
+        /// <summary>A new goal: a short notice + click. The step must hold for 1.5 s first (guests that stream in and
+        /// out would flip "rescue" and the next step back and forth).</summary>
+        void AnnounceGoal(string step)
+        {
+            if (step == null || step == goalShown) { goalPending = null; return; }
+            if (step != goalPending) { goalPending = step; goalPendingSince = Time.unscaledTime; return; }
+            if (Time.unscaledTime - goalPendingSince < 1.5f) return;
+            Notice((goalShown == null ? "GOAL: " : "NEW GOAL: ") + objective, 4f);
+            goalShown = step;
+            goalPending = null;
+            MenuNav.Click();
+        }
+
+        /// <summary>Diamond + distance over the goal while it is in front of the camera (not too close, not in the scope).</summary>
+        void WorldGoal(Camera cam, Transform rex)
+        {
+            bool show = objectiveHas && rex != null && cam != null && !hudHidden && (actions.weapons == null || !actions.weapons.Scoped);
+            Vector3 at = objectiveAt;
+            if (show)
+            {
+                // zone centres have no height (y = 0): float the mark 3 m over Rex's height there
+                if (Mathf.Approximately(at.y, 0f)) at.y = rex.position.y + 3f; else at.y += 2.2f;
+                Vector3 flat = at - rex.position; flat.y = 0f;
+                Vector3 sp = cam.WorldToScreenPoint(at);
+                show = flat.magnitude > 8f && sp.z > 0f && sp.x > 0f && sp.x < Screen.width && sp.y > 0f && sp.y < Screen.height;
+                if (show && RectTransformUtility.ScreenPointToLocalPointInRectangle(hudRoot, sp,
+                        canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null, out var local))
+                {
+                    worldGoal.anchoredPosition = local;
+                    worldGoalDist.text = Mathf.RoundToInt(flat.magnitude) + " m";
+                }
+                else show = false;
+            }
+            worldGoalGroup.alpha = show ? 0.9f : 0f;
         }
 
         void Compass()
@@ -518,6 +557,7 @@ namespace RexMagnum
                 t.color = i == 0 ? new Color(1f, 0.45f, 0.35f, a) : new Color(1f, 1f, 1f, a);
             }
             var rex = RexT;
+            WorldGoal(cam, rex);
             markerGroup.alpha = objectiveHas && rex != null ? 1f : 0f;
             if (!objectiveHas || rex == null) return;
             Vector3 to = objectiveAt - rex.position;
