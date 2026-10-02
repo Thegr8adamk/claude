@@ -37,7 +37,13 @@ namespace RexMagnum
         /// <summary>Active guests (HUD Use prompts, objective marker).</summary>
         public static readonly List<Guest> All = new List<Guest>();
         /// <summary>Hiding and reachable: Use near the guest rescues (when no blob is near).</summary>
-        public bool CanRescue => state == State.Hiding && !lockedIn;
+        public bool CanRescue => !lockedIn && !security &&
+                                 (state == State.Hiding || (state == State.Idle && lastBlobDist < BlobsAroundRadius));
+        /// <summary>An idle guest with blobs around (but none within SafeRadius) can be rescued too.</summary>
+        public const float BlobsAroundRadius = 30f;
+        float lastBlobDist = float.MaxValue;
+        Health rexHealth;
+        bool indoors, sheltering;      // home inside the hotel (locks in at night); outdoors: walks to a hide spot
         public bool Rescued => state == State.Rescued;
 
         void OnEnable() => All.Add(this);
@@ -51,8 +57,9 @@ namespace RexMagnum
             if (!TryGetComponent(out voice)) voice = gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 1f;
             var rc = FindAnyObjectByType<RexController>();
-            if (rc != null) { rex = rc.transform; rexCtrl = rc; }
+            if (rc != null) { rex = rc.transform; rexCtrl = rc; rexHealth = rc.GetComponent<Health>(); }
             home = transform.position;
+            indoors = HomeIndoors();
             agent.speed = 1.4f;
         }
 
@@ -98,8 +105,9 @@ namespace RexMagnum
                 }
             }
             // rescue: checked every frame (a button press lasts one frame)
-            if (state == State.Hiding && !lockedIn && rexDist < 3f && agent.isOnNavMesh && RMInput.Use &&
-                WeaponPickup.Nearby == null && FoodPickup.Nearby == null)
+            // food nearby only blocks when Rex could eat it (at full health Use does not pick food up)
+            if (CanRescue && rexDist < 3f && agent.isOnNavMesh && RMInput.Use && WeaponPickup.Nearby == null &&
+                (FoodPickup.Nearby == null || (rexHealth != null && rexHealth.Fraction >= 1f)))
             {
                 NearestBlob(out float safeDist);
                 if (safeDist > SafeRadius) Rescue();
@@ -108,19 +116,36 @@ namespace RexMagnum
             if (Time.time < nextThink || !agent.isOnNavMesh) return;
             nextThink = Time.time + 0.4f;
             NearestBlob(out float blobDist);
+            lastBlobDist = blobDist;
             // brief: at night guests lock themselves in their rooms. They walk back to their spot, then go inside
             // (hidden); knocking (Use / Action near the spot) gets a muffled answer through the door. At dawn they
             // come out again.
+            // Only guests whose home is inside the hotel have a room to lock; outdoor guests (pool, beach) walk to
+            // the nearest hotel hide spot and wait there (visible), and go back home at dawn.
             if (!security && DayNight.Night > 0.6f && state != State.Rescued && state != State.Panic)
             {
-                if (!lockedIn)
+                if (indoors)
                 {
-                    if (Vector3.Distance(transform.position, home) > 1.2f) agent.SetDestination(home);
-                    else SetLockedIn(true);
+                    if (!lockedIn)
+                    {
+                        if (Vector3.Distance(transform.position, home) > 1.2f) agent.SetDestination(home);
+                        else SetLockedIn(true);
+                    }
+                }
+                else if (!sheltering)
+                {
+                    sheltering = true;
+                    var spot = NearestHideSpot();
+                    if (spot != null && NavMesh.SamplePosition(spot.position, out NavMeshHit sh, 6f, NavMesh.AllAreas)) agent.SetDestination(sh.position);
                 }
                 return;
             }
             if (lockedIn) SetLockedIn(false);
+            if (sheltering)
+            {
+                sheltering = false;
+                if (state != State.Rescued && state != State.Panic) agent.SetDestination(home);
+            }
             switch (state)
             {
                 case State.Idle:
@@ -154,23 +179,44 @@ namespace RexMagnum
             if (agent.isOnNavMesh) agent.isStopped = on;
         }
 
+        Transform NearestHideSpot()
+        {
+            Transform best = null;
+            if (hideSpots == null) return null;
+            float bd = float.MaxValue;
+            foreach (var h in hideSpots)
+            {
+                if (h == null) continue;
+                float d = Vector3.Distance(h.position, transform.position);
+                if (d < bd) { bd = d; best = h; }
+            }
+            return best;
+        }
+
+        /// <summary>Home inside the hotel: within the area of the hide spots (all inside the hotel) plus 5 m.</summary>
+        bool HomeIndoors()
+        {
+            if (hideSpots == null) return false;
+            bool any = false;
+            var b = new Bounds();
+            foreach (var h in hideSpots)
+            {
+                if (h == null) continue;
+                if (!any) { b = new Bounds(h.position, Vector3.zero); any = true; }
+                else b.Encapsulate(h.position);
+            }
+            if (!any) return false;
+            b.Expand(new Vector3(10f, 200f, 10f));         // size: 5 m on each side, any floor
+            return b.Contains(home);
+        }
+
         void Panic()
         {
             state = State.Panic;
             agent.speed = 4.5f;
             Vector3 target = transform.position + (transform.position - (rex != null ? rex.position : transform.position)).normalized * 15f;
-            if (hideSpots != null && hideSpots.Length > 0)
-            {
-                Transform best = null;
-                float bd = float.MaxValue;
-                foreach (var h in hideSpots)
-                {
-                    if (h == null) continue;
-                    float d = Vector3.Distance(h.position, transform.position);
-                    if (d < bd) { bd = d; best = h; }
-                }
-                if (best != null) target = best.position;
-            }
+            var best = NearestHideSpot();
+            if (best != null) target = best.position;
             if (NavMesh.SamplePosition(target, out NavMeshHit hit, 6f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
             Say(GuestLines.Scream(), -1, true);      // crowd line: does not push other subtitles off the screen
         }

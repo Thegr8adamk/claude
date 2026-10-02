@@ -24,8 +24,8 @@ namespace RexMagnum
         static readonly System.Collections.Generic.Dictionary<Color32, Material> shared =
             new System.Collections.Generic.Dictionary<Color32, Material>();
 
-        /// <summary>One shared slime material per colour (splats, decals, shots do not fade, so they can share).
-        /// Use SlimeMaterial only when the material is changed per object (puddles fade out).</summary>
+        /// <summary>One shared slime material per colour (splats, decals, shots, puddles: puddles fade with a
+        /// MaterialPropertyBlock, so they share too). SlimeMaterial makes a new one (only for per-object changes).</summary>
         public static Material SharedSlime(Color color)
         {
             Color32 key = color;

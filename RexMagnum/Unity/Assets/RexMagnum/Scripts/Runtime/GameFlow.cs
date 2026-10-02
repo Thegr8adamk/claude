@@ -44,7 +44,6 @@ namespace RexMagnum
         float hintTime;
         Vector3 titleOrbitCenter;
         float titleAngle;
-        GUIStyle big, mid, small, box;
 
         const int HintCount = 6;
 
@@ -180,7 +179,7 @@ namespace RexMagnum
         void Choose(int i)
         {
             if (state != State.Title) return;
-            Sfx.Play("bottle_clink", playerCamera != null ? playerCamera.transform.position : Vector3.zero, 0.5f);   // at the listener
+            MenuNav.Click();          // the menus' common click (once per frame: a keyboard OK already clicked)
             if (i == 0) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; StartCoroutine(Intro()); }
             else if (i == 1) { confirmNew = true; confirmSel = 1; }
             else if (i == 2) { inSettings = true; settings.page = 0; }
@@ -297,29 +296,17 @@ namespace RexMagnum
                 GUI.DrawTexture(new Rect(i * w * 0.025f, 0, w * 0.025f + 1, h), Texture2D.whiteTexture);
             }
             GUI.color = Color.white;
-            var bl = new GUIStyle(big) { alignment = TextAnchor.MiddleLeft, fontSize = (int)(96 * s) };
-            var sh = new GUIStyle(bl);
-            sh.normal.textColor = new Color(0, 0, 0, 0.7f);
             float x = w * 0.06f;
-            GUI.Label(new Rect(x + 5 * s, h * 0.12f + 5 * s, w, 130 * s), "REX MAGNUM", sh);
-            GUI.Label(new Rect(x, h * 0.12f, w, 130 * s), "REX MAGNUM", bl);
-            var md = new GUIStyle(mid) { alignment = TextAnchor.MiddleLeft, fontSize = (int)(40 * s) };
-            GUI.Label(new Rect(x + 6 * s, h * 0.12f + 118 * s, w, 60 * s), "VACATION VIOLENCE", md);
-
-            if (menuBtn == null || menuBtn.fontSize != (int)(40 * s))
-            {
-                menuBtn = new GUIStyle(GUI.skin.label) { fontSize = (int)(40 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-                menuBtn.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
-                menuSelStyle = new GUIStyle(menuBtn);
-                menuSelStyle.normal.textColor = new Color(1f, 0.8f, 0.25f);
-            }
+            GUI.Label(new Rect(x + 5 * s, h * 0.12f + 5 * s, w, 130 * s), "REX MAGNUM", MenuSkin.LogoShadow);
+            GUI.Label(new Rect(x, h * 0.12f, w, 130 * s), "REX MAGNUM", MenuSkin.Logo);
+            GUI.Label(new Rect(x + 6 * s, h * 0.12f + 118 * s, w, 60 * s), "VACATION VIOLENCE", MenuSkin.Subtitle);
+            menuBtn = MenuSkin.MenuItem;
+            menuSelStyle = MenuSkin.MenuItemOn;
 
             if (inSettings)
             {
                 var area = new Rect(x, h * 0.3f, w * 0.88f - x, h * 0.56f);
-                GUI.color = new Color(0f, 0f, 0f, 0.75f);
-                GUI.DrawTexture(new Rect(area.x - 20 * s, area.y - 20 * s, area.width + 40 * s, area.height + 110 * s), Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                MenuSkin.DrawPanel(new Rect(area.x - 20 * s, area.y - 20 * s, area.width + 40 * s, area.height + 110 * s));
                 settings.Draw(area, s);
                 var back = new Rect(area.x, area.yMax + 20 * s, 300 * s, 60 * s);
                 GUI.Label(back, "< BACK", back.Contains(Event.current.mousePosition) ? menuSelStyle : menuBtn);
@@ -327,6 +314,7 @@ namespace RexMagnum
                 {
                     Event.current.Use();
                     inSettings = false; settings.CancelWait();
+                    MenuNav.Click();
                     PlayerPrefs.Save();
                 }
                 return;
@@ -338,7 +326,7 @@ namespace RexMagnum
             {
                 var r = new Rect(x, h * 0.36f + i * 72 * s, 420 * s, 66 * s);
                 bool hover = r.Contains(Event.current.mousePosition);
-                if (hover && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) menuSel = i;
+                if (hover && menuSel != i && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) { menuSel = i; MenuNav.Click(); }
                 bool on = i == menuSel;
                 if (on)
                 {
@@ -354,7 +342,7 @@ namespace RexMagnum
                     Choose(i);
                 }
             }
-            var sm = new GUIStyle(small) { alignment = TextAnchor.LowerLeft, fontSize = (int)(19 * s) };
+            var sm = MenuSkin.Notes;
             var g = UnityEngine.InputSystem.Gamepad.current;
             GUI.Label(new Rect(x, h * 0.36f + n * 72 * s + 16 * s, w * 0.5f, 40 * s),
                       g != null ? "Controller: " + g.displayName + "   (D-pad / stick, A = OK)" : "Mouse, or arrow keys + Enter. Controllers work too.", sm);
@@ -365,7 +353,7 @@ namespace RexMagnum
         /// <summary>NEW GAME: "are you sure" with YES / NO (mouse, keys, controller).</summary>
         void DrawConfirm(float x, float w, float h, float s)
         {
-            var q = new GUIStyle(mid) { alignment = TextAnchor.UpperLeft, fontSize = (int)(30 * s), wordWrap = true };
+            var q = MenuSkin.Question;
             GUI.Label(new Rect(x, h * 0.36f, w * 0.5f, 170 * s),
                       "Start a NEW GAME?\nThis clears your progress, accomplishments, photo album, clues, weapons and big goals.\n" +
                       "Settings and key bindings stay.", q);
@@ -392,35 +380,24 @@ namespace RexMagnum
             }
         }
 
-        void Styles()
-        {
-            if (big != null) return;
-            big = new GUIStyle(GUI.skin.label) { fontSize = 64, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            big.normal.textColor = new Color(1f, 0.8f, 0.25f);
-            mid = new GUIStyle(big) { fontSize = 30 };
-            mid.normal.textColor = new Color(1f, 0.92f, 0.8f);
-            small = new GUIStyle(big) { fontSize = 18, fontStyle = FontStyle.Normal, wordWrap = true };
-            small.normal.textColor = Color.white;
-            box = new GUIStyle(GUI.skin.box) { fontSize = 20, wordWrap = true, alignment = TextAnchor.MiddleCenter };
-            box.normal.textColor = Color.white;
-        }
-
         void OnGUI()
         {
             if (PhotoAlbum.Capturing) return;
-            Styles();
             float w = Screen.width, h = Screen.height, s = h / 1080f;
+            MenuSkin.Use(s);              // the shared menu look (title, pause, settings, hints)
             if (state == State.Title) DrawTitle(w, h, s);
             else if (state == State.Play && hint < HintCount && !PauseMenu.Open)
             {
-                box.fontSize = (int)(30 * s);
-                var r = new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);      // under the HUD compass
-                GUI.color = new Color(0f, 0f, 0f, 0.7f);
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                // under the HUD compass. Touch: below the top button row (centres 0.1 H from the top, radius 0.075 H,
+                // bigger if resized) and right of the top-left compass / health, clear of Pause and Jump on the right
+                var r = RMInput.LastDevice == RMInput.DeviceKind.Touch
+                    ? new Rect(w * 0.26f, h * 0.22f, w * 0.58f, 92 * s)
+                    : new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);
+                MenuSkin.DrawPanel(r);
                 GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f);
                 GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                GUI.Label(r, Hint(hint), box);
+                GUI.Label(r, Hint(hint), MenuSkin.Hint);
             }
             if (fade > 0.001f)
             {

@@ -164,6 +164,7 @@ namespace RexMagnum
                     Toggle("Swap sticks (left-handed)", "RexMagnum_SwapSticks", 0);
                     Toggle("Swap triggers and bumpers", "RexMagnum_SwapTriggers", 0);
                     Toggle("Aim assist (controller + phone)", "RexMagnum_AimAssist", 1);
+                    Toggle("Controller vibration", "RexMagnum_Rumble", 1);
                     Header("HOLD OR TAP");
                     Toggle("Run: tap to toggle", "RexMagnum_RunToggle", 0);
                     Toggle("Aim: tap to toggle", "RexMagnum_AimToggle", 0);
@@ -177,7 +178,7 @@ namespace RexMagnum
                     }
                     Button("All controller + touch options", () => "RESET", () =>
                     {
-                        foreach (var k in new[] { "SwapSticks", "SwapTriggers", "AimAssist", "RunToggle", "AimToggle", "HandsHold" })
+                        foreach (var k in new[] { "SwapSticks", "SwapTriggers", "AimAssist", "Rumble", "RunToggle", "AimToggle", "HandsHold" })
                             PlayerPrefs.DeleteKey("RexMagnum_" + k);
                         ApplyAll();
                     });
@@ -328,7 +329,7 @@ namespace RexMagnum
             if (Event.current.type == EventType.Layout) Build();
             float tw = area.width / Pages.Length;
             for (int i = 0; i < Pages.Length; i++)
-                if (GUI.Toggle(new Rect(area.x + i * tw + 4, area.y, tw - 8, 46 * s), page == i, Pages[i], btn) && page != i) SetPage(i);
+                if (GUI.Toggle(new Rect(area.x + i * tw + 4, area.y, tw - 8, 46 * s), page == i, Pages[i], MenuSkin.Tab) && page != i) { SetPage(i); MenuNav.Click(); }
             GUI.Label(new Rect(area.x, area.y + 50 * s, area.width, 26 * s),
                       Gamepad.current != null ? "LB / RB: page     D-pad: choose and change     A: press     B: back"
                                               : "Q / E: page     Arrows: choose and change     Enter: press     Esc: back", small);
@@ -357,7 +358,7 @@ namespace RexMagnum
                 {
                     int v = r.get();
                     int n = GUILayout.Toolbar(v, r.opts, btn, GUILayout.MaxWidth(inner.width - labelW - 50));
-                    if (n != v) { r.set(n); sel = i; }
+                    if (n != v) { r.set(n); sel = i; MenuNav.Click(); }
                 }
                 else if (r.getF != null)
                 {
@@ -371,7 +372,7 @@ namespace RexMagnum
                 }
                 else if (r.press != null)
                 {
-                    if (GUILayout.Button(r.pressText(), btn, GUILayout.Width(Mathf.Min(360 * s, inner.width - labelW - 50)))) { sel = i; r.press(); }
+                    if (GUILayout.Button(r.pressText(), btn, GUILayout.Width(Mathf.Min(360 * s, inner.width - labelW - 50)))) { sel = i; r.press(); MenuNav.Click(); }
                 }
                 GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();

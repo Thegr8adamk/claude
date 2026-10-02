@@ -46,10 +46,11 @@ namespace RexMagnum
             sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             sc.referenceResolution = new Vector2(1920, 1080);
             sc.matchWidthOrHeight = 0.5f;          // ultrawide and tall phones: text does not grow with width only
-            // control list (first minute only): left side, middle height, clear of the compass and the hint box
-            info = MakeText(go.transform, font, new Vector2(0, 0.5f), new Vector2(30, 0), 21, TextAnchor.UpperLeft);
-            info.rectTransform.sizeDelta = new Vector2(900, 480);
-            info.verticalOverflow = VerticalWrapMode.Overflow;
+            // one line for the first 15 s: where the full control list is (the room hints teach the rest)
+            info = MakeText(go.transform, font, new Vector2(0, 0.5f), new Vector2(30, 0), 22, TextAnchor.MiddleLeft);
+            info.rectTransform.sizeDelta = new Vector2(900, 40);
+            info.horizontalOverflow = HorizontalWrapMode.Overflow;
+            hudRoot = go.GetComponent<RectTransform>();
             action = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 40), 40, TextAnchor.LowerRight);
             subtitle = MakeText(go.transform, font, new Vector2(0.5f, 0), new Vector2(0, 120), 34, TextAnchor.LowerCenter);
             subtitle.rectTransform.sizeDelta = new Vector2(1600, 200);
@@ -82,6 +83,7 @@ namespace RexMagnum
             objectiveText = MakeText(root, font, new Vector2(0.5f, 1), new Vector2(0, -84), 26, TextAnchor.UpperCenter);
             objectiveText.color = new Color(1f, 0.85f, 0.3f);
             BuildCompass(root, font);
+            BuildWorldGoal(root, font);
             BuildHealthBar(root);
             BuildHitMarker(root);
             // damage: red screen edges + an arc that points at the attacker
@@ -151,6 +153,29 @@ namespace RexMagnum
             compassDist = MakeText(compassMarker, font, new Vector2(0.5f, 0.5f), new Vector2(0, -42), 18, TextAnchor.MiddleCenter);
             compassDist.rectTransform.sizeDelta = new Vector2(140, 24);
             compassDist.color = new Color(1f, 0.85f, 0.3f);
+        }
+
+        RectTransform hudRoot, worldGoal;
+        CanvasGroup worldGoalGroup;
+        Text worldGoalDist;
+
+        /// <summary>The goal in the world: a small diamond + distance over the goal while it is in front of the camera.</summary>
+        void BuildWorldGoal(Transform root, Font font)
+        {
+            var g = new GameObject("WorldGoal", typeof(RectTransform), typeof(CanvasGroup));
+            g.transform.SetParent(root, false);
+            worldGoal = g.GetComponent<RectTransform>();
+            worldGoal.sizeDelta = Vector2.zero;
+            worldGoalGroup = g.GetComponent<CanvasGroup>();
+            worldGoalGroup.alpha = 0f;
+            worldGoalGroup.blocksRaycasts = false;
+            var d = MakeImage(worldGoal, "Diamond", new Color(1f, 0.85f, 0.15f, 0.9f));
+            d.rectTransform.sizeDelta = new Vector2(16, 16);
+            d.rectTransform.localEulerAngles = new Vector3(0, 0, 45f);
+            d.gameObject.AddComponent<Outline>().effectColor = Color.black;
+            worldGoalDist = MakeText(worldGoal, font, new Vector2(0.5f, 0.5f), new Vector2(0, -24), 20, TextAnchor.MiddleCenter);
+            worldGoalDist.rectTransform.sizeDelta = new Vector2(160, 26);
+            worldGoalDist.color = new Color(1f, 0.85f, 0.3f);
         }
 
         void BuildHealthBar(Transform root)
