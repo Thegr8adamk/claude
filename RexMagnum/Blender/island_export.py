@@ -44,7 +44,7 @@ BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). B
     "A_DoorWood": (4, 3.6, True),
 }
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
-WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime"}
+WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime", "A_RiverWater": "river"}
 FALL = {"A_Fall", "A_SmallFall"}
 FOLIAGE_IMG = {"PalmLeaf": "leaf_palm.png", "BroadLeaf": "leaf_broad.png", "FernLeaf": "leaf_fern.png"}
 TWO_SIDED = {"A_GrassBlade", "A_Vine", "A_Straw", "A_Curtain0", "A_Curtain1", "A_Curtain2", "A_Curtain3",
@@ -498,7 +498,14 @@ def export_assets(mats_used, names=None):
     # slime river (world mesh)
     river = bpy.data.objects.get("SlimeRiver")
     if river:
-        ob = bpy.data.objects.new("River_LOD0", joined_mesh([river], "River_LOD0", mats_used))
+        # keep the river's own UVs (metres across / downstream) and vertex colours (foam, speed): no box UV
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = bpy.data.meshes.new_from_object(river.evaluated_get(dg), depsgraph=dg)
+        me.transform(river.matrix_world)
+        me.name = "River_LOD0"
+        for mt in me.materials:
+            mats_used.add(mat_name(mt))
+        ob = bpy.data.objects.new("River_LOD0", me)
         tmp.objects.link(ob)
         export_fbx([ob], os.path.join(BLD, "River.fbx"))
         rows.append(dict(name="River", fbx="Buildings/River.fbx", tris=len(ob.data.polygons)))
