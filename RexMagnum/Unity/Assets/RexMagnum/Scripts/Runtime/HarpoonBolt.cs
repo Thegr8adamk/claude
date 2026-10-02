@@ -5,7 +5,7 @@ namespace RexMagnum
     /// <summary>Harpoon: fast steel spear with a rope back to the gun. Pins blobs (to the wall if close).</summary>
     public class HarpoonBolt : MonoBehaviour
     {
-        static Material ropeMat;     // shared by every rope (one new material per bolt was never freed)
+        static Material ropeMat, boltMat;     // shared by every rope / bolt (one new material per bolt was never freed)
         Vector3 velocity;
         float damage, life;
         GameObject owner;
@@ -20,11 +20,14 @@ namespace RexMagnum
             go.name = "Harpoon";
             go.transform.localScale = new Vector3(0.012f, 0.5f, 0.012f);
             go.transform.SetPositionAndRotation(from, Quaternion.FromToRotation(Vector3.up, dir));
-            var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            m.SetColor("_BaseColor", new Color(0.8f, 0.8f, 0.82f));
-            m.SetFloat("_Metallic", 1f);
-            m.SetFloat("_Smoothness", 0.8f);
-            go.GetComponent<Renderer>().material = m;
+            if (boltMat == null)
+            {
+                boltMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                boltMat.SetColor("_BaseColor", new Color(0.8f, 0.8f, 0.82f));
+                boltMat.SetFloat("_Metallic", 1f);
+                boltMat.SetFloat("_Smoothness", 0.8f);
+            }
+            go.GetComponent<Renderer>().sharedMaterial = boltMat;
             var h = go.AddComponent<HarpoonBolt>();
             h.velocity = dir * 45f;
             h.damage = damage;
@@ -112,7 +115,11 @@ namespace RexMagnum
                 Destroy(gameObject, 3f);
                 return;
             }
-            if (RMInput.Use) { pullUntil = Time.time + 0.5f; hookedUntil = Time.time + 2.5f; }
+            if (RMInput.Use)
+            {
+                RMInput.ConsumeUse();                 // the pull only: no pickup / door / guest on the same press
+                pullUntil = Time.time + 0.5f; hookedUntil = Time.time + 2.5f;
+            }
             if (Time.time < pullUntil)
             {
                 Vector3 to = owner.transform.position - hooked.transform.position;

@@ -508,17 +508,28 @@ namespace RexMagnum
             nextObjective = Time.unscaledTime + 0.5f;
             var rex = RexT;
             // no goal over the title / intro or the room hints: the first goal is announced when the tutorial ends
-            string warning = null;
+            string warning = null, side = null;
             if (GameFlow.Busy || GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
-            else { objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; }
+            else { objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; side = GameGuide.Side; }
             // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
             if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
-            objectiveText.text = objective == null ? "" : "NEXT: " + objective + (warning != null ? "\n<color=#9CCBFF>" + warning + "</color>" : "");
+            if (side != null && layoutTouch) side = "Side: sniper rifle on the hotel roof.";
+            // built only when one of the parts changed (twice a second otherwise: small garbage, but none needed)
+            if (objective != shownObjective || warning != shownWarning || side != shownSide)
+            {
+                shownObjective = objective; shownWarning = warning; shownSide = side;
+                objectiveText.text = objective == null ? "" : "NEXT: " + objective
+                    + (warning != null ? "\n<color=#9CCBFF>" + warning + "</color>" : "")
+                    + (side != null ? "\n<color=#B8E6A0>" + side + "</color>" : "");
+            }
+            // the notice once per night (GameGuide.Warning only comes on the first night ever: Progress "nights");
+            // it may show again the next night only after real daylight (no repeat when Night wobbles near 0.6)
             if (warning != null && !nightShown) { nightShown = true; Notice(warning, 4f); MenuNav.Click(); }
+            else if (warning == null && DayNight.Night < 0.2f) nightShown = false;
             AnnounceGoal(objective != null ? GameGuide.StepId : null);
         }
 
-        string goalShown, goalPending;
+        string goalShown, goalPending, shownObjective, shownWarning, shownSide;
         float goalPendingSince;
         bool nightShown;
 
@@ -595,15 +606,58 @@ namespace RexMagnum
         /// <summary>What Use (or Action) does here: pickups, guests (rescue / knock / talk), golf cart, elevator.</summary>
         string UsePrompt()
         {
-            if (WeaponPickup.Nearby != null) return Glyph.Swap(WeaponPickup.Nearby.Label, "Use");
-            if (FoodPickup.Nearby != null) return Glyph.Swap(FoodPickup.Nearby.Label, "Use");
-            var rex = RexT;
-            if (rex == null || GameFlow.Busy) return "";
+            int kind = PromptKind(out Object subj);
+            // the string is built only when what is near (or the device / key names) changes: no garbage every frame
+            var dev = RMInput.LastDevice;
+            // the in-cab prompt names the next floor: refreshed 4 times a second while Rex rides
+            bool stale = kind == 8 && Time.unscaledTime > promptRefresh;
+            if (kind == promptKind && subj == promptSubj && dev == promptDevice && !stale && !PauseMenu.Open) return promptText;
+            promptKind = kind; promptSubj = subj; promptDevice = dev;
+            promptRefresh = Time.unscaledTime + 0.25f;
+            promptText = BuildPrompt(kind, subj);
+            return promptText;
+        }
+
+        int promptKind = -1;
+        float promptRefresh;
+        Object promptSubj;
+        RMInput.DeviceKind promptDevice;
+        string promptText = "";
+
+        string BuildPrompt(int kind, Object subj)
+        {
             string U = Glyph.B("Use");
+            var g = subj as Guest;
+            switch (kind)
+            {
+                case 1: return Glyph.Swap(((WeaponPickup)subj).Label, "Use");
+                case 2: return Glyph.Swap(((FoodPickup)subj).Label, "Use");
+                case 3: return $"{U}: get out of the cart";
+                case 4: return $"{U}: knock on the door";
+                case 5: return $"Pop the blobs near {g.guestName} first, then {U}: rescue";
+                case 6: return $"{U}: rescue {g.guestName}";
+                case 7: return $"{U}: drive the golf cart";
+                case 8: return $"{U}: {((Elevator)subj).CabPrompt}";
+                case 9: return $"{U}: call the elevator";
+                case 10: return $"{Glyph.B("Action")}: talk to {g.guestName}";
+                case 11: return $"{Glyph.B("Hands")}: hands down to talk to {g.guestName}";
+                case 12: return $"{U}: calm down {g.guestName}";
+                default: return "";
+            }
+        }
+
+        /// <summary>What Use (or Action) does here as a kind + the thing it is about (0 = nothing).</summary>
+        int PromptKind(out Object subj)
+        {
+            subj = null;
+            if (WeaponPickup.Nearby != null) { subj = WeaponPickup.Nearby; return 1; }
+            if (FoodPickup.Nearby != null) { subj = FoodPickup.Nearby; return 2; }
+            var rex = RexT;
+            if (rex == null || GameFlow.Busy) return 0;
             if (GolfCart.Driven != null)
             {
                 if (drivingSince < 0f) drivingSince = Time.time;
-                return Time.time - drivingSince < 8f ? $"{U}: get out of the cart" : "";
+                return Time.time - drivingSince < 8f ? 3 : 0;
             }
             drivingSince = -1f;
             if (Time.unscaledTime > nextFind)
@@ -622,28 +676,28 @@ namespace RexMagnum
                 float d = Vector3.Distance(g.transform.position, p);
                 if (d < nearD) { nearD = d; near = g; }
             }
-            if (near != null && near.LockedIn) return $"{U}: knock on the door";
+            subj = near;
+            if (near != null && near.LockedIn) return 4;
             if (near != null && near.CanRescue)
-                return Blob.LivingNear(near.transform.position, Guest.SafeRadius) > 0
-                    ? $"Pop the blobs near {near.guestName} first, then {U}: rescue"
-                    : $"{U}: rescue {near.guestName}";
+                return Blob.LivingNear(near.transform.position, Guest.SafeRadius) > 0 ? 5 : near.IsCalm ? 12 : 6;
+            subj = null;
             foreach (var c in carts)
-                if (c != null && Vector3.Distance(c.transform.position, p) < 3f) return $"{U}: drive the golf cart";
+                if (c != null && Vector3.Distance(c.transform.position, p) < 3f) return 7;
             foreach (var e in elevators)
             {
                 if (e == null || e.cab == null) continue;
                 Vector3 l = e.cab.InverseTransformPoint(p + Vector3.up * 0.5f);
                 if (Mathf.Abs(l.x) < e.cabHalfSize.x && l.y > -0.3f && l.y < e.cabHalfSize.y * 2f && Mathf.Abs(l.z) < e.cabHalfSize.z)
-                    return $"{U}: ride the elevator";
+                { subj = e; return 8; }
                 if (e.landingDoors != null)
                     foreach (var door in e.landingDoors)
-                        if (door != null && Vector3.Distance(door.position, p) < 3f) return $"{U}: call the elevator";
+                        if (door != null && Vector3.Distance(door.position, p) < 3f) return 9;
             }
+            subj = near;
             if (near != null && nearD < 2.5f)
-                return actions.controller != null && actions.controller.HandsDown
-                    ? $"{Glyph.B("Action")}: talk to {near.guestName}"
-                    : $"{Glyph.B("Hands")}: hands down to talk to {near.guestName}";
-            return "";
+                return actions.controller != null && actions.controller.HandsDown ? 10 : 11;
+            subj = null;
+            return 0;
         }
     }
 }

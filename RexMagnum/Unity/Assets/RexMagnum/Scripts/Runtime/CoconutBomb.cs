@@ -9,6 +9,7 @@ namespace RexMagnum
         float fuse = 3f, damage;
         GameObject owner;
         Light spark;
+        static PhysicsMaterial bounce;      // shared by every coconut (a new one per throw was never freed)
 
         public static void Throw(GameObject prefab, Vector3 from, Vector3 velocity, float damage, GameObject owner)
         {
@@ -29,8 +30,8 @@ namespace RexMagnum
             rb.interpolation = RigidbodyInterpolation.Interpolate;     // smooth in the slow-motion ride cam
             rb.linearVelocity = velocity;
             rb.angularVelocity = Random.insideUnitSphere * 8f;
-            var mat = new PhysicsMaterial { bounciness = 0.35f, dynamicFriction = 0.6f };
-            sc.material = mat;
+            if (bounce == null) bounce = new PhysicsMaterial { bounciness = 0.35f, dynamicFriction = 0.6f };
+            sc.sharedMaterial = bounce;
             // thrown from inside Rex's capsule reach: it must not bounce off Rex himself
             if (owner != null && owner.TryGetComponent(out CharacterController occ)) Physics.IgnoreCollision(sc, occ);
             var b = go.AddComponent<CoconutBomb>();

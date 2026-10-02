@@ -295,6 +295,7 @@ namespace RexMagnum
         {
             if (!string.IsNullOrEmpty(objective)) GUILayout.Label("NEXT: " + objective, label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
+            if (!string.IsNullOrEmpty(objective) && GameGuide.Side != null) GUILayout.Label("<color=#B8E6A0>" + GameGuide.Side + "</color>", label);
             GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
             GUILayout.Space(10);
             GUILayout.Label("ISLAND ZONES", title);

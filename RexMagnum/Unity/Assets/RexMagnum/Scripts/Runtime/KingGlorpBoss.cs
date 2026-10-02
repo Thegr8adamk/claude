@@ -44,6 +44,13 @@ namespace RexMagnum
             "WHO DARES DISTURB THE KING?", "Bow, small damp creature!", "My crown! Do not look at my crown!",
             "I absorb! I ABSORB!", "You are not famous. I checked.", "Glorp is ETERNAL! Glorp is... leaking.",
         };
+        const string DeathLine = "Glorp... is... not... eternaaal...";
+        // the fight's other lines have named clips: Resources/Voice/Glorp/glorp_<name> (optional, subtitle always)
+        static readonly (string line, string clip)[] NamedLines =
+        {
+            ("Rise, my subjects!", "glorp_rise"), ("My beautiful armor!", "glorp_armor"),
+            ("NOW YOU SEE MY FINAL FORM!", "glorp_final"), (DeathLine, "glorp_death"),
+        };
 
         void Start()
         {
@@ -72,12 +79,18 @@ namespace RexMagnum
             health.Damaged += OnDamaged;
         }
 
-        /// <summary>King Glorp's lines, voiced when Resources/Voice/Glorp/line_NN exists (index in GlorpLines).</summary>
-        void Say(string line)
+        /// <summary>King Glorp's lines, voiced when Resources/Voice/Glorp/line_NN exists (index in GlorpLines) or the
+        /// line's named clip (NamedLines); silent with the subtitle when the clip is missing. Returns the line's length.
+        /// speaker: the AudioSource's object (default: the boss himself).</summary>
+        float Say(string line, GameObject speaker = null)
         {
+            if (speaker == null) speaker = gameObject;
             int i = System.Array.IndexOf(GlorpLines, line);
-            if (i < 0) { RexVoice.Subtitle?.Invoke("KING GLORP: " + line); return; }
-            RexVoice.SayLine(gameObject, "KING GLORP", line, $"Voice/Glorp/line_{i + 1:00}");
+            if (i >= 0) return RexVoice.SayLine(speaker, "KING GLORP", line, $"Voice/Glorp/line_{i + 1:00}");
+            foreach (var n in NamedLines)
+                if (n.line == line) return RexVoice.SayLine(speaker, "KING GLORP", line, "Voice/Glorp/" + n.clip);   // calls RexVoice.Speaking
+            RexVoice.Subtitle?.Invoke("KING GLORP: " + line);
+            return 2f;
         }
 
         void OnDisable() { Fighting = false; }
@@ -324,12 +337,21 @@ namespace RexMagnum
             dead = true;
             Fighting = false;
             music.Stop();
-            Say("Glorp... is... not... eternaaal...");
+            // the boss object is gone ~0.5 s after dying (it would cut his last line): a voice object of its own
+            var dv = new GameObject("GlorpDeathVoice");
+            dv.transform.position = at + Vector3.up * 2f;
+            var src = dv.AddComponent<AudioSource>();
+            src.spatialBlend = 1f;
+            src.minDistance = 8f;
+            src.maxDistance = 120f;
+            float deathLen = Say(DeathLine, dv);
+            Destroy(dv, deathLen + 0.5f);
             for (int i = 0; i < 10; i++)
             {
                 SlimeFX.Splat(at + Random.insideUnitSphere * 3f + Vector3.up * 2f, Random.onUnitSphere, new Color(1f, 0.8f, 0.2f), 40);
                 yield return new WaitForSeconds(0.1f);
             }
+            if (deathLen > 1f) yield return new WaitForSeconds(deathLen - 1f);   // Rex answers when the king has finished
             if (rex != null)
             {
                 RexVoice.Say(rex.gameObject, "GlorpWin", true);

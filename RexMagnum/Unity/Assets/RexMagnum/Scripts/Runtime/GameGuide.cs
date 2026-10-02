@@ -36,6 +36,8 @@ namespace RexMagnum
         public static readonly Vector3 Factory = new Vector3(300f, 0f, 75f);          // Island.json factory.core
         public static readonly Vector3 Pistol = new Vector3(54f, 4.28f, -304f);       // Island.json hotel pistol (casino lounge, floor 1)
         public static readonly Vector3 Sniper = new Vector3(82f, 21.53f, -292f);      // Island.json hotel sniper (roof)
+        public static readonly Vector3 ElevatorShaft = new Vector3(81f, 0f, -300f);   // Island.json hotel elevatorX
+        public static readonly Vector3 Stairwell = new Vector3(-2.2f, 0f, -300f);     // island_assets.py STAIR_X centre (hotel-local x -42.2) + hotel (40, -300)
 
         public static bool Visited(string zone) => Progress.Value("zone_" + zone) > 0;
 
@@ -49,48 +51,154 @@ namespace RexMagnum
             // the first night: a warning on its own line under the goal (the goal and StepId stay, so the old goal
             // is not announced again when the night ends)
             Warning = DayNight.Night > 0.6f && Progress.Value("nights") < 1 ? "NIGHT: blobs glow and come in numbers. Stay near lights." : null;
+            // the sniper rifle is optional (King Glorp shrugs off long shots): a side note while Rex is at the hotel
+            // anyway, never a step that sends him back 1 km before the boss
+            Side = w != null && w.Has(WeaponId.Pistol) && !w.Has(WeaponId.Sniper) && InZone(Zones[0], rex)
+                   && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1
+                ? "Side: the sniper rifle is on the hotel roof (stairs or elevator to the top)." : null;
             return s;
         }
 
         /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "clubs", "cart", "cave", "factory",
-        /// "sniper", "glorp", "explore_&lt;zone&gt;", "free"): the HUD announces a new goal when it changes.</summary>
+        /// "glorp", "explore_&lt;zone&gt;", "free"): the HUD announces a new goal when it changes.</summary>
         public static string StepId;
         /// <summary>A warning line under the goal (the first night), or null.</summary>
         public static string Warning;
+        /// <summary>An optional side note under the goal (the sniper rifle while at the hotel), or null.</summary>
+        public static string Side;
+
+        static float rescueSeen = -100f;
+        static Vector3 rescueAt;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; StepId = null; Warning = null; Side = null; }   // editor with Domain Reload off
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
         {
             target = Vector3.zero;
             hasTarget = true;
             id = "pool";
-            if (!Visited("pool")) { target = Zones[1].at; return "Go down to the pool. Something is wrong."; }
+            if (!Visited("pool"))
+            {
+                // still upstairs in the hotel (floor 2 is ~7.1, the ground ~3.5-4.2): first out of the room and down
+                if (rex.y > 6f && InZone(Zones[0], rex))
+                { target = WayDown(rex); return "Leave the room. Take the stairs or the elevator down to the pool."; }
+                target = Zones[1].at; return "Go down to the pool. Something is wrong.";
+            }
             int rescues = Progress.Value("rescues");
             id = "rescue";
-            if (rescues < 3 && NearestHidingGuest(rex, out target))
-                return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first.";
+            if (rescues < 3)
+            {
+                if (NearestHidingGuest(rex, out target))
+                {
+                    rescueSeen = Time.unscaledTime; rescueAt = target;
+                    return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first.";
+                }
+                // night: guests lock themselves in. The step stays (no NEW GOAL at dusk and dawn); the marker shows the next one
+                if (Guest.NightLockdown)
+                {
+                    string next = Rest(w, rex, out target, out hasTarget, out _);
+                    return $"Rescue hiding guests ({rescues}/3). Guests are locked in until morning." + (hasTarget ? " Meanwhile: " + next : "");
+                }
+                // a guest just out of reach (or walking home at dusk): keep the step a while, no goal flicker
+                if (Time.unscaledTime - rescueSeen < 20f)
+                { target = rescueAt; return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first."; }
+            }
+            return Rest(w, rex, out target, out hasTarget, out id);
+        }
+
+        /// <summary>The steps after the pool and the first rescues.</summary>
+        static string Rest(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
+        {
+            target = Vector3.zero;
+            hasTarget = true;
             id = "pistol";
             if (w != null && !w.Has(WeaponId.Pistol)) { target = Pistol; return "Get the chrome pistol in the casino lounge (hotel, ground floor)."; }
             id = "clubs";
             if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
             id = "cart";
             if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0)
-            { target = ProShop; return $"Drive a golf cart: pro shop, west. {Glyph.B("Use")}: get in."; }
+            {
+                if (NearestCart(rex, out target)) return $"Drive a golf cart (follow the marker to the nearest one). {Glyph.B("Use")}: get in.";
+                target = ProShop; return $"Drive a golf cart: pro shop, west. {Glyph.B("Use")}: get in.";
+            }
             id = "cave";
             if (!FactoryCore.Stopped && !Visited("cave") && !Visited("ruins"))
             { target = Zones[6].at; return "The cave behind the waterfall (north-west) leads to the ruins."; }
             id = "factory";
             if (!FactoryCore.Stopped) { target = Factory; return "Stop the blob factory (jungle ruins, east)."; }
-            id = "sniper";
-            if (w != null && !w.Has(WeaponId.Sniper) && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1)
-            { target = Sniper; return "Get the sniper rifle on the hotel roof (stairs or elevator)."; }
             id = "glorp";
             if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) { target = Zones[7].at; return "Pop King Glorp (crashed ship, north)."; }
             int zones = Progress.Value("zones");
             foreach (var z in Zones)
                 if (!Visited(z.id)) { id = "explore_" + z.id; target = z.at; return $"Explore: {z.name} ({zones}/{Zones.Length} zones)."; }
+            // after the main chain: one side challenge at a time (the step id stays "free": no NEW GOAL for each)
             id = "free";
             hasTarget = false;
-            return "Free play: rescue guests, take photos, pop blobs.";
+            return Challenge();
+        }
+
+        static readonly string[] PhotoKinds = { "Tourist", "Lifeguard", "Bouncer" };
+        static readonly string[] PhotoKindNames = { "a green tourist blob", "a red lifeguard blob", "a purple bouncer blob" };
+
+        /// <summary>Free play: the first side challenge not done yet (photos of each blob type, rescues, the sniper
+        /// rifle, then the accomplishments list).</summary>
+        static string Challenge()
+        {
+            var photos = Progress.Photos;
+            for (int k = 0; k < PhotoKinds.Length; k++)
+            {
+                bool has = false;
+                foreach (var p in photos) if (p.subject == PhotoKinds[k]) { has = true; break; }
+                if (!has) return $"Side challenge: take a photo with {PhotoKindNames[k]} ({Glyph.B("Photo")}).";
+            }
+            int rescues = Progress.Value("rescues");
+            if (rescues < 20) return $"Side challenge: rescue 20 guests ({rescues}/20).";
+            foreach (var a in Progress.All)
+                if (!Progress.IsUnlocked(a.id))
+                {
+                    int v = Mathf.Min(Progress.Value(a.counter), a.need);
+                    return $"Side challenge: {a.name}. {a.desc}" + (a.need > 1 ? $" ({v}/{a.need})" : "");
+                }
+            return "Free play: rescue guests, take photos, pop blobs. Everything is done. Legend.";
+        }
+
+        // golf carts and the elevator, found again every 10 s (zones can load later; a new scene after NEW GAME)
+        static GolfCart[] carts;
+        static Elevator[] lifts;
+        static float nextFind;
+
+        static void FindThings()
+        {
+            if (Time.unscaledTime < nextFind && carts != null) return;
+            nextFind = Time.unscaledTime + 10f;
+            carts = Object.FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
+            lifts = Object.FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+        }
+
+        static bool NearestCart(Vector3 from, out Vector3 at)
+        {
+            FindThings();
+            at = Vector3.zero;
+            float best = float.MaxValue;
+            foreach (var c in carts)
+            {
+                if (c == null) continue;
+                float d = (c.transform.position - from).sqrMagnitude;
+                if (d < best) { best = d; at = c.transform.position; }
+            }
+            return best < float.MaxValue;
+        }
+
+        /// <summary>The nearer of the stairwell and the elevator, at Rex's height (the marker floats on his floor).</summary>
+        static Vector3 WayDown(Vector3 rex)
+        {
+            FindThings();
+            Vector3 lift = ElevatorShaft;
+            foreach (var e in lifts)
+                if (e != null && e.cab != null) { lift = e.cab.position; break; }
+            Vector3 a = new Vector3(Stairwell.x, rex.y, Stairwell.z), b = new Vector3(lift.x, rex.y, lift.z);
+            return (a - rex).sqrMagnitude <= (b - rex).sqrMagnitude ? a : b;
         }
 
         static bool NearestHidingGuest(Vector3 from, out Vector3 at)

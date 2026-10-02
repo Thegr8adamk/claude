@@ -49,6 +49,13 @@ namespace RexMagnum
                     pool[i] = go.AddComponent<AudioSource>();
                     pool[i].playOnAwake = false;
                     pool[i].spatialBlend = 1f;
+                    // world filters on each pool source (not on the listener: music, voices and UI stay dry)
+                    var lp = go.AddComponent<AudioLowPassFilter>();
+                    lp.cutoffFrequency = 22000f;
+                    lp.enabled = false;
+                    var rv = go.AddComponent<AudioReverbFilter>();
+                    rv.reverbPreset = AudioReverbPreset.Room;
+                    rv.enabled = false;
                     best = i;
                     break;
                 }
@@ -74,8 +81,36 @@ namespace RexMagnum
             a.spatialBlend = 1f;
             a.volume = volume * AudioMix.Effects;
             a.pitch = pitch * Random.Range(0.92f, 1.08f);
+            Filter(a, true);
             a.Play();
             return a;
+        }
+
+        // ------------------------------------------------------------ world filters (Ambience sets them)
+
+        static float cutoff = 22000f;
+        static bool reverbOn;
+
+        /// <summary>Under water (low-pass cutoff) and under a roof (Room reverb) for the world sounds only: every
+        /// pool source follows at once. Ambience calls this each frame; music, voices and UI have their own sources.</summary>
+        public static void SetWorldFX(float lowPassCutoff, bool roomReverb)
+        {
+            cutoff = lowPassCutoff;
+            reverbOn = roomReverb;
+            // a short sound keeps its reverb for 1 s after it started (the tail is not cut off)
+            for (int i = 0; i < PoolSize; i++)
+                if (pool[i] != null) Filter(pool[i], pool[i].isPlaying || Time.unscaledTime - started[i] < 1f);
+        }
+
+        static void Filter(AudioSource a, bool playing)
+        {
+            if (a.TryGetComponent(out AudioLowPassFilter lp))
+            {
+                lp.cutoffFrequency = cutoff;
+                lp.enabled = cutoff < 21500f;
+            }
+            // reverb only on sources that play (an idle reverb filter still costs DSP time)
+            if (a.TryGetComponent(out AudioReverbFilter rv)) rv.enabled = reverbOn && playing;
         }
     }
 }

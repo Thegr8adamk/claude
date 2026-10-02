@@ -7,7 +7,9 @@ namespace RexMagnum
     ///  2. Marty calls: the floor-cleaner TV ad;
     ///  3. the resort's bar-tab receipt with the damage on it;
     ///  4. Rex in his hero pose: "I'm back."
-    /// Then free play continues.</summary>
+    /// Then free play continues.
+    /// VR: the headset camera is never taken over (a moving camera the head does not control makes people sick):
+    /// the same story plays from Rex's own view as a dimmed view + subtitles / notices on the HUD.</summary>
     public class EndingSequence : MonoBehaviour
     {
         float t;
@@ -55,6 +57,31 @@ namespace RexMagnum
                 var mg = GameObject.FindGameObjectWithTag("MainCamera");
                 if (mg != null) main = mg.GetComponent<Camera>();
             }
+            vr = VRMode.Active;
+            if (vr)
+            {
+                // no camera of our own: a black panel in front of the player's eyes fades in and out
+                voice = gameObject.AddComponent<AudioSource>();
+                voice.spatialBlend = 0f;
+                var cg = new GameObject("EndingFade", typeof(Canvas));
+                cg.transform.SetParent(transform, false);
+                var cv = cg.GetComponent<Canvas>();
+                cv.renderMode = main != null ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay;
+                cv.worldCamera = main;
+                cv.planeDistance = 0.35f;                      // behind the HUD (0.3 m): the subtitles stay readable
+                cv.sortingOrder = -10;
+                var img = new GameObject("Black", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+                img.transform.SetParent(cg.transform, false);
+                var rt = img.GetComponent<RectTransform>();
+                rt.anchorMin = Vector2.zero;
+                rt.anchorMax = Vector2.one;
+                rt.offsetMin = rt.offsetMax = Vector2.zero;
+                vrFade = img.GetComponent<UnityEngine.UI.Image>();
+                vrFade.raycastTarget = false;
+                vrFade.color = new Color(0, 0, 0, 0);
+                RexTestHUD.Notice("GUEST VIDEO: Rex slips on slime.  41,000,000 views  #maximumjustice #fail", 6.5f);
+                return;
+            }
             cam = new GameObject("EndingCam").AddComponent<Camera>();
             voice = cam.gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 0f;
@@ -79,6 +106,8 @@ namespace RexMagnum
         }
 
         Camera hiddenMain;
+        bool vr, vrReceipt;
+        UnityEngine.UI.Image vrFade;
 
         readonly System.Collections.Generic.List<Blob> stunned = new System.Collections.Generic.List<Blob>();
 
@@ -107,7 +136,9 @@ namespace RexMagnum
             if (t >= 7f && nextCall < Marty.Length && t >= nextCallAt)
             {
                 lastCall = nextCall++;
-                nextCallAt = t + PlayLine($"Voice/Ending/call_{lastCall + 1:00}") + 0.3f;
+                float len = PlayLine($"Voice/Ending/call_{lastCall + 1:00}");
+                nextCallAt = t + len + 0.3f;
+                if (vr) RexVoice.ShowSubtitle(Marty[lastCall], len + 0.3f);   // VR: no IMGUI in the headset
             }
             else if (nextCall == Marty.Length && tReceipt > 98f && t >= nextCallAt)
             {
@@ -115,6 +146,7 @@ namespace RexMagnum
                 tBack = t + 8f;
                 tEnd = tBack + 4f;
             }
+            if (vr) { UpdateVR(); return; }
             if (rex == null) { if (t > tEnd) Destroy(gameObject); return; }
             Vector3 p = rex.transform.position, f = rex.transform.forward, r = rex.transform.right;
             if (t < 7f)
@@ -142,6 +174,30 @@ namespace RexMagnum
             if (t > tEnd) Destroy(gameObject);
         }
 
+        /// <summary>VR: Rex's own view, dimmed (fade in 0.6 s, out over the last second), the story as HUD text.</summary>
+        void UpdateVR()
+        {
+            if (vrFade != null)
+            {
+                float a = Mathf.Min(Mathf.Clamp01(t / 0.6f), Mathf.Clamp01(tEnd - t)) * 0.85f;
+                vrFade.color = new Color(0, 0, 0, a);
+            }
+            if (rex != null && !slipped && t > 1.2f) { slipped = true; rex.SetTrigger(Animator.StringToHash("Slip")); }
+            if (!vrReceipt && t >= tReceipt && t < tBack)
+            {
+                vrReceipt = true;
+                RexTestHUD.Notice("ISLA GRANDE RESORT: the damage has been added to your tab.  TOTAL DUE: $25,877.50", 6f);
+            }
+            if (t >= tBack && !heroed)
+            {
+                heroed = true;
+                if (rex != null) rex.SetTrigger(Animator.StringToHash("Victory"));
+                RexVoice.Subtitle?.Invoke("REX: I'm back.");
+                PlayLine("Voice/Ending/imback_01");
+            }
+            if (t > tEnd) Destroy(gameObject);
+        }
+
         /// <summary>Plays a line on the ending's own voice source (Voices volume, stops on skip); returns its length.</summary>
         float PlayLine(string path)
         {
@@ -155,7 +211,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (PauseMenu.Open) return;
+            if (PauseMenu.Open || vr) return;
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             // styles made once (a new GUIStyle per OnGUI call is garbage every frame), sizes set per call
             if (big == null)

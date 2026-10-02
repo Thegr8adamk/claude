@@ -120,6 +120,7 @@ namespace RexMagnum
             if (!owned.Contains(id))
             {
                 owned.Add(id);
+                if (id == WeaponId.Bottle) bottleHits = 0;          // a fresh bottle (switching weapons keeps the count)
                 if (d.isGun) ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + d.startAmmo);   // keep ammo found before the weapon
                 Equip(id);
                 RexVoice.Say(gameObject, "WeaponFound", true);
@@ -148,7 +149,6 @@ namespace RexMagnum
         public void Equip(WeaponId id)
         {
             current = id;
-            bottleHits = 0;
             towelShownWet = false;
             if (heldBody) Destroy(heldBody);
             if (heldArms) Destroy(heldArms);
@@ -201,7 +201,7 @@ namespace RexMagnum
 
         void UpdateVisibility()
         {
-            bool show = !controller.HandsDown;
+            bool show = !controller.HandsDown && !(current == WeaponId.Coconut && Ammo(WeaponId.Coconut) <= 0);   // none left: empty hand
             drawT = Mathf.MoveTowards(drawT, show ? 1f : 0f, Time.deltaTime / DrawTime);
             float k = drawT * drawT * (3f - 2f * drawT);
             bool on = drawT > 0.01f;
@@ -253,7 +253,7 @@ namespace RexMagnum
 
             if (d.grip == Grip.Throw)
             {
-                ThrowAimLine(RMInput.ActionHeld && pressTime >= 0 && Time.time - pressTime > holdTime);
+                ThrowAimLine(RMInput.ActionHeld && pressTime >= 0 && Time.time - pressTime > holdTime && Ammo(WeaponId.Coconut) > 0);
                 if (RMInput.ActionDown) pressTime = Time.time;
                 if (RMInput.ActionUp && pressTime >= 0 && !busy)
                 {
@@ -286,6 +286,7 @@ namespace RexMagnum
             // tap = a quick jab (0.42 s); heavy = 0.75 s but ~3x the damage, knockback, hit-stop and shake
             busyUntil = Time.time + (heavy ? 0.75f : 0.42f);
             controller.FaceAimFor(heavy ? 0.75f : 0.42f);
+            SoftAim();
             // tap combo: the 3rd tap within 0.8 s of the one before is a finisher (2x damage, heavy knockback + hit-stop)
             bool combo = false;
             if (!heavy)
@@ -303,6 +304,27 @@ namespace RexMagnum
             float pitch = own ? 1f : heavy ? 0.85f : 1.1f;
             float vol = own ? 1f : heavy ? 0.8f : 0.55f;
             StartCoroutine(PlayLater(swing, heavy ? 0.4f : 0.12f, vol, pitch));
+        }
+
+        /// <summary>Melee soft aim: the nearest living blob within 3 m and 45 degrees of the view gets the swing
+        /// (the view turns toward it, up to 25 degrees; Rex turns with the view while attacking).</summary>
+        void SoftAim()
+        {
+            if (cameraRig == null || cameraRig.VRControlled) return;
+            Vector3 fwd = Quaternion.Euler(0f, cameraRig.MoveYaw, 0f) * Vector3.forward;
+            float best = 3f, turn = 0f;
+            bool found = false;
+            foreach (var b in Blob.All)
+            {
+                if (b == null || b.IsDead) continue;
+                Vector3 to = Vector3.ProjectOnPlane(b.transform.position - transform.position, Vector3.up);
+                float dist = to.magnitude;
+                if (dist >= best || dist < 0.05f) continue;
+                float a = Vector3.SignedAngle(fwd, to, Vector3.up);
+                if (Mathf.Abs(a) > 45f) continue;
+                best = dist; turn = a; found = true;
+            }
+            if (found) cameraRig.NudgeYaw(Mathf.Clamp(turn, -25f, 25f));
         }
 
         /// <summary>A hit lands: the game freezes for a moment (real time; heavy 60 ms, light 25 ms). Skipped while the
@@ -325,10 +347,20 @@ namespace RexMagnum
             bool hard = heavy || combo;            // the combo finisher hits like a heavy (feel only; death style stays the tap one)
             yield return new WaitForSeconds(delay);
             Vector3 c = transform.position + Vector3.up * 1.1f + transform.forward * (d.reach * 0.6f);
-            foreach (var col in Physics.OverlapSphere(c, d.reach * 0.55f, ~0, QueryTriggerInteraction.Ignore))
+            // swing arc: everything in front within reach is hit (light 55 degrees each side, heavy cleaves 85 and a
+            // little further); one sound, shake and hit-stop per swing, not per blob
+            Vector3 chest = transform.position + Vector3.up * 1.1f;
+            float arc = heavy ? 85f : 55f, reach = d.reach * (heavy ? 1.25f : 1.15f);
+            var struck = new HashSet<Health>();
+            bool any = false, anyBlob = false, camShown = false, lineSaid = false;
+            foreach (var col in Physics.OverlapSphere(chest, reach, ~0, QueryTriggerInteraction.Ignore))
             {
                 var h = col.GetComponentInParent<Health>();
-                if (h == null || h.gameObject == gameObject || h.IsDead) continue;
+                if (h == null || h.gameObject == gameObject || h.IsDead || struck.Contains(h)) continue;
+                Vector3 hp = col.ClosestPoint(chest);
+                Vector3 flat = Vector3.ProjectOnPlane(hp - chest, Vector3.up);
+                if (flat.sqrMagnitude > 0.36f && Vector3.Angle(transform.forward, flat) > arc) continue;   // behind / beside (touching counts)
+                struck.Add(h);
                 var blob = h.GetComponent<Blob>();
                 if (blob != null)
                 {
@@ -337,49 +369,55 @@ namespace RexMagnum
                     // golf (brief: the blob flies into the pool / sea): aim the fling at water nearby, if any
                     if (d.id == WeaponId.GolfClub && heavy && WaterVolume.RandomSurfacePoint(blob.transform.position, 35f, out Vector3 wet))
                     {
-                        Vector3 flat = Vector3.ProjectOnPlane(wet - blob.transform.position, Vector3.up);
-                        if (Vector3.Dot(flat.normalized, transform.forward) > -0.2f)      // not straight back at Rex
+                        Vector3 fly = Vector3.ProjectOnPlane(wet - blob.transform.position, Vector3.up);
+                        if (Vector3.Dot(fly.normalized, transform.forward) > -0.2f)      // not straight back at Rex
                         {
-                            blob.flingDirection = flat.normalized + Vector3.up;            // 45 degrees
-                            blob.flingSpeed = Mathf.Clamp(Mathf.Sqrt(flat.magnitude * 9.81f), 8f, 20f);
+                            blob.flingDirection = fly.normalized + Vector3.up;            // 45 degrees
+                            blob.flingSpeed = Mathf.Clamp(Mathf.Sqrt(fly.magnitude * 9.81f), 8f, 20f);
                         }
                     }
                     if (d.id == WeaponId.Towel && heavy) { blob.Stun(2f); Progress.Add("towel_stuns"); }          // brief: wind-up snap stuns 2 s
                 }
                 float dmg = (heavy ? d.holdDamage : d.tapDamage * (combo ? 2f : 1f)) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
-                h.Damage(dmg, col.ClosestPoint(c), gameObject);
-                if (blob != null) RexTestHUD.HitMarker();
-                if (combo && blob != null) RexTestHUD.Notice("COMBO", 0.7f);      // once: the loop stops after the first hit
-                if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
-                if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
-                if (blob != null && !h.IsDead) blob.Knockback(transform.forward, hard ? 1.5f : 0.4f);
+                h.Damage(dmg, hp, gameObject);
+                any = true;
+                if (blob != null) { RexTestHUD.HitMarker(); anyBlob = true; }
+                if (blob != null && !h.IsDead)        // pushed away from Rex (a cleave scatters the group)
+                    blob.Knockback(flat.sqrMagnitude > 0.01f ? flat.normalized : transform.forward, hard ? 1.5f : 0.4f);
                 if (h.IsDead && blob != null)       // blobs only: the stuck door also has Health (no kill cam for a door)
                 {
-                    // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
-                    if ((heavy && d.killCamOnHold) || Blob.LivingNear(transform.position, 30f) == 0)
+                    // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group (one per swing)
+                    if (!camShown && ((heavy && d.killCamOnHold) || Blob.LivingNear(transform.position, 30f) == 0))
+                    {
+                        camShown = true;
                         KillCam.Show(h.transform, transform.position,
                             d.id == WeaponId.GolfClub && heavy ? KillCam.Style.Follow :
                             d.id == WeaponId.Towel ? KillCam.Style.Towel :
                             d.id == WeaponId.Fists ? KillCam.Style.Fist : KillCam.Style.Orbit);
-                    KillLine(d, blob, KillCam.Active || (heavy && d.id == WeaponId.GolfClub));   // golf fling: always a line
+                    }
+                    if (!lineSaid) { lineSaid = true; KillLine(d, blob, KillCam.Active || (heavy && d.id == WeaponId.GolfClub)); }   // golf fling: always a line
                 }
-                if (blob != null)          // light hits get a smaller kick too (the jab should not feel like air)
-                {
-                    if (cameraRig != null) cameraRig.Shake(hard ? 0.18f : 0.06f);
-                    StartCoroutine(HitStop(hard ? 0.06f : 0.025f));
-                    if (hard) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
-                }
-                if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
-                {
-                    Sfx.Play("bottle_break", c);
-                    Progress.Add("bottle_breaks");
-                    owned.Remove(WeaponId.Bottle);
-                    SaveInventory();                       // the intact bottle must not come back after a reload
-                    if (Has(WeaponId.BottleBroken)) Equip(WeaponId.BottleBroken);   // Give only equips a new weapon
-                    else Give(WeaponId.BottleBroken);
-                    SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
-                }
-                break;
+            }
+            if (!any) yield break;
+            if (combo && anyBlob) RexTestHUD.Notice("COMBO", 0.7f);
+            if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
+            if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
+            if (anyBlob)          // light hits get a smaller kick too (the jab should not feel like air); a cleave a bit more
+            {
+                if (cameraRig != null) cameraRig.Shake((hard ? 0.18f : 0.06f) * (struck.Count > 1 ? 1.3f : 1f));
+                StartCoroutine(HitStop(hard ? 0.06f : 0.025f));
+                if (hard) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
+            }
+            if (d.id == WeaponId.Bottle && current == WeaponId.Bottle && ++bottleHits >= 3)   // brief: breaks after 3 hits (swings that land)
+            {
+                bottleHits = 0;
+                Sfx.Play("bottle_break", c);
+                Progress.Add("bottle_breaks");
+                owned.Remove(WeaponId.Bottle);
+                SaveInventory();                       // the intact bottle must not come back after a reload
+                if (Has(WeaponId.BottleBroken)) Equip(WeaponId.BottleBroken);   // Give only equips a new weapon
+                else Give(WeaponId.BottleBroken);
+                SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
             }
         }
 
@@ -390,12 +428,7 @@ namespace RexMagnum
             if (Ammo(d.id) <= 0)
             {
                 nextShot = Time.time + 0.4f;
-                Sfx.Play("dryfire", transform.position, 0.6f);      // empty: click
-                if (Time.time >= nextEmptyNotice)                   // plus a message (the click alone is easy to miss)
-                {
-                    nextEmptyNotice = Time.time + 2f;
-                    RexTestHUD.Notice("OUT OF AMMO", 0.8f);
-                }
+                OutOf("OUT OF AMMO");
                 return;
             }
             ammo[d.id]--;
@@ -409,9 +442,11 @@ namespace RexMagnum
             Vector3 from = muzzle != null ? muzzle.position : cameraRig.transform.position;
             if (d.id == WeaponId.Harpoon)
             {
+                if (cameraRig != null) cameraRig.Kick(1.5f);        // the spring thump; no flash (no powder)
                 HarpoonBolt.Fire(from, (target - from).normalized, d.tapDamage, gameObject);
                 return;
             }
+            MuzzleFlash(from, d.id == WeaponId.Sniper ? 3.5f : 1.6f);
             // hitscan from the camera (crosshair), tracer from the muzzle
             Vector3 dir = (target - cameraRig.transform.position).normalized;
             // start past Rex: in tight rooms the third-person camera is close and the line passes through his capsule
@@ -444,6 +479,44 @@ namespace RexMagnum
             }
             else Tracer(from, target);
         }
+
+        /// <summary>Empty: a click, plus a message (the click alone is easy to miss).</summary>
+        void OutOf(string notice)
+        {
+            Sfx.Play("dryfire", transform.position, 0.6f);
+            if (Time.time < nextEmptyNotice) return;
+            nextEmptyNotice = Time.time + 2f;
+            RexTestHUD.Notice(notice, 0.8f);
+        }
+
+        // ---- shot feel: the view kicks up (camera only, the aim stays) and the muzzle lights up for ~50 ms.
+        // One light per Rex, moved to the muzzle and switched on per shot (no new object per shot).
+        Light muzzleLight;
+        float muzzleOffAt;
+
+        void MuzzleFlash(Vector3 at, float kick)
+        {
+            if (cameraRig != null) cameraRig.Kick(kick);
+            if (muzzleLight == null)
+            {
+                muzzleLight = new GameObject("MuzzleFlash").AddComponent<Light>();
+                muzzleLight.type = LightType.Point;
+                muzzleLight.color = new Color(1f, 0.75f, 0.4f);
+                muzzleLight.range = 5f;
+                muzzleLight.intensity = 4f;
+                muzzleLight.shadows = LightShadows.None;
+            }
+            muzzleLight.transform.position = at;
+            muzzleLight.enabled = true;
+            muzzleOffAt = Time.unscaledTime + 0.05f;       // real time: a kill cam's slow motion does not hold it on
+        }
+
+        void LateUpdate()
+        {
+            if (muzzleLight != null && muzzleLight.enabled && Time.unscaledTime >= muzzleOffAt) muzzleLight.enabled = false;
+        }
+
+        void OnDestroy() { if (muzzleLight != null) Destroy(muzzleLight.gameObject); }
 
         static Transform MuzzleOf(GameObject held)
         {
@@ -512,7 +585,7 @@ namespace RexMagnum
 
         void ThrowCoconut(bool longThrow)
         {
-            if (Ammo(WeaponId.Coconut) <= 0) return;
+            if (Ammo(WeaponId.Coconut) <= 0) { OutOf("OUT OF COCONUTS"); return; }
             Sfx.Play("coconut", transform.position);
             ammo[WeaponId.Coconut]--;
             SaveInventory();

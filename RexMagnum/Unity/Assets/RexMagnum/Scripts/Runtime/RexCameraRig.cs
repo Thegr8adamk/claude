@@ -63,6 +63,12 @@ namespace RexMagnum
 
         /// <summary>Short camera shake (heavy hit, Rex hit). amount ~0.1 small .. 0.4 big; fades in ~0.25 s.</summary>
         public void Shake(float amount) => shake = Mathf.Max(shake, amount);
+        /// <summary>Gun recoil: the view kicks up by this many degrees and settles back in ~0.2 s (the aim does not move).</summary>
+        public void Kick(float degrees) => kick = Mathf.Min(kick + degrees, 6f);
+        float kick;
+        /// <summary>Melee soft aim: turn the view (and so Rex) this many degrees over ~0.1 s. Not in VR (sickness).</summary>
+        public void NudgeYaw(float degrees) { if (!VRControlled) nudge = degrees; }
+        float nudge;
         bool wasScoped, snapHeld, bodyHiddenNear;
         readonly RaycastHit[] camHits = new RaycastHit[16];
         Transform head;
@@ -151,6 +157,8 @@ namespace RexMagnum
                     Pitch = Mathf.Clamp(Pitch - look.y, -75f, 80f);
                 }
             }
+            if (Mathf.Abs(nudge) > 0.05f) { float st = nudge * Mathf.Min(1f, dt * 18f); Yaw += st; nudge -= st; }
+            else nudge = 0f;
             // only a gun aims (zoom + face the crosshair); right click with fists or a towel does nothing
             IsAiming = InputEnabled && RMInput.Aim && (weapons == null || weapons.Aiming);
             bool scoped = weapons != null && weapons.Scoped;
@@ -217,13 +225,22 @@ namespace RexMagnum
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);
             aimRot = rot;                                      // the aim ignores the shake below
             if (VRControlled || scoped) shake = 0f;            // no shake in a headset (sickness) or through the scope
+            if (VRControlled) kick = 0f;
             if (shake > 0.001f)
             {
-                // unscaled: a shake during the hit-stop still plays out; random roll/pitch kick, no position jump through walls.
+                // unscaled: a shake during the hit-stop still plays out; smooth Perlin wobble (not a new random angle each
+                // frame), rotation only (no position jump through walls), fading with the amount.
                 // Scaled by the field of view: a kick of N degrees fills more of a narrow (aim zoom) view, so it is smaller there.
-                float s = shake * cam.fieldOfView / 65f;
-                transform.rotation *= Quaternion.Euler(Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 4f);
+                float s = shake * cam.fieldOfView / 65f, nt = Time.unscaledTime * 22f;
+                transform.rotation *= Quaternion.Euler((Mathf.PerlinNoise(nt, 0.1f) * 2f - 1f) * s * 8f,
+                                                       (Mathf.PerlinNoise(3.7f, nt) * 2f - 1f) * s * 8f,
+                                                       (Mathf.PerlinNoise(nt, 7.3f) * 2f - 1f) * s * 4f);
                 shake = Mathf.MoveTowards(shake, 0f, Time.unscaledDeltaTime * 1.6f);
+            }
+            if (kick > 0.01f)
+            {
+                transform.rotation *= Quaternion.Euler(-kick, 0f, 0f);       // muzzle climb, view only
+                kick = Mathf.Lerp(kick, 0f, Time.unscaledDeltaTime * 14f);
             }
             fov = FovSetting; fpFov = FovSetting + 10f; aimFov = FovSetting - 15f;
             if (!VRControlled)      // in VR the headset sets the field of view

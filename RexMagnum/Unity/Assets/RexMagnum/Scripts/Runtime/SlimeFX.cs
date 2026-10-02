@@ -61,6 +61,32 @@ namespace RexMagnum
             return d;
         }
 
+        /// <summary>A pooled wall / floor slime decal: switches itself off after DecalLife (SlimeFX reuses it).</summary>
+        sealed class SlimeDecal : MonoBehaviour
+        {
+            public float until;
+            public Renderer rend;
+            void Update() { if (Time.time >= until) gameObject.SetActive(false); }
+        }
+
+        // same scheme as the drops: every pop used to make 10 new quads; now the oldest is reused
+        const int MaxDecals = 80;
+        const float DecalLife = 30f;
+        static readonly System.Collections.Generic.Queue<SlimeDecal> decals = new System.Collections.Generic.Queue<SlimeDecal>();
+
+        static SlimeDecal GetDecal()
+        {
+            while (decals.Count > 0 && decals.Peek() == null) decals.Dequeue();     // destroyed with a scene
+            if (decals.Count > 0 && (decals.Count >= MaxDecals || !decals.Peek().gameObject.activeSelf)) return decals.Dequeue();
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "SlimeDecal";
+            Object.Destroy(q.GetComponent<Collider>());
+            var d = q.AddComponent<SlimeDecal>();
+            d.rend = q.GetComponent<Renderer>();
+            d.rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return d;
+        }
+
         public static void Splat(Vector3 at, Vector3 normal, Color color, int count = 8)
         {
             var mat = SharedSlime(color);
@@ -91,13 +117,15 @@ namespace RexMagnum
                 Vector3 dir = Random.onUnitSphere;
                 if (StaticHit(at, dir, size * 4f, out RaycastHit hit))
                 {
-                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    Object.Destroy(q.GetComponent<Collider>());
-                    q.transform.position = hit.point + hit.normal * 0.01f;
-                    q.transform.rotation = Quaternion.LookRotation(-hit.normal) * Quaternion.Euler(0, 0, Random.Range(0, 360f));
+                    var d = GetDecal();
+                    var q = d.gameObject;
+                    q.transform.SetPositionAndRotation(hit.point + hit.normal * 0.01f,
+                        Quaternion.LookRotation(-hit.normal) * Quaternion.Euler(0, 0, Random.Range(0, 360f)));
                     q.transform.localScale = Vector3.one * Random.Range(0.3f, 0.7f) * size;
-                    q.GetComponent<Renderer>().sharedMaterial = SharedSlime(color);
-                    Object.Destroy(q, 30f);
+                    d.rend.sharedMaterial = SharedSlime(color);
+                    d.until = Time.time + DecalLife;
+                    q.SetActive(true);
+                    decals.Enqueue(d);
                 }
             }
         }

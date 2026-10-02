@@ -29,6 +29,9 @@ namespace RexMagnum
         bool lights;
         // driven metres, kept here and written to Progress at most once per second (Progress.Set saves)
         float cartMetres, nextProgress;
+        Vector3 parkPos;                      // where the builder parked it: a drowned cart comes back here
+        Quaternion parkRot;
+        float nextWaterCheck;
 
         public static void RegisterCharger(Transform t) { if (!chargers.Contains(t)) chargers.Add(t); }
 
@@ -41,6 +44,8 @@ namespace RexMagnum
             rex = FindAnyObjectByType<RexController>();
             if (rex != null) rexHealth = rex.GetComponent<Health>();
             rig = FindAnyObjectByType<RexCameraRig>();
+            parkPos = transform.position;
+            parkRot = transform.rotation;
             SetLights(false);
         }
 
@@ -56,6 +61,12 @@ namespace RexMagnum
             bool driving = Driven == this;
             // Rex died at the wheel: get out, so the respawn in room 304 is not pulled back to the seat
             if (driving && rexHealth != null && rexHealth.IsDead) { Exit(); return; }
+            // driven into the pool / sea (deeper than 0.8 m): Rex gets out, the cart goes back to its park point
+            if (Time.time >= nextWaterCheck)
+            {
+                nextWaterCheck = Time.time + 0.25f;
+                if (WaterVolume.Depth(transform.position) > 0.8f) { Drowned(driving); return; }
+            }
             // the ending cutscene: Rex may sit at the wheel (InputEnabled is off then anyway), so it has its own flag
             bool locked = EndingSequence.Playing;
             if (!locked && RMInput.Use && Time.time > nextUse && !PauseMenu.Open && !GameFlow.Busy)
@@ -69,7 +80,7 @@ namespace RexMagnum
                 if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
                     battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
             if (!driving) return;
-            if (!locked && RMInput.Hands) SetLights(!lights);
+            if (!locked && RMInput.Hands && !PauseMenu.Open) SetLights(!lights);
             // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
             // pushing until 15% (not back in the seat at the first 0.1% of charge)
             if (battery <= 0f) pushMode = true;
@@ -158,6 +169,20 @@ namespace RexMagnum
             rex.InputEnabled = true;
             if (rex.bodyAnimator != null) { rex.bodyAnimator.SetBool("Drive", false); rex.bodyAnimator.SetBool("Push", false); }
             speed = 0f;
+        }
+
+        void Drowned(bool driving)
+        {
+            if (driving) Exit();
+            speed = 0f;
+            pushMode = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.position = parkPos;
+            rb.rotation = parkRot;
+            transform.SetPositionAndRotation(parkPos, parkRot);
+            SetLights(false);
+            if (driving) RexTestHUD.Notice("The cart sank. It is back at its parking spot.", 3f);
         }
 
         void OnGUI()

@@ -36,11 +36,16 @@ namespace RexMagnum
         public const float SafeRadius = 10f;
         /// <summary>Active guests (HUD Use prompts, objective marker).</summary>
         public static readonly List<Guest> All = new List<Guest>();
-        /// <summary>Hiding and reachable: Use near the guest rescues (when no blob is near).</summary>
-        public bool CanRescue => !lockedIn && !security &&
-                                 (state == State.Hiding || (state == State.Idle && lastBlobDist < BlobsAroundRadius));
-        /// <summary>An idle guest with blobs around (but none within SafeRadius) can be rescued too.</summary>
+        /// <summary>Hiding or idle (not yet rescued): Use near the guest rescues (when no blob is near). A calm guest
+        /// far from any blob counts too (Rex "calms them down"), so the 3-rescue goal never runs out of guests.</summary>
+        public bool CanRescue => !lockedIn && !security && (state == State.Hiding || state == State.Idle);
+        /// <summary>Idle and no blob within BlobsAroundRadius: Use "calms them down" (HUD wording; counts as a rescue).</summary>
+        public bool IsCalm => state == State.Idle && lastBlobDist >= BlobsAroundRadius;
         public const float BlobsAroundRadius = 30f;
+        /// <summary>Night: guests are locked in their rooms until morning (HUD: "Guests are locked in until morning").
+        /// Same threshold the guests use to go inside.</summary>
+        public static bool NightLockdown => DayNight.Night > LockNight;
+        const float LockNight = 0.6f;
         float lastBlobDist = float.MaxValue;
         Health rexHealth;
         bool indoors, sheltering;      // home inside the hotel (locks in at night); outdoors: walks to a hide spot
@@ -159,7 +164,7 @@ namespace RexMagnum
             // come out again.
             // Only guests whose home is inside the hotel have a room to lock; outdoor guests (pool, beach) walk to
             // the nearest hotel hide spot and wait there (visible), and go back home at dawn.
-            if (!security && DayNight.Night > 0.6f && state != State.Rescued && state != State.Panic)
+            if (!security && DayNight.Night > LockNight && state != State.Rescued && state != State.Panic)
             {
                 if (indoors)
                 {
@@ -276,6 +281,7 @@ namespace RexMagnum
 
         void Rescue()
         {
+            bool calmed = IsCalm;                  // no blob around: Rex "calms them down" (same one-time rewards)
             state = State.Rescued;
             RMInput.ConsumeUse();
             agent.speed = 2.2f;
@@ -289,7 +295,7 @@ namespace RexMagnum
             for (int i = 0; i < Clues.Length; i++)
                 if (Progress.AddClue(Clues[(start + i) % Clues.Length])) { clue = Clues[(start + i) % Clues.Length]; break; }
             // own HUD line (not a subtitle): Rex's rescue line does not push it off, and it shows with subtitles off
-            RexTestHUD.Notice($"CLUE from {guestName}: \"{clue}\"  (Pause > Map keeps it)", 6f);
+            RexTestHUD.Notice((calmed ? $"{guestName} calms down. " : "") + $"CLUE from {guestName}: \"{clue}\"  (Pause > Map keeps it)", 6f);
             if (Random.value < 0.5f || rewardPrefabs == null || rewardPrefabs.Length == 0)
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
             else

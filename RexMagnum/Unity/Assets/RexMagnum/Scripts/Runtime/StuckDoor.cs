@@ -24,6 +24,18 @@ namespace RexMagnum
             health.Died += by => { if (!open) StartCoroutine(Open(by)); };
         }
 
+        /// <summary>A returning player: every stuck door stands open at once (no bang, no line, no tutorial wait).</summary>
+        public static void OpenAll()
+        {
+            foreach (var d in FindObjectsByType<StuckDoor>(FindObjectsSortMode.None))
+            {
+                if (d.open) continue;
+                d.open = true;
+                d.transform.localRotation = d.transform.localRotation * Quaternion.Euler(0f, d.openAngle, 0f);
+            }
+            AnyOpen = true;
+        }
+
         IEnumerator Shake()
         {
             var r = transform.localRotation;

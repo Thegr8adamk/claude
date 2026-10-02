@@ -243,24 +243,35 @@ namespace RexMagnum
             state = State.Intro;
             fadeTarget = 1f;
             while (fade < 0.99f) yield return null;
-            Sfx.Play("chaos", bedPoint != null ? bedPoint.position : Vector3.zero, 1f);     // follows Settings > Sound > Sound effects
+            // a returning player (has been down at the pool before): no face-down wake-up, no room hints, the door
+            // already open, the goal right away
+            bool returning = GameGuide.Visited("pool");
             music.Stop();
             if (titleCamera != null) titleCamera.enabled = false;
             if (playerCamera != null) playerCamera.enabled = true;
-            if (rex != null && bedPoint != null)
+            if (returning)
             {
-                rex.Teleport(bedPoint.position, bedPoint.eulerAngles.y);
-                rex.Die();                       // face-down pose
-                var rig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
-                if (rig) { rig.InputEnabled = false; rig.enabled = true; }
+                hint = HintCount;
+                StuckDoor.OpenAll();
             }
-            yield return new WaitForSeconds(0.6f);
-            fadeTarget = 0f;
-            yield return new WaitForSeconds(1.2f);
-            if (rex != null) RexVoice.Say(rex.gameObject, "Wake", true);
-            yield return new WaitForSeconds(2.6f);
-            fadeTarget = 1f;
-            while (fade < 0.99f) yield return null;
+            else
+            {
+                Sfx.Play("chaos", bedPoint != null ? bedPoint.position : Vector3.zero, 1f);     // follows Settings > Sound > Sound effects
+                if (rex != null && bedPoint != null)
+                {
+                    rex.Teleport(bedPoint.position, bedPoint.eulerAngles.y);
+                    rex.Die();                       // face-down pose
+                    var rig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
+                    if (rig) { rig.InputEnabled = false; rig.enabled = true; }
+                }
+                yield return new WaitForSeconds(0.6f);
+                fadeTarget = 0f;
+                yield return new WaitForSeconds(1.2f);
+                if (rex != null) RexVoice.Say(rex.gameObject, "Wake", true);
+                yield return new WaitForSeconds(2.6f);
+                fadeTarget = 1f;
+                while (fade < 0.99f) yield return null;
+            }
             if (rex != null && wakePoint != null)
             {
                 rex.Revive();

@@ -417,6 +417,7 @@ namespace RexMagnum.EditorTools
         // ---------------------------------------------------------------- buildings
 
         static readonly HashSet<string> NoCollide = new HashSet<string>();
+        static readonly HashSet<string> SeeThrough = new HashSet<string>();     // glass, water, falls, foliage: never occluders
 
         static void BuildingPrefab(AssetRow a, MatRow[] rows, Transform parent)
         {
@@ -425,6 +426,9 @@ namespace RexMagnum.EditorTools
                     if (r.kind == "water" || r.kind == "fall" || r.kind == "foliage" || r.name.Contains("Curtain") ||
                         r.name.Contains("Towel") || r.name == "A_Straw" || r.name == "A_Vine" || r.name == "A_Dark")
                         NoCollide.Add(r.name);
+            if (SeeThrough.Count == 0)
+                foreach (var r in rows)
+                    if (r.kind == "glass" || r.kind == "water" || r.kind == "fall" || r.kind == "foliage") SeeThrough.Add(r.name);
             var asset = AssetDatabase.LoadAssetAtPath<GameObject>($"{Dir}/{a.fbx}");
             if (asset == null) { Debug.LogWarning("Missing " + a.fbx); return; }
             var root = new GameObject(a.name);
@@ -432,22 +436,8 @@ namespace RexMagnum.EditorTools
             StripImportedLODs(model);
             ApplyFix(model.transform);
             var rs = model.GetComponentsInChildren<MeshRenderer>();
-            var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();       // extras (_Door, _Bottle, _Core) stay outside the LODs
-            var lod1 = rs.Where(r => r.name.EndsWith("_LOD1")).ToArray();
-            var lod2 = rs.Where(r => r.name.EndsWith("_LOD2")).ToArray();      // heavy buildings: middle level for phones
-            var lg = root.AddComponent<LODGroup>();
-            lg.SetLODs(lod2.Length > 0 ? new[] { new LOD(0.3f, lod0), new LOD(0.1f, lod1), new LOD(0.006f, lod2) }
-                : lod1.Length > 0 ? new[] { new LOD(0.18f, lod0), new LOD(0.006f, lod1) }
-                : new[] { new LOD(0.006f, lod0) });
-            lg.RecalculateBounds();
-            foreach (var r in rs)
-            {
-                r.shadowCastingMode = ShadowCastingMode.On;
-                GameObjectUtility.SetStaticEditorFlags(r.gameObject,
-                    StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
-            }
-            // collision: LOD0 without water, falls, curtains, straw...
-            foreach (var r in lod0)
+            // collision: LOD0 without water, falls, curtains, straw... (from the full mesh, before the glass split)
+            foreach (var r in rs.Where(r => r.name.EndsWith("_LOD0")))
             {
                 var mf = r.GetComponent<MeshFilter>();
                 if (mf == null || mf.sharedMesh == null) continue;
@@ -457,6 +447,30 @@ namespace RexMagnum.EditorTools
                 c.transform.SetParent(r.transform, false);
                 c.AddComponent<MeshCollider>().sharedMesh = col;
             }
+            foreach (var r in rs)
+            {
+                r.shadowCastingMode = ShadowCastingMode.On;
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject,
+                    StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+            }
+            // see-through sub-meshes in an occluder hide what is behind the windows / pools / falls after the
+            // occlusion bake: move them to a child renderer that is only an occludee (same LOD level as its parent)
+            var seeThrough = new Dictionary<MeshRenderer, MeshRenderer>();
+            foreach (var r in rs.Where(r => r.name.Contains("_LOD")))      // extras (door, bottles) move: left whole
+            {
+                var st = SplitSeeThrough(r, a.name);
+                if (st != null) seeThrough[r] = st;
+            }
+            MeshRenderer[] Level(string suffix) => rs.Where(r => r.name.EndsWith(suffix))
+                .SelectMany(r => seeThrough.TryGetValue(r, out var st) ? new[] { r, st } : new[] { r }).ToArray();
+            var lod0 = Level("_LOD0");       // extras (_Door, _Bottle, _Core) stay outside the LODs
+            var lod1 = Level("_LOD1");
+            var lod2 = Level("_LOD2");      // heavy buildings: middle level for phones
+            var lg = root.AddComponent<LODGroup>();
+            lg.SetLODs(lod2.Length > 0 ? new[] { new LOD(0.3f, lod0), new LOD(0.1f, lod1), new LOD(0.006f, lod2) }
+                : lod1.Length > 0 ? new[] { new LOD(0.18f, lod0), new LOD(0.006f, lod1) }
+                : new[] { new LOD(0.006f, lod0) });
+            lg.RecalculateBounds();
             string path = $"{Prefabs}/{a.name}.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             UnityEngine.Object.DestroyImmediate(root);
@@ -477,6 +491,49 @@ namespace RexMagnum.EditorTools
                 var mf = r.GetComponent<MeshFilter>();
                 if (mf == null || mf.sharedMesh == null || mf.sharedMesh.triangles.Length == 0) r.enabled = false;  // empty LOD (Room304_LOD1)
             }
+        }
+
+        /// <summary>Moves the see-through sub-meshes (glass, water, falls, foliage) of r into a child renderer that is
+        /// OccludeeStatic only; r keeps the solid ones and stays the occluder. A renderer that is all see-through just
+        /// loses OccluderStatic. Returns the new child renderer, or null.</summary>
+        static MeshRenderer SplitSeeThrough(MeshRenderer r, string building)
+        {
+            var mf = r.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return null;
+            var src = mf.sharedMesh;
+            var mats = r.sharedMaterials;
+            var solid = new List<int>();
+            var clear = new List<int>();
+            for (int s = 0; s < src.subMeshCount; s++)
+                (s < mats.Length && mats[s] != null && SeeThrough.Contains(mats[s].name) ? clear : solid).Add(s);
+            if (clear.Count == 0) return null;
+            if (solid.Count == 0)
+            {
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, StaticEditorFlags.OccludeeStatic);
+                return null;
+            }
+            Mesh Part(List<int> subs, string tag)
+            {
+                var m = UnityEngine.Object.Instantiate(src);         // same vertices / UVs / normals, fewer sub-meshes
+                m.name = $"{building}_{r.name}_{tag}";
+                m.subMeshCount = subs.Count;
+                for (int i = 0; i < subs.Count; i++) m.SetTriangles(src.GetTriangles(subs[i]), i, false);
+                m.RecalculateBounds();
+                string p = $"{Gen}/{m.name}.asset";
+                AssetDatabase.DeleteAsset(p);
+                AssetDatabase.CreateAsset(m, p);
+                return m;
+            }
+            var child = new GameObject(r.name.Replace("_LOD", "_SeeThroughLOD"));     // no "_LOD0" suffix: not a lightmap / collision part
+            child.transform.SetParent(r.transform, false);
+            child.AddComponent<MeshFilter>().sharedMesh = Part(clear, "SeeThrough");
+            var cr = child.AddComponent<MeshRenderer>();
+            cr.sharedMaterials = clear.Select(i => mats[i]).ToArray();
+            cr.shadowCastingMode = r.shadowCastingMode;
+            GameObjectUtility.SetStaticEditorFlags(child, StaticEditorFlags.OccludeeStatic);
+            mf.sharedMesh = Part(solid, "Solid");
+            r.sharedMaterials = solid.Select(i => mats[i]).ToArray();
+            return cr;
         }
 
         static Mesh CollisionMesh(Mesh src, Material[] mats, string name)
@@ -598,7 +655,9 @@ namespace RexMagnum.EditorTools
             rp.size = new Vector3(5.5f, 3.4f, 9.5f);
             rp.boxProjection = true;
             rp.mode = ReflectionProbeMode.Realtime;
-            rp.refreshMode = ReflectionProbeRefreshMode.OnAwake;
+            rp.refreshMode = ReflectionProbeRefreshMode.ViaScripting;     // InteriorProbes: load + dusk / dawn
+            rp.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            if (gp.GetComponent<InteriorProbes>() == null) gp.gameObject.AddComponent<InteriorProbes>();
             rp.importance = 2;
             // title camera: slow shot of the hotel from the beach; then the flow takes over
             var tc = new GameObject("TitleCamera").AddComponent<Camera>();
@@ -699,7 +758,8 @@ namespace RexMagnum.EditorTools
         /// <summary>One more blob spawner for a zone, with the same blob prefabs as the pool spawner.</summary>
         static BlobSpawner ZoneSpawner(string name, Vector3 at, int maxAlive, float radius, Transform parent)
         {
-            var src = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
+            // the pool spawner, not whichever zone spawner Find returns first
+            var src = mainSpawner != null ? mainSpawner : UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (src == null) return null;
             var sp = new GameObject(name).AddComponent<BlobSpawner>();
             sp.transform.SetParent(parent, false);
@@ -805,8 +865,10 @@ namespace RexMagnum.EditorTools
             rp.boxProjection = true;
             rp.blendDistance = 1f;
             rp.mode = ReflectionProbeMode.Realtime;
-            rp.refreshMode = ReflectionProbeRefreshMode.OnAwake;
+            // by script (InteriorProbes): on load and again at dusk / dawn, not the noon sky all night
+            rp.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
             rp.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            if (parent.GetComponent<InteriorProbes>() == null) parent.gameObject.AddComponent<InteriorProbes>();
             rp.resolution = 64;
             rp.importance = 1;
             rp.intensity = intensity;
@@ -1037,7 +1099,7 @@ namespace RexMagnum.EditorTools
                 var size = new Vector3(Mathf.Abs(b.x - a.x), Mathf.Abs(b.y - a.y), Mathf.Abs(b.z - a.z)) + Vector3.one * 8f;
                 BoxProbe(pn, (a + b) * 0.5f + Vector3.up * 1.5f, size, 0.4f, root, true);
             }
-            var spawner = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
+            var spawner = mainSpawner != null ? mainSpawner : UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (spawner != null && main.Count >= 2)
             {
                 var sp = new GameObject("TunnelBlobs").AddComponent<BlobSpawner>();
@@ -1319,7 +1381,20 @@ namespace RexMagnum.EditorTools
             r.sharedMaterials = mats;
             r.shadowCastingMode = pr.kind == "fern" ? ShadowCastingMode.Off : ShadowCastingMode.On;
             var lg = root.AddComponent<LODGroup>();
-            lg.SetLODs(new[] { new LOD(pr.kind == "fern" ? 0.02f : 0.008f, new Renderer[] { r }) });
+            // palms / trees: a cross-quad picture of the tree far away (the terrain's own billboards only work
+            // with SpeedTree shaders, so LODGroup trees drew the full mesh out to treeDistance)
+            var far = pr.kind == "palm" || pr.kind == "tree" ? TreeImpostor(mesh, mats, pr.name) : null;
+            if (far != null)
+            {
+                var fg = new GameObject(pr.name + "_Far");
+                fg.transform.SetParent(root.transform, false);
+                fg.AddComponent<MeshFilter>().sharedMesh = far.Value.mesh;
+                var fr = fg.AddComponent<MeshRenderer>();
+                fr.sharedMaterial = far.Value.mat;
+                fr.shadowCastingMode = ShadowCastingMode.Off;      // far beyond the shadow distance anyway
+                lg.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r }), new LOD(0.008f, new Renderer[] { fr }) });
+            }
+            else lg.SetLODs(new[] { new LOD(pr.kind == "fern" ? 0.02f : 0.008f, new Renderer[] { r }) });
             if (pr.kind == "palm" || pr.kind == "tree")
             {
                 var cc = root.AddComponent<CapsuleCollider>();
@@ -1339,6 +1414,149 @@ namespace RexMagnum.EditorTools
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{Prefabs}/Veg_{pr.name}.prefab");
             UnityEngine.Object.DestroyImmediate(root);
             return prefab;
+        }
+
+        /// <summary>Far LOD for a tree: renders the mesh once from the side (orthographic, flat white ambient, no
+        /// lights, so the picture is close to plain albedo and the sun / night still light it in game) into a 256 px
+        /// cut-out texture, and puts it on two crossed quads. Null when the capture fails.</summary>
+        static (Mesh mesh, Material mat)? TreeImpostor(Mesh mesh, Material[] mats, string name)
+        {
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) return null;     // -nographics batch build
+            const int Res = 256;
+            const int CaptureLayer = 31;
+            var key = new Color(1f, 0f, 1f);       // chroma key: alpha from the background colour (robust with any RT alpha)
+            var b = mesh.bounds;
+            float size = Mathf.Max(b.size.y, Mathf.Max(b.size.x, b.size.z)) * 1.02f;
+            var origin = new Vector3(0f, -5000f, 0f);
+            var go = new GameObject("ImpostorCapture");
+            var cam = new GameObject("ImpostorCamera").AddComponent<Camera>();
+            var rt = new RenderTexture(Res, Res, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None).Where(l => l.enabled).ToArray();
+            bool fog = RenderSettings.fog;
+            var probe = RenderSettings.ambientProbe;
+            var prevActive = RenderTexture.active;
+            Texture2D tex;
+            try
+            {
+                go.layer = CaptureLayer;
+                go.transform.position = origin;
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterials = mats;
+                mr.shadowCastingMode = ShadowCastingMode.Off;
+                foreach (var l in lights) l.enabled = false;
+                RenderSettings.fog = false;
+                var sh = new SphericalHarmonicsL2();
+                sh.AddAmbientLight(Color.white);
+                RenderSettings.ambientProbe = sh;
+                cam.enabled = false;
+                cam.orthographic = true;
+                cam.orthographicSize = size * 0.5f;
+                cam.aspect = 1f;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = key;
+                cam.cullingMask = 1 << CaptureLayer;
+                cam.allowMSAA = false;
+                cam.allowHDR = false;
+                cam.nearClipPlane = 0.1f;
+                cam.farClipPlane = size * 4f;
+                cam.transform.position = origin + b.center + Vector3.back * size * 2f;
+                cam.transform.rotation = Quaternion.identity;
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex = new Texture2D(Res, Res, TextureFormat.RGBA32, true);
+                tex.ReadPixels(new Rect(0, 0, Res, Res), 0, 0);
+            }
+            catch (Exception e) { Debug.LogWarning($"[Rex Magnum] Tree far LOD for {name} skipped: {e.Message}"); return null; }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                cam.targetTexture = null;
+                foreach (var l in lights) if (l != null) l.enabled = true;
+                RenderSettings.fog = fog;
+                RenderSettings.ambientProbe = probe;
+                UnityEngine.Object.DestroyImmediate(cam.gameObject);
+                UnityEngine.Object.DestroyImmediate(go);
+                rt.Release();
+                UnityEngine.Object.DestroyImmediate(rt);
+            }
+            // key out the background; give the cut-out pixels the mean leaf colour (no pink fringes in small mips)
+            var px = tex.GetPixels();
+            Color sum = Color.clear;
+            int solid = 0;
+            for (int i = 0; i < px.Length; i++)
+            {
+                var c = px[i];
+                bool bg = Mathf.Abs(c.r - key.r) + c.g + Mathf.Abs(c.b - key.b) < 0.25f;
+                if (bg) px[i].a = 0f;
+                else { px[i].a = 1f; sum += c; solid++; }
+            }
+            UnityEngine.Object.DestroyImmediate(tex);
+            // nothing drawn, or no background left (no GPU in batch mode, failed render): keep the single LOD
+            if (solid < 50 || solid > px.Length * 0.9f) { Debug.LogWarning($"[Rex Magnum] Tree far LOD for {name}: bad capture, skipped."); return null; }
+            var mean = sum / solid;
+            mean.a = 0f;
+            for (int i = 0; i < px.Length; i++) if (px[i].a == 0f) px[i] = mean;
+            var outTex = new Texture2D(Res, Res, TextureFormat.RGBA32, false);
+            outTex.SetPixels(px);
+            outTex.Apply();
+            string png = $"{Gen}/{name}_Far.png";
+            File.WriteAllBytes(png, outTex.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(outTex);
+            AssetDatabase.ImportAsset(png, ImportAssetOptions.ForceUpdate);
+            if (AssetImporter.GetAtPath(png) is TextureImporter ti)
+            {
+                ti.textureType = TextureImporterType.Default;
+                ti.sRGBTexture = true;
+                ti.alphaSource = TextureImporterAlphaSource.FromInput;
+                ti.alphaIsTransparency = true;
+                ti.mipmapEnabled = true;
+                ti.mipMapsPreserveCoverage = true;          // far trees must not thin out in the small mips
+                ti.alphaTestReferenceValue = 0.5f;
+                ti.wrapMode = TextureWrapMode.Clamp;
+                ti.maxTextureSize = Res;
+                ti.SaveAndReimport();
+            }
+            var farTex = AssetDatabase.LoadAssetAtPath<Texture2D>(png);
+            if (farTex == null) return null;
+            var m = Asset(name + "_Far", Shader.Find("Universal Render Pipeline/Lit"));
+            m.SetTexture("_BaseMap", farTex);
+            m.SetColor("_BaseColor", Color.white);
+            m.SetFloat("_Smoothness", 0f);
+            m.SetFloat("_AlphaClip", 1f);
+            m.SetFloat("_Cutoff", 0.5f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Cull", 0f);
+            m.renderQueue = (int)RenderQueue.AlphaTest;
+            m.enableInstancing = true;
+            EditorUtility.SetDirty(m);
+            // two crossed quads (X and Z planes) through the trunk; normals up so both sides take the same light
+            float h = size * 0.5f;
+            Vector3 c0 = b.center;
+            var v = new List<Vector3>();
+            var uv = new List<Vector2>();
+            var tri = new List<int>();
+            foreach (var axis in new[] { Vector3.right, Vector3.forward })
+            {
+                int o = v.Count;
+                v.Add(c0 - axis * h - Vector3.up * h); uv.Add(new Vector2(0f, 0f));
+                v.Add(c0 + axis * h - Vector3.up * h); uv.Add(new Vector2(1f, 0f));
+                v.Add(c0 + axis * h + Vector3.up * h); uv.Add(new Vector2(1f, 1f));
+                v.Add(c0 - axis * h + Vector3.up * h); uv.Add(new Vector2(0f, 1f));
+                tri.AddRange(new[] { o, o + 2, o + 1, o, o + 3, o + 2 });
+            }
+            var q = new Mesh { name = name + "_Far" };
+            q.SetVertices(v);
+            q.SetUVs(0, uv);
+            q.SetTriangles(tri, 0);
+            q.SetNormals(Enumerable.Repeat(Vector3.up, v.Count).ToList());
+            q.RecalculateBounds();
+            q.RecalculateTangents();
+            string mp = $"{Gen}/{name}_Far.asset";
+            AssetDatabase.DeleteAsset(mp);
+            AssetDatabase.CreateAsset(q, mp);
+            return (q, m);
         }
 
         static GameObject DetailPrefab(Proto pr)
@@ -1705,37 +1923,93 @@ namespace RexMagnum.EditorTools
         }
 
         /// <summary>Occlusion culling data for the island (buildings, terrain hills and the hotel walls hide what is
-        /// behind them). Also run by the Windows / Android build menus when the scene has none yet.</summary>
+        /// behind them). The menu bakes in the background with a progress bar and a Cancel button; the Windows /
+        /// Android build menus ask first when the scene has none yet (EnsureOcclusion).</summary>
         [MenuItem("Rex Magnum/Bake Occlusion Culling", priority = 31)]
         public static void BakeOcclusion()
         {
             if (GameObject.Find("Island") == null) { Debug.LogWarning("[Rex Magnum] Open Scenes/Island.unity first."); return; }
+            if (StaticOcclusionCulling.isRunning) return;
+            OcclusionSettings();
+            if (!StaticOcclusionCulling.GenerateInBackground()) { Debug.LogWarning("[Rex Magnum] Occlusion culling bake did not start."); return; }
+            occStart = EditorApplication.timeSinceStartup;
+            EditorApplication.update += OcclusionProgress;
+        }
+
+        static double occStart;
+
+        /// <summary>Progress bar while the background bake runs (Umbra gives no fraction: show the time so far).</summary>
+        static void OcclusionProgress()
+        {
+            double t = EditorApplication.timeSinceStartup - occStart;
+            if (StaticOcclusionCulling.isRunning)
+            {
+                if (EditorUtility.DisplayCancelableProgressBar("Rex Magnum: occlusion culling",
+                        $"Baking... {(int)t / 60}:{(int)t % 60:00} so far (usually 2 to 10 minutes). Cancel stops it.",
+                        Mathf.Repeat((float)t / 120f, 1f)))
+                {
+                    StaticOcclusionCulling.Cancel();
+                    Debug.Log("[Rex Magnum] Occlusion culling bake cancelled.");
+                }
+                return;
+            }
+            EditorApplication.update -= OcclusionProgress;
+            EditorUtility.ClearProgressBar();
+            if (StaticOcclusionCulling.umbraDataSize > 0)
+            {
+                EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+                Debug.Log($"[Rex Magnum] Occlusion culling baked in {(int)t / 60}:{(int)t % 60:00} ({StaticOcclusionCulling.umbraDataSize / 1024} KB).");
+            }
+            else Debug.LogWarning("[Rex Magnum] Occlusion culling bake stopped or failed: no data.");
+        }
+
+        static void OcclusionSettings()
+        {
             StaticOcclusionCulling.smallestOccluder = 4f;
             StaticOcclusionCulling.smallestHole = 0.3f;
             StaticOcclusionCulling.backfaceThreshold = 100f;
-            if (StaticOcclusionCulling.Compute())
-            {
-                EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
-                Debug.Log($"[Rex Magnum] Occlusion culling baked ({StaticOcclusionCulling.umbraDataSize / 1024} KB).");
-            }
-            else Debug.LogWarning("[Rex Magnum] Occlusion culling bake failed.");
         }
 
-        /// <summary>Before a build: bakes occlusion for the island scene if it has no data (opens it if needed,
-        /// then reopens the scene that was open).</summary>
-        public static void EnsureOcclusion()
+        /// <summary>Before a build: if the island scene has no occlusion data, asks the owner first (bake now, which
+        /// takes minutes and cannot be stopped once it runs / build without it / stop the build). Opens the scene if
+        /// needed, then reopens the scene that was open. Returns false when the build must stop.</summary>
+        public static bool EnsureOcclusion()
         {
             string path = Scenes + "/Island.unity";
-            if (!File.Exists(path)) return;
+            if (!File.Exists(path)) return true;
             var active = EditorSceneManager.GetActiveScene();
             bool other = active.path != path;
             if (other)
             {
-                if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+                if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
                 EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
             }
-            if (StaticOcclusionCulling.umbraDataSize == 0) BakeOcclusion();
+            bool go = true;
+            if (StaticOcclusionCulling.umbraDataSize == 0 && !StaticOcclusionCulling.isRunning)
+            {
+                int pick = Application.isBatchMode ? 0 : EditorUtility.DisplayDialogComplex("Rex Magnum: occlusion culling",
+                    "The island has no occlusion culling data yet. With it, the game does not draw what is behind " +
+                    "buildings and hills (faster, most on phones).\n\nBaking takes about 2 to 10 minutes, one time only. " +
+                    "Unity is busy until it is done and it cannot be stopped once it starts.\n\n" +
+                    "\"Build without\" makes the game now (it works, a bit slower). You can bake later with " +
+                    "Rex Magnum > Bake Occlusion Culling (that one has a Cancel button).",
+                    "Bake now, then build", "Stop the build", "Build without");
+                if (pick == 1) go = false;
+                else if (pick == 0)
+                {
+                    OcclusionSettings();
+                    double t0 = EditorApplication.timeSinceStartup;
+                    if (StaticOcclusionCulling.Compute())
+                    {
+                        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+                        Debug.Log($"[Rex Magnum] Occlusion culling baked in {(int)(EditorApplication.timeSinceStartup - t0)} s " +
+                                  $"({StaticOcclusionCulling.umbraDataSize / 1024} KB).");
+                    }
+                    else Debug.LogWarning("[Rex Magnum] Occlusion culling bake failed; building without it.");
+                }
+            }
             if (other && !string.IsNullOrEmpty(active.path)) EditorSceneManager.OpenScene(active.path, OpenSceneMode.Single);
+            return go;
         }
 
         /// <summary>Adds the URP "Screen Space Ambient Occlusion" renderer feature (contact shadows in corners).</summary>

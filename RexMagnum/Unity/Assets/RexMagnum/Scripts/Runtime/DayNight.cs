@@ -94,7 +94,9 @@ namespace RexMagnum
                 foreach (var sp in spawners)
                     if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 1.8f, Night) * sp.factoryScale));
             // the slow fade keeps its own level; the voice duck (fast) is applied on top of it
-            nightLevel = Mathf.MoveTowards(nightLevel, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
+            // King Glorp's fight: his power ballad plays, the night loop fades out in about a second (and back slowly after)
+            bool boss = KingGlorpBoss.Fighting;
+            nightLevel = Mathf.MoveTowards(nightLevel, boss ? 0f : Night * 0.5f * AudioMix.Music, Time.deltaTime * (boss ? 0.5f : 0.1f));
             if (nightMusic != null) nightMusic.volume = nightLevel * AudioMix.Duck;
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)
