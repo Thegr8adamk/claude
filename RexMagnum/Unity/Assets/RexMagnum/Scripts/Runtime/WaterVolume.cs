@@ -48,6 +48,29 @@ namespace RexMagnum
             return true;
         }
 
+        /// <summary>A random point on a water surface within radius of c (for blobs that rise from the water).</summary>
+        public static bool RandomSurfacePoint(Vector3 c, float radius, out Vector3 p)
+        {
+            p = c;
+            var near = new List<Bounds>();
+            foreach (var a in areas)
+            {
+                var b = a.b;
+                if (b.max.y < c.y - 15f || b.max.y > c.y + 15f) continue;
+                Vector3 q = b.ClosestPoint(new Vector3(c.x, b.max.y, c.z));
+                if (new Vector2(q.x - c.x, q.z - c.z).magnitude < radius) near.Add(b);
+            }
+            if (near.Count == 0) return false;
+            var w = near[Random.Range(0, near.Count)];
+            for (int i = 0; i < 8; i++)
+            {
+                Vector2 o = Random.insideUnitCircle * radius;
+                var t = new Vector3(Mathf.Clamp(c.x + o.x, w.min.x, w.max.x), w.max.y, Mathf.Clamp(c.z + o.y, w.min.z, w.max.z));
+                if (Surface(t + Vector3.down * 0.5f, out _, out _)) { p = t; return true; }
+            }
+            return false;
+        }
+
         /// <summary>How deep p is under the water surface (0 when not in water).</summary>
         public static float Depth(Vector3 p) => Surface(p, out float s, out _) ? s - p.y : 0f;
     }
