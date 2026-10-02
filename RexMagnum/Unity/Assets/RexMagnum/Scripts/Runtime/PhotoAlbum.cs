@@ -36,7 +36,7 @@ namespace RexMagnum
             else { int i = Random.Range(0, Captions.Length); if (i == last) i = (i + 1) % Captions.Length; last = i; caption = Captions[i]; }
             Progress.AddPhoto(new Progress.Photo { file = file, caption = caption, subject = subject, time = System.DateTime.Now.Ticks });
             if (subject == "KingGlorp") Progress.Add("photos_glorp");
-            else if (!string.IsNullOrEmpty(subject)) Progress.Add("photos_blob");
+            else if (!string.IsNullOrEmpty(subject) && subject != "Guest") Progress.Add("photos_blob");
             RexVoice.Subtitle?.Invoke("PHOTO SAVED: " + caption);
         }
     }

@@ -16,6 +16,7 @@ namespace RexMagnum
             { "Fists", new[] { "Talk to the hand. It's the only one still returning my calls.", "These fists are registered weapons. In Guam.", "Knuckle sandwich. Hold the mayo. You ARE the mayo.", "I've punched better. I've punched worse. I've punched a director.", "That's gonna leave a stain." } },
             { "Taunt", new[] { "Read between the lines.", "That's my autograph.", "Count with me. One.", "Here's my head shot.", "This finger's single. Like me. Four times.", "Sit on it and wobble.", "This one's free. Autographs are ten bucks." } },
             { "Photo", new[] { "Smile. Or whatever the hell you do.", "Get my good side. It's this one. No. Other one.", "This one's for the fans. Both of them.", "Say cheese. You smell like it.", "Hold still. My thumb's on the lens. Every damn time." } },
+            { "PhotoGuest", new[] { "Closer. Closer. OK, that's my wallet." } },
             { "PhotoAlone", new[] { "Just me. Again. Story of my life." } },
             { "Slip", new[] { "I meant to do that.", "My hip! No, it's fine. It's the fake one.", "Stunt fall. Nailed it." } },
             { "Slime", new[] { "Ugh. It's in my mouth. Not the worst thing this week.", "I've had worse on me. Ask housekeeping.", "This shirt is vintage, you snot.", "Great. Now I'm moist." } },

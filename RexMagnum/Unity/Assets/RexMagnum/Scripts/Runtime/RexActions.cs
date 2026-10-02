@@ -82,9 +82,18 @@ namespace RexMagnum
                     float d = Vector3.Distance(b.transform.position, transform.position);
                     if (d < best) { best = d; nearest = b; }
                 }
+                // brief section 8: the nearest blob OR guest; a guest closer than any blob is the one in the photo
+                Guest guest = null;
+                foreach (var g in FindObjectsByType<Guest>(FindObjectsSortMode.None))
+                {
+                    float d = Vector3.Distance(g.transform.position, transform.position);
+                    if (d < best) { best = d; guest = g; nearest = null; }
+                }
                 if (nearest != null) nearest.OnPhoto();
-                RexVoice.Say(gameObject, nearest != null ? "Photo" : "PhotoAlone");
-                PhotoAlbum.Take(this, nearest == null ? "" : nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString());
+                if (guest != null) Progress.Add("guest_photos");
+                RexVoice.Say(gameObject, guest != null ? "PhotoGuest" : nearest != null ? "Photo" : "PhotoAlone");
+                PhotoAlbum.Take(this, guest != null ? "Guest" : nearest == null ? "" :
+                                      nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString());
             }
             controller.FaceAim = Time.time < faceAimUntil;
         }
