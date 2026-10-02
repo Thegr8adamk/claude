@@ -263,7 +263,9 @@ namespace RexMagnum
                 if (h.IsDead)
                 {
                     KillLine(d, blob);
-                    if (heavy && d.killCamOnHold) KillCam.Show(h.transform, transform.position, false);
+                    // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
+                    if ((heavy && d.killCamOnHold) || (blob != null && Blob.LivingNear(transform.position, 30f) == 0))
+                        KillCam.Show(h.transform, transform.position, false);
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
@@ -312,7 +314,7 @@ namespace RexMagnum
                     {
                         KillLine(d, blob);
                         if (d.id == WeaponId.Sniper) KillCam.Show(h.transform, from, true);   // full bullet cam
-                        else if (blob != null && Blob.AliveCount() == 0) KillCam.Show(h.transform, from, true);
+                        else if (blob != null && Blob.LivingNear(transform.position, 30f) == 0) KillCam.Show(h.transform, from, true);
                     }
                 }
                 SlimeFX.Splat(hit.point, hit.normal, new Color(1f, 0.9f, 0.6f), 4);

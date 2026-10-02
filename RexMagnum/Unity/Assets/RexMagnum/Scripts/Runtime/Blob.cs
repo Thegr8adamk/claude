@@ -40,6 +40,15 @@ namespace RexMagnum
         public bool IsStunned => Time.time < stunUntil;
         static int alive;
         public static int AliveCount() => alive;
+        /// <summary>Blobs still alive within radius of p (a dead blob stays in the scene ~1 s while it pops).</summary>
+        public static int LivingNear(Vector3 p, float radius)
+        {
+            int n = 0;
+            float r2 = radius * radius;
+            foreach (var b in All)
+                if (b != null && !b.IsDead && (b.transform.position - p).sqrMagnitude < r2) n++;
+            return n;
+        }
         public static readonly System.Collections.Generic.List<Blob> All = new System.Collections.Generic.List<Blob>();
         public bool IsDead => health != null && health.IsDead;
         void OnEnable() { alive++; All.Add(this); }
