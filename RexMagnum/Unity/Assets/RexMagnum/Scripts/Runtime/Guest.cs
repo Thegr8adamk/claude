@@ -285,7 +285,7 @@ namespace RexMagnum
             "The steak knives are at the buffet. Don't ask why I know.",
             "Golf clubs are in the pro shop. West side.",
             "The slime comes from the old temple ruins. Something glows in there.",
-            "There's a ship on top of the big waterfall. A big gold one lives in it.",
+            "There's a ship on top of the big waterfall. A big gold one lives in it. The cave tunnels go up to it: take the branch at the fork.",
             "The cave behind the waterfall goes all the way to the ruins.",
             "Coconuts at the tiki bar. They go boom.",
         };

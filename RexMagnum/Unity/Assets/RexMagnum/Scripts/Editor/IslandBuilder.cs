@@ -2033,9 +2033,15 @@ namespace RexMagnum.EditorTools
                 var mf = r.GetComponent<MeshFilter>();
                 if (r.name.EndsWith("_LOD0") && mf != null && mf.sharedMesh != null && AssetDatabase.GetAssetPath(mf.sharedMesh).StartsWith(Gen))
                 {
+                    // the split parts are saved non-readable (no CPU copy in the build): readable while we unwrap
+                    var mso = new SerializedObject(mf.sharedMesh);
+                    var rp = mso.FindProperty("m_IsReadable");
+                    bool wasReadable = rp == null || rp.boolValue;
+                    if (!wasReadable) { rp.boolValue = true; mso.ApplyModifiedPropertiesWithoutUndo(); }
                     var uv2 = new List<Vector2>();
                     mf.sharedMesh.GetUVs(1, uv2);
                     if (uv2.Count == 0) { Unwrapping.GenerateSecondaryUVSet(mf.sharedMesh); EditorUtility.SetDirty(mf.sharedMesh); }
+                    if (!wasReadable) { mso.Update(); rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); EditorUtility.SetDirty(mf.sharedMesh); }
                 }
             }
             AssetDatabase.SaveAssets();

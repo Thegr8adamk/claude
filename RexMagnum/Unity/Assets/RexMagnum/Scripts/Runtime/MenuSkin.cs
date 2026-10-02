@@ -59,6 +59,7 @@ namespace RexMagnum
             Button = new GUIStyle(GUI.skin.button) { fontSize = F(22), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
                                                      border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(10, 10, 6, 6), richText = true };
             Skin(Button, Color.white, dark);
+            if (UiFont != null) Button.font = UiFont;
             Tab = new GUIStyle(Button) { fontSize = F(20) };
             Option = new GUIStyle(Button) { fontSize = F(19), fixedHeight = 40 * s, margin = new RectOffset(3, 3, 3, 3) };
             Panel = new GUIStyle(GUI.skin.box) { border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(12, 12, 10, 10) };
@@ -67,10 +68,29 @@ namespace RexMagnum
             RowSel.normal.background = rowSelTex;
         }
 
+        static Font uiFont;
+        static bool fontTried;
+        /// <summary>A clean system sans-serif (installed on the player's machine; nothing is downloaded), or null for
+        /// Unity's built-in font.</summary>
+        static Font UiFont
+        {
+            get
+            {
+                if (!fontTried)
+                {
+                    fontTried = true;
+                    try { uiFont = Font.CreateDynamicFontFromOSFont(new[] { "Segoe UI", "Helvetica Neue", "Roboto", "Noto Sans", "Arial" }, 32); }
+                    catch (System.Exception) { uiFont = null; }
+                }
+                return uiFont;
+            }
+        }
+
         static GUIStyle Text(int size, FontStyle fs, TextAnchor a, Color c, bool wrap)
         {
             // rich text: controller buttons show as coloured tokens (Glyph)
             var st = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = fs, alignment = a, wordWrap = wrap, richText = true };
+            if (UiFont != null) st.font = UiFont;
             st.normal.textColor = c;
             return st;
         }
