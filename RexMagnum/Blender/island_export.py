@@ -3,7 +3,7 @@
 Reads Island_v02.blend (built by build_island_v2.py) and writes Unity/Assets/RexMagnum/Island/:
   Buildings/<Asset>.fbx      one file per building zone, world coordinates, objects <Asset>_LOD0 / <Asset>_LOD1
   Vegetation/<Proto>.fbx     palms, jungle trees, ferns, boulders, grass clumps (local coordinates)
-  Vegetation/<Proto>_LOD1.fbx  ~1k-tri middle LOD of each palm / jungle tree (same generator, lod=1)
+  Vegetation/<Proto>_Mid.fbx   ~1k-tri middle LOD of each palm / jungle tree (same generator, lod=1)
   Textures/*.png             baked tileable PBR tiles (base, normal, mask), terrain layers, water normal, falls
   island_splat0/1.png        terrain paint weights (RGBA + RG) for 6 terrain layers
   Island.json                materials, assets, vegetation instances, terrain + spawn data for IslandBuilder.cs
@@ -640,7 +640,7 @@ def tree_protos():
 
 
 def export_tree_lod1(n, mats_used):
-    """<n>_LOD1.fbx: the same palm / jungle tree rebuilt by island_hq at lod=1 (same seed -> same silhouette,
+    """<n>_Mid.fbx (not _LOD1: Unity warns about a lone _LOD1 file name): the same palm / jungle tree rebuilt by island_hq at lod=1 (same seed -> same silhouette,
     same materials and Wind colours, ~1k tris). Built in a throw-away collection, not kept in the blend."""
     import island_hq as HQ
     import re
@@ -651,9 +651,9 @@ def export_tree_lod1(n, mats_used):
     objs = list(c.objects)
     ob = bpy.data.objects.new(n + "_Lite", joined_mesh(objs, n + "_Lite", mats_used))
     temp_collection().objects.link(ob)
-    export_fbx([ob], os.path.join(VEG, f"{n}_LOD1.fbx"), "LINEAR")
+    export_fbx([ob], os.path.join(VEG, f"{n}_Mid.fbx"), "LINEAR")
     tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    print(f"[Export] {n}_LOD1: {tris} tris", flush=True)
+    print(f"[Export] {n}_Mid: {tris} tris", flush=True)
     for o in objs + [ob]:
         me = o.data
         bpy.data.objects.remove(o)

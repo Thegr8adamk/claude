@@ -34,6 +34,22 @@ def is_clear(mat):
     return False
 
 
+def triangulate_ngons(objs):
+    """N-gons (caps, bevelled gun parts) as triangles at export: Unity's own triangulation discarded the non-planar /
+    concave ones ("A polygon of Mesh ... is self-intersecting and has been discarded"). Quads stay; custom normals
+    kept. A modifier (applied by use_mesh_modifiers), so the source mesh is unchanged."""
+    for o in objs:
+        if o.type != "MESH" or any(m.type == "TRIANGULATE" for m in o.modifiers):
+            continue
+        if not any(len(p.vertices) > 4 for p in o.data.polygons):
+            continue
+        md = o.modifiers.new("TriangulateNgons", "TRIANGULATE")
+        md.min_vertices = 5
+        md.quad_method = "BEAUTY"
+        md.ngon_method = "BEAUTY"
+        md.keep_custom_normals = True
+
+
 def join_opaque(coll, name):
     meshes = [o for o in coll.objects if o.type == "MESH" and not all(is_clear(m) for m in o.data.materials if m)
               and o.data.materials and o.name != name]
@@ -241,6 +257,7 @@ def main():
     for name in ALL:
         c = bpy.data.collections[name]
         objs = list(c.all_objects)
+        triangulate_ngons(objs)
         for x in bpy.context.view_layer.objects:
             x.select_set(x in objs)
         bpy.ops.export_scene.fbx(filepath=os.path.join(out, name + ".fbx"), use_selection=True,

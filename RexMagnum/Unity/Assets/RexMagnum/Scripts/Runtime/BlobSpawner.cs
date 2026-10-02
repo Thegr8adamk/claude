@@ -107,6 +107,7 @@ namespace RexMagnum
             var agent = b.GetComponent<NavMeshAgent>();
             Vector3 shore = b.transform.position;
             if (agent) agent.enabled = false;
+            b.navPending = false;                       // its own Update must not turn the agent on mid-rise
             Vector3 under = new Vector3(water.x, water.y - 1.6f, water.z);
             SlimeFX.Splat(water, Vector3.up, new Color(0.75f, 0.9f, 1f), 14);
             for (float t = 0f; t < 1.6f && b != null; t += Time.deltaTime)
@@ -118,7 +119,7 @@ namespace RexMagnum
             }
             if (b == null || b.IsDead) yield break;
             b.transform.position = shore;
-            if (agent) { agent.enabled = true; agent.Warp(shore); }
+            if (agent && !RuntimeNavMesh.TryEnable(agent)) b.navPending = true;   // no mesh there (yet): Blob retries quietly
         }
 
         void Update()

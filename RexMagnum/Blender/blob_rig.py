@@ -292,9 +292,11 @@ def A_pop(arm, t):
     grow = _smooth(t, 0.0, 0.7)
     gone = _smooth(t, 0.7, 1.0)
     body(arm, puff=0.4 * grow, squash=-0.1 * grow)
-    for pb in arm.pose.bones:
-        if gone > 0:
-            pb.scale = tuple(s * (1 - gone) + 0.001 for s in pb.scale)
+    if gone > 0:
+        # shrink at the Root only (every bone inherits it): scaling each bone to 0.001 multiplied down the chain
+        # (~1e-15 at the eye bones), and the FBX exporter wrote NaN keys for the bone-parented eye meshes
+        pb = _pb(arm, "Root")
+        pb.scale = tuple(s * (1 - gone) + 0.01 for s in pb.scale)
     for i in range(ntent(arm)):
         tentacle(arm, i, -25 * grow, wave=10, phase=t * 30 + i)
 

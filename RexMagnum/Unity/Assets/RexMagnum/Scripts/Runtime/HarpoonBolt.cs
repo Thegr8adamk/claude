@@ -142,10 +142,10 @@ namespace RexMagnum
         {
             yield return new WaitForSeconds(after);
             if (ag == null) yield break;
-            // back onto the NavMesh (the wall pin may have pushed the blob off it)
-            if (UnityEngine.AI.NavMesh.SamplePosition(ag.transform.position, out var hit, 3f, UnityEngine.AI.NavMesh.AllAreas))
-                ag.transform.position = hit.position;
-            ag.enabled = true;
+            var b = ag.GetComponent<Blob>();
+            if (b != null && b.IsDead) yield break;
+            // back onto the NavMesh (the wall pin may have pushed the blob off it); none near: the blob retries quietly
+            if (!RuntimeNavMesh.TryEnable(ag, 3f) && b != null) b.navPending = true;
         }
     }
 }

@@ -1912,12 +1912,12 @@ namespace RexMagnum.EditorTools
             // with SpeedTree shaders, so LODGroup trees drew the full mesh out to treeDistance); the picture is
             // baked from the full mesh
             var far = pr.kind == "palm" || pr.kind == "tree" ? TreeImpostor(mesh, mats, pr.name) : null;
-            // middle LOD: <Name>_LOD1.fbx, the same tree from island_hq at lod=1 (~1k tris instead of 3.2k-4.7k;
+            // middle LOD: <Name>_Mid.fbx (a lone _LOD1 file name made the importer warn), the same tree from island_hq at lod=1 (~1k tris instead of 3.2k-4.7k;
             // up to ~1200 trees within 200 m in the jungle). QualityAuto turns its shadows off on Low / phones.
             Renderer mid = null;
             if (far != null)
             {
-                var (lm, lmats) = BakedMesh(pr.fbx.Replace(".fbx", "_LOD1.fbx"), pr.name + "_LOD1");
+                var (lm, lmats) = BakedMesh(pr.fbx.Replace(".fbx", "_Mid.fbx"), pr.name + "_LOD1");
                 if (lm != null)
                 {
                     var mg = new GameObject(pr.name + "_LOD1");
@@ -1927,7 +1927,7 @@ namespace RexMagnum.EditorTools
                     mid.sharedMaterials = lmats;
                     mid.shadowCastingMode = ShadowCastingMode.On;
                 }
-                else Debug.LogWarning($"[Rex Magnum] {pr.name}_LOD1.fbx missing (island_export.py --trees): mesh -> picture");
+                else Debug.LogWarning($"[Rex Magnum] {pr.name}_Mid.fbx missing (island_export.py --trees): mesh -> picture");
             }
             if (far != null)
             {
@@ -2287,6 +2287,7 @@ namespace RexMagnum.EditorTools
                 }
             ShapePoolAccess(hts, ti, data, parent);          // ramp + deck rim + north bank (the buildings are placed already)
             ShapeBuildingAccess(hts, ti, data, parent);      // tiki bar, dive shop, buffet-terrace doors
+            ShapeCaveMouth(hts, ti, parent);                 // the boulder on the way into the cave mouth
             td.SetHeights(0, 0, hts);
 
             // layers
@@ -2588,14 +2589,17 @@ namespace RexMagnum.EditorTools
                     Put(rr, cc, Mathf.Lerp(Get(rr, cc), want, side));
                 }
             float doorAfter = Get(Idx(door.z + 1f), Idx(door.x));
-            Debug.Log($"[Rex Magnum] Pool access: rim raised {raised} cells to {rimTop:F2}; ramp z {door.z:F1} .. {deckZ:F1} " +
+            // the one summary line per build (an info message: the Console's info toggle must be on to see it)
+            Debug.Log($"[Rex Magnum] Pool access: DONE. {deckCells} deck cells, {graded} bank cells graded; rim raised {raised} cells to {rimTop:F2}; ramp z {door.z:F1} .. {deckZ:F1} " +
                       $"({rampLo:F2} -> {rampHi:F2}, slope {(rampHi - rampLo) / Mathf.Max(0.5f, deckZ - door.z) * 100f:F0}%); " +
                       $"ground at the doors {doorBefore:F2} -> {doorAfter:F2} (slab {slab:F2}).");
             if (Mathf.Abs(doorAfter - slab) > 0.3f) Debug.LogWarning($"[Rex Magnum] Pool access: ground at the lobby doors is {doorAfter - slab:F2} m from the slab.");
 
             // walk check paths: inside the lobby, out of the doors, up onto the deck, along it and off both outer sides;
             // and from the deck's north edge up the graded bank (at the deck column nearest the doors' x)
-            float alongZ = deckZ + 2f;
+            // 1 m in from the edge: at + 2 m the east run scraped the 0.8 m bandstand (planks x 64 - 76 from z -277 north,
+            // PoolArea.fbx), a stage, not a route; the lane between it and the deck edge is the real walkway
+            float alongZ = deckZ + 1f;
             walkLegs.Add(("hotel pool doors -> deck -> off the deck (W + E)", new[]
             {
                 new Vector3(door.x, slab, door.z - 4f), new Vector3(door.x, slab, door.z), new Vector3(door.x, deckTop, alongZ),
@@ -2633,6 +2637,48 @@ namespace RexMagnum.EditorTools
                     fill = Mathf.Max(fill, want - hv);
                 }
             return (cells, fill);
+        }
+
+        /// <summary>Cave mouth approach (walk check, checked on Cave.fbx and the RAW): a wet boulder of the pool ring
+        /// (x -161.3 .. -158.7, z 220.3 .. 222.3, top 28.23) sits on the straight line into the mouth (x -160, Tunnels)
+        /// and under the tunnel exit point, 0.55 - 0.63 m over the ground (27.4 - 27.7): no step <= 0.35. Finds the Cave
+        /// rock that sticks 0.3 - 1.5 m out of the ground on a strip along that line and raises the ground around it to
+        /// 0.2 m under its top, 1:2 back to the slope: the boulder sits half-buried in the bank and is a low step.</summary>
+        static void ShapeCaveMouth(float[,] hts, TerrainInfo ti, Transform world)
+        {
+            var caveT = world.Find("Cave");
+            if (caveT == null) { Debug.LogWarning("[Rex Magnum] Cave mouth: Cave missing, terrain not shaped."); return; }
+            Physics.SyncTransforms();
+            float cell = ti.size / (ti.res - 1), range = ti.maxH - ti.minH;
+            float Ground(float wx, float wz)          // bilinear, as the terrain draws it
+            {
+                float fx = Mathf.Clamp((wx + ti.size / 2) / cell, 0f, ti.res - 1.001f), fz = Mathf.Clamp((wz + ti.size / 2) / cell, 0f, ti.res - 1.001f);
+                int c = (int)fx, r = (int)fz;
+                float tx = fx - c, tz = fz - r;
+                float hv = Mathf.Lerp(Mathf.Lerp(hts[r, c], hts[r, c + 1], tx), Mathf.Lerp(hts[r + 1, c], hts[r + 1, c + 1], tx), tz);
+                return ti.minH + hv * range;
+            }
+            // the strip: the mouth line (x -160, z 214 .. 226, the leg and the exit point) +- 1.2 m (capsule + margin);
+            // further in the cave floor is under the ground and the roof over the ray start, so neither counts
+            var rayHits = new RaycastHit[16];
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue, topY = float.MinValue, g0 = 0f;
+            for (float wz = 214f; wz <= 226f; wz += 0.25f)
+                for (float wx = -161.2f; wx <= -158.8f; wx += 0.25f)
+                {
+                    float g = Ground(wx, wz);
+                    int n = Physics.RaycastNonAlloc(new Vector3(wx, g + 3f, wz), Vector3.down, rayHits, 4f, ~0, QueryTriggerInteraction.Ignore);
+                    for (int k = 0; k < n; k++)
+                    {
+                        float y = rayHits[k].point.y;
+                        if (!rayHits[k].collider.transform.IsChildOf(caveT) || y < g + 0.3f || y > g + 1.5f) continue;
+                        x0 = Mathf.Min(x0, wx); x1 = Mathf.Max(x1, wx); z0 = Mathf.Min(z0, wz); z1 = Mathf.Max(z1, wz);
+                        if (y > topY) { topY = y; g0 = g; }
+                    }
+                }
+            if (topY == float.MinValue) { Debug.Log("[Rex Magnum] Cave mouth: no rock over 0.3 m on the way in, terrain not shaped."); return; }
+            var (cells, fill) = RaisePad(hts, ti, x0 - 0.5f, x1 + 0.5f, z0 - 0.5f, z1 + 0.5f, topY - 0.2f, 2f);
+            Debug.Log($"[Rex Magnum] Cave mouth: rock x {x0:F1} .. {x1:F1}, z {z0:F1} .. {z1:F1}, top {topY:F2} ({topY - g0:F2} m over the ground); " +
+                      $"ground raised to {topY - 0.2f:F2}: {cells} cells, up to {fill:F2} m.");
         }
 
         /// <summary>Walkable entries for the beach buildings and the buffet-terrace doors (review, checked on the RAW and
@@ -2739,8 +2785,11 @@ namespace RexMagnum.EditorTools
             Physics.SyncTransforms();
             const float Radius = 0.32f, Height = 1.72f, StepUp = 0.35f;
             float y = path[0].y;
-            // the first ground under the start (the path's heights are only a guess: the beach is metres below the pads)
-            if (Physics.Raycast(path[0] + Vector3.up * 1.5f, Vector3.down, out RaycastHit h0, 30f, ~0, QueryTriggerInteraction.Ignore)) y = h0.point.y;
+            // the first ground under the start (the path's heights are only a guess: the beach is metres below the pads);
+            // ground over the guess (the dune behind the dive shop: 5.3 at the start, guess 3.66) is found from 12 m up,
+            // else the rays started under it and the check reported "no ground" on a plain slope
+            if (Physics.Raycast(path[0] + Vector3.up * 1.5f, Vector3.down, out RaycastHit h0, 30f, ~0, QueryTriggerInteraction.Ignore) ||
+                Physics.Raycast(path[0] + Vector3.up * 12f, Vector3.down, out h0, 40f, ~0, QueryTriggerInteraction.Ignore)) y = h0.point.y;
             int steps = 0, bad = 0;
             float worst = 0f;
             Vector3 at = new Vector3(path[0].x, y, path[0].z);
@@ -2768,7 +2817,14 @@ namespace RexMagnum.EditorTools
                     if (!Physics.Raycast(new Vector3(q.x, y + 0.9f, q.z), Vector3.down, out RaycastHit hit, 3f, ~0, QueryTriggerInteraction.Ignore))
                     {
                         bad++;
-                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check {name}: no ground (drop > 2 m) at {q.x:F1}, {q.z:F1} (leg {s}).");
+                        // ground over the ray start is a wall / bank (terrain is one-sided: the ray saw nothing), not a drop;
+                        // the walk goes on from that ground so one bad spot is not a run of follow-up errors
+                        bool above = Physics.Raycast(new Vector3(q.x, y + 12f, q.z), Vector3.down, out RaycastHit up, 11.1f, ~0, QueryTriggerInteraction.Ignore) &&
+                                     up.collider is TerrainCollider;          // not a ceiling / roof over the walker
+                        if (bad <= 8) Debug.LogWarning(above
+                            ? $"[Rex Magnum] Walk check {name}: ground {up.point.y - y:+0.00} m over the last step at {q.x:F1}, {up.point.y:F2}, {q.z:F1} (leg {s}, {up.collider.name})."
+                            : $"[Rex Magnum] Walk check {name}: no ground (drop > 2 m) at {q.x:F1}, {q.z:F1} (leg {s}).");
+                        if (above) y = up.point.y;
                         at = new Vector3(q.x, y, q.z);
                         continue;
                     }
@@ -2784,8 +2840,10 @@ namespace RexMagnum.EditorTools
                     at = new Vector3(q.x, y, q.z);
                 }
             }
-            if (bad == 0) Debug.Log($"[Rex Magnum] Walk check {name}: {steps} steps, no block, all steps <= {StepUp:F2} m (worst {worst:F2}).");
-            else Debug.LogWarning($"[Rex Magnum] Walk check {name}: {bad} of {steps} steps blocked, over {StepUp:F2} m or without ground.");
+            Vector3 p0 = path[0], p1 = path[path.Length - 1];
+            string span = $"({p0.x:F0}, {p0.z:F0}) -> ({p1.x:F0}, {p1.z:F0}), {path.Length - 1} legs";
+            if (bad == 0) Debug.Log($"[Rex Magnum] Walk check {name}: PASS, {span}, {steps} steps, no block, all steps <= {StepUp:F2} m (worst {worst:F2}).");
+            else Debug.LogWarning($"[Rex Magnum] Walk check {name}: FAIL, {span}, {bad} of {steps} steps blocked, over {StepUp:F2} m or without ground.");
         }
 
         // ---------------------------------------------------------------- ocean, sky, light, post

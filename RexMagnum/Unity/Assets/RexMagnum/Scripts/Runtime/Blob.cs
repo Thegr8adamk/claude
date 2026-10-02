@@ -176,6 +176,10 @@ namespace RexMagnum
         }
 
         NavMeshAgent agent;
+        /// <summary>Agent still off, waiting for a NavMesh under the blob (Update retries quietly). BlobSpawner clears it
+        /// while the blob rises out of the water and sets it again if the shore has no mesh yet.</summary>
+        [System.NonSerialized] public bool navPending;
+        float nextNavTry;
         float nextSlideSfx;
         Health health;
         Transform rex;
@@ -192,6 +196,7 @@ namespace RexMagnum
         void Awake()
         {
             agent = GetComponent<NavMeshAgent>();
+            navPending = !agent.enabled;            // prefabs start with the agent off: Update turns it on over the NavMesh
             startScale = transform.localScale;
             health = GetComponent<Health>();
             health.Damaged += OnDamaged;
@@ -413,7 +418,15 @@ namespace RexMagnum
                 nextSlideSfx = Time.time + Random.Range(1.5f, 3f);
                 Sfx.Play("blob_slide", transform.position, 0.45f);
             }
-            if (!agent.enabled) return;            // rising out of the water (BlobSpawner)
+            if (!agent.enabled)                    // rising out of the water (BlobSpawner), or no NavMesh under it yet
+            {
+                if (navPending && Time.time >= nextNavTry)
+                {
+                    nextNavTry = Time.time + 0.5f;
+                    if (RuntimeNavMesh.TryEnable(agent)) navPending = false;
+                }
+                return;
+            }
 
             // Angry: darker color + shake (brief); a little faster
             float angry = IsAngry ? 1f : 0f;
@@ -741,8 +754,7 @@ namespace RexMagnum
                 yield return null;
             }
             tr.position = shore;
-            agent.enabled = true;
-            agent.Warp(shore);
+            navPending = !RuntimeNavMesh.TryEnable(agent);                // no mesh at the shore point: Update retries
             busyUntil = 0f;
             nextAttack = Time.time + 0.5f;                                 // comes up throwing
         }

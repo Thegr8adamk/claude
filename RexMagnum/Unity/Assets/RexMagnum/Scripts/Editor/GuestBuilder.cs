@@ -80,6 +80,7 @@ namespace RexMagnum.EditorTools
                 agent.height = 1.75f;
                 agent.angularSpeed = 540f;
                 agent.acceleration = 12f;
+                agent.enabled = false;          // on at runtime once the NavMesh is built (Guest: RuntimeNavMesh.TryEnable)
                 var cap = root.AddComponent<CapsuleCollider>();
                 cap.radius = 0.3f; cap.height = 1.75f; cap.center = new Vector3(0, 0.88f, 0);
                 root.AddComponent<AudioSource>().spatialBlend = 1f;

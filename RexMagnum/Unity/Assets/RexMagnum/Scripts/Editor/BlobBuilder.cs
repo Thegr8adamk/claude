@@ -232,6 +232,7 @@ namespace RexMagnum.EditorTools
             agent.radius = r;
             agent.height = h;
             agent.baseOffset = 0f;
+            agent.enabled = false;              // on at runtime once the NavMesh is there (Blob: RuntimeNavMesh.TryEnable)
             root.AddComponent<Health>();
             var blob = root.AddComponent<Blob>();
             blob.kind = (Blob.Kind)Enum.Parse(typeof(Blob.Kind), kind);

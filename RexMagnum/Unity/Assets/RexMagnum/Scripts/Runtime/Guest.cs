@@ -121,19 +121,31 @@ namespace RexMagnum
                 if (hadPath) savedDestination = agent.destination;
                 agent.enabled = false;
             }
-            else
+            else if (EnsureAgent(true))
             {
-                agent.enabled = true;
-                if (agent.isOnNavMesh) agent.isStopped = lockedIn;             // SetLockedIn skipped this while the agent was off
-                if (hadPath && !lockedIn && agent.isOnNavMesh) agent.SetDestination(savedDestination);   // where it was going
+                if (hadPath && !lockedIn) agent.SetDestination(savedDestination);   // where it was going
             }
+        }
+
+        float nextNavTry;
+        /// <summary>The agent starts off (prefab): on once the runtime NavMesh is under the guest (snapped there),
+        /// else quietly retried every second. True: on the mesh now.</summary>
+        bool EnsureAgent(bool now = false)
+        {
+            if (agent.enabled) return agent.isOnNavMesh;
+            if (!now && Time.time < nextNavTry) return false;
+            nextNavTry = Time.time + 1f;
+            if (!RuntimeNavMesh.TryEnable(agent)) return false;
+            agent.isStopped = lockedIn;                                        // SetLockedIn skipped this while the agent was off
+            return true;
         }
 
         void Update()
         {
             if (rex != null) SleepCheck();
             if (dormant) return;
-            if (anim != null) anim.SetFloat(SpeedHash, agent.velocity.magnitude, 0.1f, Time.deltaTime);
+            EnsureAgent();
+            if (anim != null) anim.SetFloat(SpeedHash, agent.enabled ? agent.velocity.magnitude : 0f, 0.1f, Time.deltaTime);
             if (rex == null) return;
             float rexDist = Vector3.Distance(rex.position, transform.position);
 

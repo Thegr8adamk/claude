@@ -69,6 +69,9 @@ namespace RexMagnum.EditorTools
                 RexMagnum.QualityAuto.SetUrp(urp, "supportsMainLightShadows", "m_MainLightShadowsSupported", true);
                 RexMagnum.QualityAuto.SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
                 RexMagnum.QualityAuto.SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", true);
+                // lamp shadow atlas: 4096 with 512 px tiles = 64 maps (QualityAuto lets at most 36 cast at once)
+                RexMagnum.QualityAuto.SetUrp(urp, "additionalLightsShadowmapResolution", "m_AdditionalLightsShadowmapResolution", 4096);
+                RexMagnum.QualityAuto.SetUrp(urp, "additionalLightsShadowResolutionTierHigh", "m_AdditionalLightsShadowResolutionTierHigh", 512);
                 // box-projected interior reflection probes (room 304, lobby, corridors, tunnels) + soft blend between probes
                 RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
                 RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);

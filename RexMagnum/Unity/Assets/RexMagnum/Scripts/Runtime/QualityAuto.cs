@@ -46,6 +46,7 @@ namespace RexMagnum
 
         void Update()
         {
+            ShadowLightBudget(false);
             if (Time.unscaledTime < camCheck) return;
             camCheck = Time.unscaledTime + 0.5f;           // twice a second is enough
             if (seenCams.Count > 64) seenCams.RemoveWhere(c => c == null);
@@ -57,6 +58,61 @@ namespace RexMagnum
             System.Array.Clear(camBuf, 0, camCount);       // no stale references kept alive
         }
         Camera[] camBuf = new Camera[16];
+
+        // ---- lamp shadows: at most a few point / spot lights cast shadows at once (the nearest ones to the camera).
+        // All the built shadow lamps together (36+ maps, 6 per point light) did not fit the shadow atlas: URP shrank
+        // every one of them and warned. Budget: MaxShadowLights lights and MaxShadowMaps maps (point 6, spot 1);
+        // the atlas (Apply) holds 64 maps of 512 on Ultra, the only tier with additional light shadows.
+        const int MaxShadowLights = 8, MaxShadowMaps = 36;
+        readonly System.Collections.Generic.Dictionary<Light, LightShadows> builtShadow =
+            new System.Collections.Generic.Dictionary<Light, LightShadows>();
+        readonly System.Collections.Generic.List<Light> shadowCands = new System.Collections.Generic.List<Light>();
+        float nextBudget, nextLightScan;
+
+        void ShadowLightBudget(bool now)
+        {
+            if (!now && Time.unscaledTime < nextBudget) return;
+            nextBudget = Time.unscaledTime + 0.5f;
+            if (now || Time.unscaledTime >= nextLightScan)
+            {
+                // lights made later (zones, set pieces) too: a new scan every few seconds
+                nextLightScan = Time.unscaledTime + 5f;
+                foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                    if (l.type != LightType.Directional && !builtShadow.ContainsKey(l) && l.shadows != LightShadows.None)
+                        builtShadow[l] = l.shadows;
+            }
+            if (builtShadow.Count == 0) return;
+            var cam = Camera.main;
+            Vector3 eye = cam != null ? cam.transform.position : transform.position;
+            shadowCands.Clear();
+            bool dead = false;
+            foreach (var kv in builtShadow)
+            {
+                var l = kv.Key;
+                if (l == null) { dead = true; continue; }
+                if (l.isActiveAndEnabled && l.intensity > 0.01f) shadowCands.Add(l);
+                else if (l.shadows != LightShadows.None) l.shadows = LightShadows.None;
+            }
+            if (dead)
+            {
+                var gone = new System.Collections.Generic.List<Light>();
+                foreach (var kv in builtShadow) if (kv.Key == null) gone.Add(kv.Key);
+                foreach (var g in gone) builtShadow.Remove(g);
+            }
+            // nearest first, measured from the edge of the light's reach (a big lamp counts as nearer)
+            shadowCands.Sort((a, b) =>
+                ((a.transform.position - eye).magnitude - a.range).CompareTo((b.transform.position - eye).magnitude - b.range));
+            int lights = 0, maps = 0;
+            foreach (var l in shadowCands)
+            {
+                int cost = l.type == LightType.Point ? 6 : 1;
+                bool on = lights < MaxShadowLights && maps + cost <= MaxShadowMaps &&
+                          (l.transform.position - eye).magnitude < l.range + 30f;          // far lamps: no shadow worth a map
+                if (on) { lights++; maps += cost; }
+                var want = on ? builtShadow[l] : LightShadows.None;
+                if (l.shadows != want) l.shadows = want;
+            }
+        }
 
         void TierAA(Camera c)
         {
@@ -279,6 +335,11 @@ namespace RexMagnum
                 SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", t >= QualityTier.High || (t == QualityTier.Medium && !mobile));
                 // lamp / torch / tunnel-lamp shadows (point + spot) only on Ultra: they are the expensive ones
                 SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t == QualityTier.Ultra);
+                // their atlas: 4096 with 512 px tiles on Ultra (64 maps; ShadowLightBudget uses at most 36), 2048 below
+                SetUrp(urp, "additionalLightsShadowmapResolution", "m_AdditionalLightsShadowmapResolution", t == QualityTier.Ultra ? 4096 : 2048);
+                SetUrp(urp, "additionalLightsShadowResolutionTierLow", "m_AdditionalLightsShadowResolutionTierLow", 256);
+                SetUrp(urp, "additionalLightsShadowResolutionTierMedium", "m_AdditionalLightsShadowResolutionTierMedium", 256);
+                SetUrp(urp, "additionalLightsShadowResolutionTierHigh", "m_AdditionalLightsShadowResolutionTierHigh", 512);
                 urp.msaaSampleCount = msaa[i];
                 urp.supportsCameraDepthTexture = true;    // water depth colour + shore foam
                 urp.supportsCameraOpaqueTexture = false;
@@ -344,6 +405,7 @@ namespace RexMagnum
             float treeBiasMul = t >= QualityTier.High ? Mathf.Clamp(0.9f / Mathf.Max(0.01f, lodBias[i]), 0.3f, 1f) : 1f;
             foreach (var ter in terrains) TreeLodBias(ter, treeBiasMul);
             ApplyDisplay();
+            ShadowLightBudget(true);
             Debug.Log($"[Rex Magnum] Graphics: {t} (GPU {SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB, " +
                       $"RAM {SystemInfo.systemMemorySize} MB, {SystemInfo.processorCount} cores)");
         }

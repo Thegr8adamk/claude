@@ -81,6 +81,20 @@ namespace RexMagnum
                     a.Warp(hit.position);
         }
 
+        /// <summary>Turns a (disabled) agent on only where a NavMesh is: snapped to the nearest point within radius first.
+        /// Agents start disabled (prefabs): enabling one off the mesh logs "Failed to create agent ... not close enough
+        /// to the NavMesh" (the runtime mesh builds after the scene loads). False: no mesh there yet, quietly try later.</summary>
+        public static bool TryEnable(NavMeshAgent a, float radius = 4f)
+        {
+            if (a == null || !a.gameObject.activeInHierarchy) return false;
+            if (a.enabled) return a.isOnNavMesh;
+            if (!NavMesh.SamplePosition(a.transform.position, out NavMeshHit hit, radius, NavMesh.AllAreas)) return false;
+            a.transform.position = hit.position;
+            a.enabled = true;
+            if (a.isOnNavMesh) a.Warp(hit.position);
+            return a.isOnNavMesh;
+        }
+
         void OnDestroy()
         {
             if (instance.valid) instance.Remove();
