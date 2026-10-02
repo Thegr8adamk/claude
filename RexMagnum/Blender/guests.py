@@ -164,8 +164,9 @@ def is_leg(L, c):
 
 
 def clean_hems(ob, thickness=0.003):
-    """Straighten jagged cut edges: every open edge loop is projected onto its best-fit plane, then the cloth
-    gets a little thickness so the hem reads as fabric, not a paper edge."""
+    """Straighten jagged cut edges, then give the cloth a little thickness so the hem reads as fabric, not a
+    paper edge. A flat hem loop (sleeve, waist, leg) is projected onto its best-fit plane. A loop that is not flat
+    (tank-top neckline over the straps, armholes) is smoothed along the loop instead, so its shape is kept."""
     bm = bmesh.new()
     bm.from_mesh(ob.data)
     bnd = {v for e in bm.edges if e.is_boundary for v in e.verts}
@@ -173,27 +174,29 @@ def clean_hems(ob, thickness=0.003):
     for v0 in bnd:
         if v0 in seen:
             continue
-        loop, stack = [], [v0]
-        while stack:                       # connected boundary vertices = one hem loop
-            v = stack.pop()
-            if v in seen:
-                continue
+        loop, v, prev = [], v0, None
+        while v is not None and v not in seen:      # walk the hem loop in order
             seen.add(v)
             loop.append(v)
-            for e in v.link_edges:
-                if e.is_boundary:
-                    o = e.other_vert(v)
-                    if o not in seen:
-                        stack.append(o)
+            nxt = [e.other_vert(v) for e in v.link_edges if e.is_boundary and e.other_vert(v) is not prev]
+            nxt = [o for o in nxt if o not in seen]
+            prev, v = v, (nxt[0] if nxt else None)
         if len(loop) < 4:
             continue
         pts = np.array([tuple(v.co) for v in loop])
         c = pts.mean(axis=0)
-        _, _, vt = np.linalg.svd(pts - c)
-        nrm = Vector(vt[2])
-        cv = Vector(c)
-        for v in loop:
-            v.co -= nrm * (v.co - cv).dot(nrm)
+        _, sv, vt = np.linalg.svd(pts - c)
+        if sv[2] / math.sqrt(len(loop)) < 0.008:    # flat loop: project onto its plane
+            nrm, cv = Vector(vt[2]), Vector(c)
+            for v in loop:
+                v.co -= nrm * (v.co - cv).dot(nrm)
+            continue
+        n = len(loop)                               # curved loop: Taubin smoothing (no shrinking)
+        for it in range(40):
+            k = 0.5 if it % 2 == 0 else -0.53
+            new = [(loop[i - 1].co + loop[(i + 1) % n].co) * 0.5 for i in range(n)]
+            for i, v in enumerate(loop):
+                v.co = v.co + (new[i] - v.co) * k
     bm.to_mesh(ob.data)
     bm.free()
     so = ob.modifiers.new("Thickness", "SOLIDIFY")
@@ -205,6 +208,7 @@ def make_top(body, L, kind, colour, name, look):
     neck_z = float(L["neck"].z)
     hip, chest = L["hip_z"], L["chest_z"]
     mat = look.fabric_material(f"{name}_Top", None, colour, rough=0.75, weave_scale=1200, bump=0.15, sheen=0.08)
+    cy = float(body.co[(body.co[:, 2] > chest - 0.05) & (body.co[:, 2] < chest + 0.05)][:, 1].mean())
 
     def keep(c):
         t = arm_t(L, c)
@@ -212,9 +216,14 @@ def make_top(body, L, kind, colour, name, look):
         if kind == "bikini":
             return torso and chest - 0.09 < c.z < chest + 0.07 and (c.y < 0.02 or chest - 0.03 < c.z < chest + 0.0)
         if kind == "tank":
-            if t is not None:
+            if t is not None or not torso or c.z < hip - 0.06:
                 return False
-            return torso and hip - 0.06 < c.z < neck_z - 0.06 and (abs(c.x) > 0.04 or c.z < chest + 0.04)
+            ax, sx = abs(c.x), abs(L["sh_l"].x)
+            if ax < 0.42 * sx:                       # scoop neck: lower in front than at the back
+                return c.z < chest + (0.05 if c.y < cy else 0.1)
+            if ax < 0.72 * sx:                       # strap: up and over the shoulder
+                return c.z < neck_z + 0.04
+            return c.z < chest - 0.01                # armhole
         if kind in ("tshirt", "polo"):
             if t is not None:
                 return t < (0.45 if kind == "tshirt" else 0.4)
@@ -229,8 +238,8 @@ def make_top(body, L, kind, colour, name, look):
     def off(c, n):
         if kind == "bikini":
             return 0.004
-        if kind == "dress" and c.z < hip:
-            return 0.012 + (hip - c.z) * 0.18          # skirt flares out
+        if kind == "dress":
+            return 0.008 if c.z < hip + 0.1 else 0.012  # under the skirt: close to the body
         if c.z < hip + 0.06:
             return 0.018                                # hem hangs over the shorts
         return 0.009 if kind == "tank" else 0.012
@@ -243,32 +252,42 @@ def make_top(body, L, kind, colour, name, look):
     return ob
 
 
-def make_skirt(body, L, mat, name, rings=10, segs=40):
-    """Skirt: elliptical rings from just above the hip line (overlapping the bodice) down to the knee, flaring
-    out, with soft folds. Each ring is at least 1.5 cm outside the body, so the legs never poke through."""
+def make_skirt(body, L, mat, name, rings=12, segs=48):
+    """Skirt from the waist (overlapping the bodice) down to the knee. The top ring follows the body shape at the
+    bodice distance, so there is no step at the waist; lower rings flare out with soft folds. The radius per
+    direction never gets smaller going down (widest body point above), so the legs never poke through."""
     hip = L["hip_z"]
-    top_z, bot_z = hip + 0.08, L["knee_z"] + 0.03
+    top_z, bot_z = hip + 0.09, L["knee_z"] + 0.03
     sx = abs(float(L["sh_l"].x))
     co = body.co[np.abs(body.co[:, 0]) < sx * 1.3]       # torso + legs only (the A-pose hands hang beside the hips)
-    def half_width(z, axis):
-        band = co[(co[:, 2] > z - 0.03) & (co[:, 2] < z + 0.03)]
-        if len(band) == 0:
-            return 0.15
-        return float(np.abs(band[:, axis] - band[:, axis].mean()).max())
     cy = float(co[(co[:, 2] > hip - 0.03) & (co[:, 2] < hip + 0.03)][:, 1].mean())
+    ang = np.arctan2(co[:, 1] - cy, co[:, 0])
+    rad = np.hypot(co[:, 0], co[:, 1] - cy)
+    bins = ((ang % math.tau) / math.tau * segs).astype(int) % segs
+
+    def body_r(z0, z1):
+        """Largest body radius per direction between heights z0..z1 (holes filled from the neighbours)."""
+        m = (co[:, 2] > z0) & (co[:, 2] < z1)
+        r = np.zeros(segs)
+        np.maximum.at(r, bins[m], rad[m])
+        for _ in range(segs):
+            if r.min() > 0:
+                break
+            r = np.where(r > 0, r, np.maximum(np.roll(r, 1), np.roll(r, -1)))
+        return np.maximum(r, (np.roll(r, 1) + r + np.roll(r, -1)) / 3)   # no single-bin dips
+
     bm = bmesh.new()
-    prev = None
-    for r in range(rings + 1):
-        t = r / rings
+    prev, widest = None, np.zeros(segs)
+    for r_i in range(rings + 1):
+        t = r_i / rings
         z = top_z + (bot_z - top_z) * t
-        zs = [top_z - 0.04 + j * 0.02 for j in range(int((top_z - z) / 0.02) + 3)]   # widest point at or above z
-        rx = max(half_width(q, 0) for q in zs) + 0.018 + 0.09 * t * t
-        ry = max(half_width(q, 1) for q in zs) + 0.018 + 0.07 * t * t
+        widest = np.maximum(widest, body_r(z - 0.03, z + 0.03 if r_i else top_z + 0.01))
         ring = []
         for k in range(segs):
-            a = math.tau * k / segs
-            fold = 1 + 0.035 * t * math.sin(a * 8)
-            ring.append(bm.verts.new((math.cos(a) * rx * fold, cy + math.sin(a) * ry * fold, z)))
+            a = math.tau * (k + 0.5) / segs
+            flare = (0.09 * math.cos(a) ** 2 + 0.07 * math.sin(a) ** 2) * t * t
+            rr = (widest[k] + 0.009 + 0.012 * t + flare) * (1 + 0.035 * t * math.sin(a * 8))
+            ring.append(bm.verts.new((math.cos(a) * rr, cy + math.sin(a) * rr, z)))
         if prev:
             for k in range(segs):
                 bm.faces.new((prev[k], prev[(k + 1) % segs], ring[(k + 1) % segs], ring[k]))
@@ -284,6 +303,7 @@ def make_skirt(body, L, mat, name, rings=10, segs=40):
     bpy.context.scene.collection.objects.link(ob)
     so = ob.modifiers.new("Thickness", "SOLIDIFY")
     so.thickness = 0.003
+    so.offset = -1.0
     return ob
 
 
