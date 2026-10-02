@@ -58,3 +58,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 13:40 | Cart road + bridge in the full jungle (view through the trees) | 2026-10-02_1340_road_bridge_jungle.png |
 | 2026-10-02 14:00 | 26 more voice lines: Rex's 15 flirt takes, King Glorp's 6 boss lines (his own voice), the ending call (Marty + Rex) and 'I'm back.' | (audio) |
 | 2026-10-02 14:20 | 3 more Rex animations: pushing the dead golf cart (Rex gets out and pushes from behind), limping at low health, victory pose (King Glorp defeated + ending hero shot) | 2026-10-02_1420_push_limp_victory.png |
+| 2026-10-02 14:40 | Phone touch buttons get drawn icons (jump, use, pause, taunt, photo, hands, weapon wheel, camera); Action keeps its changing word | 2026-10-02_1440_touch_icons.png |

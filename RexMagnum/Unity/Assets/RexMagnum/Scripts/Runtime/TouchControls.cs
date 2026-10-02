@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -173,6 +174,13 @@ namespace RexMagnum
             TouchState.Set("Aim", act && Time.time - actionStart > 0.3f);
         }
 
+        readonly Dictionary<string, Texture2D> icons = new Dictionary<string, Texture2D>();
+        Texture2D Icon(string name)
+        {
+            if (!icons.TryGetValue(name, out var t)) { t = Resources.Load<Texture2D>("UI/Icons/" + name); icons[name] = t; }
+            return t;
+        }
+
         void OnGUI()
         {
             if (!TouchState.Active && !EditMode) return;
@@ -184,6 +192,15 @@ namespace RexMagnum
                 var rect = new Rect(c.x - rad, H - c.y - rad, rad * 2, rad * 2);
                 GUI.color = new Color(1, 1, 1, a);
                 GUI.DrawTexture(rect, circle);
+                var icon = label != null ? Icon(label) : null;
+                if (icon != null)                       // drawn icon (Resources/UI/Icons/<button>.png)
+                {
+                    GUI.color = new Color(1, 1, 1, Mathf.Clamp01(a * 1.8f));
+                    float k = rad * 0.55f;
+                    GUI.DrawTexture(new Rect(c.x - k, H - c.y - k, k * 2, k * 2), icon, ScaleMode.ScaleToFit);
+                    GUI.color = Color.white;
+                    return;
+                }
                 GUI.color = Color.white;
                 if (label != null) GUI.Label(rect, label, style);
             }
@@ -194,7 +211,7 @@ namespace RexMagnum
             Draw(Btn("Action"), Rad("Action"), word, opacity);
             Draw(Btn("Jump"), Rad("Jump"), "Jump", opacity);
             Draw(Btn("Use"), Rad("Use"), "Use", (WeaponPickup.Nearby != null || FoodPickup.Nearby != null) ? opacity * 1.6f : opacity * 0.4f);
-            Draw(Btn("Pause"), Rad("Pause"), "II", opacity);
+            Draw(Btn("Pause"), Rad("Pause"), "Pause", opacity);
             foreach (var n in top) Draw(Btn(n), Rad(n), n, opacity);
             if (moveId >= 0)
             {
