@@ -25,4 +25,14 @@ both in the environment settings (Edit > environment variables + allowed domains
 All 8 build steps exist (Rex, blobs, weapons, island, room 304 + first playable, all zones incl. hotel interiors,
 19 guests + outfit copies, golf + cart, day/night, blob factory, cave tunnels, King Glorp + ending, accomplishments,
 album, pause menu, settings, keyboard/controller/touch remap, save). Nothing has run in real Unity yet. All scripts pass `compile_check.sh` (0 errors).
-The hourly routine "Rex Magnum hourly build" is paused (owner request). Ask before turning it on again.
+Old routine "Rex Magnum hourly build" stays off. New routine "Rex Magnum hourly build (session 2)" is ON (owner asked:
+"keep building without me telling you to"); it wakes the session hourly at :31.
+
+## Tools that work in the cloud (session 2)
+| Tool | How |
+|---|---|
+| C# compile check | `bash RexMagnum/Tools/compile_check.sh` (installs dotnet-sdk-8.0 from apt if missing) |
+| Blender 5.0 | `pip install bpy pillow` (Python 3.11), then MPFB: `git clone --depth 1 https://github.com/makehumancommunity/mpfb2` and copy `src/mpfb` to `~/.config/blender/5.0/extensions/user_default/mpfb` |
+| Guests | `cd RexMagnum/Blender && python guests.py --only Name1,Name2` (re-export; ~3 min per guest) |
+| Rex swim clips | `python swim_export.py [--render out.png]` (no re-bake of Rex) |
+Blender previews of Rex in extreme poses can show a shirt spike from the Smooth/Solidify modifiers; the game mesh does not.
