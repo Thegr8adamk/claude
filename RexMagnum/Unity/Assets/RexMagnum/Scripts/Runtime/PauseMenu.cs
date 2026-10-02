@@ -16,7 +16,7 @@ namespace RexMagnum
         public static bool Open { get; private set; }
         int tab;
         Vector2 scroll;
-        string waitingFor;
+        string waitingFor, waitingPad;
         readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
         static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS", "CONTROLS" };
         GUIStyle title, label, button, small;
@@ -35,6 +35,19 @@ namespace RexMagnum
 
         void Update()
         {
+            if (waitingPad != null)
+            {
+                var g = Gamepad.current;
+                if (g == null) { waitingPad = null; return; }
+                foreach (var b in RMInput.PadChoices)
+                    if (g[b].wasPressedThisFrame)
+                    {
+                        RMInput.RebindPad(waitingPad, b);
+                        waitingPad = null;
+                        break;
+                    }
+                return;
+            }
             if (waitingFor != null)
             {
                 var k = Keyboard.current;
@@ -229,6 +242,19 @@ namespace RexMagnum
             GUILayout.Space(10);
             if (GUILayout.Button("RESET KEYBOARD", button, GUILayout.Width(300))) RMInput.ResetKeys();
             GUILayout.Space(10);
+            GUILayout.Space(16);
+            GUILayout.Label("CONTROLLER BUTTONS", title);
+            GUILayout.Label(Gamepad.current == null ? "Connect a controller to change its buttons." :
+                            "Click an action, then press the new button. If a button is in use, the two actions swap.", small);
+            foreach (var a in RMInput.PadActions)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(a, label, GUILayout.Width(300));
+                string b = waitingPad == a ? "press a button..." : RMInput.PadName(RMInput.PadFor(a));
+                if (GUILayout.Button(b, button, GUILayout.Width(260)) && Gamepad.current != null) waitingPad = a;
+                GUILayout.EndHorizontal();
+            }
+            if (GUILayout.Button("RESET CONTROLLER BUTTONS", button, GUILayout.Width(360))) RMInput.ResetPad();
             GUILayout.Space(16);
             GUILayout.Label("CONTROLLER + TOUCH", title);
             Toggle(" Swap sticks (left-handed)", "RexMagnum_SwapSticks", 0);

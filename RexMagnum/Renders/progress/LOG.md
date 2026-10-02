@@ -32,3 +32,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 02:50 | Beach: harpoon gun + harpoon ammo in the dive shop, coconut + cocktail at the tiki bar, coconuts on the sand (brief §5; the harpoon could not be found before). Ammo found before its weapon is kept | (code only) |
 | 2026-10-02 03:05 | Elevator is sometimes slime-filled (brief §6): slime puddles on the cab floor ride along, Rex can slip; ruins charge station for the golf cart | (code only) |
 | 2026-10-02 03:20 | On-screen button names follow the device used last (brief §7): keyboard shows your remapped keys, controller shows Xbox names, phone shows touch button names | (code only) |
+| 2026-10-02 03:40 | Controller buttons can be remapped (brief §7): Pause > Controls > CONTROLLER BUTTONS, swap on conflict, reset; saved like the keyboard set | (code only) |

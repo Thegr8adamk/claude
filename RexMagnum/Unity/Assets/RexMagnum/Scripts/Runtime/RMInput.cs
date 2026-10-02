@@ -98,8 +98,8 @@ namespace RexMagnum
         static bool runOn, aimOn;
         static int runFrame = -1, aimFrame = -1;
         static bool RunRaw => KHeld("Run") || (TouchState.Active && TouchState.Move.magnitude > 0.95f) ||
-                              (G != null && (G.leftStickButton.isPressed || MoveStick.magnitude > 0.95f));
-        static bool RunPressed => KDown("Run") || (G != null && G.leftStickButton.wasPressedThisFrame);
+                              (G != null && (PB("Run").isPressed || MoveStick.magnitude > 0.95f));
+        static bool RunPressed => KDown("Run") || (G != null && PB("Run").wasPressedThisFrame);
         static bool AimRaw => TouchState.Held("Aim") || (M != null && M.rightButton.isPressed) || (G != null && AimTrig.isPressed);
         static bool AimPressed => (M != null && M.rightButton.wasPressedThisFrame) || (G != null && AimTrig.wasPressedThisFrame);
 
@@ -129,7 +129,9 @@ namespace RexMagnum
         {
             switch (LastDevice)
             {
-                case DeviceKind.Gamepad: return PadNames.TryGetValue(action, out var p) ? p : action;
+                case DeviceKind.Gamepad:
+                    if (System.Array.IndexOf(PadActions, action) >= 0) return (action == "Wheel" ? "hold " : "") + PadName(PadFor(action));
+                    return PadNames.TryGetValue(action, out var p) ? p : action;
                 case DeviceKind.Touch: return action == "Wheel" ? "hold Weapon" : action == "NextWeapon" ? "Weapon" : action;
                 default:
                     if (action == "Action") return "Left click";
@@ -137,6 +139,65 @@ namespace RexMagnum
                     var key = KeyFor(action);
                     string n = key.ToString();
                     return n.StartsWith("Left") || n.StartsWith("Right") ? n.Substring(n.StartsWith("Left") ? 4 : 5) : n;
+            }
+        }
+
+        // ---- controller remap (brief section 7: button lists per device, swap on conflict)
+        public static readonly string[] PadActions = { "Jump", "Use", "Wheel", "Taunt", "Photo", "Hands", "Shoulder", "Camera", "Run", "Pause" };
+        static readonly GamepadButton[] PadDefaults = { GamepadButton.South, GamepadButton.West, GamepadButton.North,
+            GamepadButton.DpadUp, GamepadButton.DpadRight, GamepadButton.DpadDown, GamepadButton.DpadLeft,
+            GamepadButton.RightStick, GamepadButton.LeftStick, GamepadButton.Start };
+        /// <summary>Buttons that can be given to an action (sticks and triggers have their own swap options).</summary>
+        public static readonly GamepadButton[] PadChoices = { GamepadButton.South, GamepadButton.East, GamepadButton.West,
+            GamepadButton.North, GamepadButton.DpadUp, GamepadButton.DpadDown, GamepadButton.DpadLeft, GamepadButton.DpadRight,
+            GamepadButton.LeftStick, GamepadButton.RightStick, GamepadButton.Start, GamepadButton.Select };
+        static GamepadButton[] pad;
+        public static GamepadButton PadFor(string action)
+        {
+            if (pad == null) LoadPad();
+            int i = System.Array.IndexOf(PadActions, action);
+            return i < 0 ? GamepadButton.Select : pad[i];
+        }
+        static void LoadPad()
+        {
+            pad = new GamepadButton[PadActions.Length];
+            for (int i = 0; i < PadActions.Length; i++)
+                pad[i] = (GamepadButton)PlayerPrefs.GetInt("RexMagnum_Pad_" + PadActions[i], (int)PadDefaults[i]);
+        }
+        /// <summary>Give an action a controller button; if another action had it, the two swap.</summary>
+        public static void RebindPad(string action, GamepadButton b)
+        {
+            if (pad == null) LoadPad();
+            int i = System.Array.IndexOf(PadActions, action);
+            if (i < 0) return;
+            int other = System.Array.IndexOf(pad, b);
+            if (other >= 0 && other != i) { pad[other] = pad[i]; PlayerPrefs.SetInt("RexMagnum_Pad_" + PadActions[other], (int)pad[other]); }
+            pad[i] = b;
+            PlayerPrefs.SetInt("RexMagnum_Pad_" + action, (int)b);
+        }
+        public static void ResetPad()
+        {
+            foreach (var a in PadActions) PlayerPrefs.DeleteKey("RexMagnum_Pad_" + a);
+            LoadPad();
+        }
+        static UnityEngine.InputSystem.Controls.ButtonControl PB(string action) => G[PadFor(action)];
+        public static string PadName(GamepadButton b)
+        {
+            switch (b)
+            {
+                case GamepadButton.South: return "A";
+                case GamepadButton.East: return "B";
+                case GamepadButton.West: return "X";
+                case GamepadButton.North: return "Y";
+                case GamepadButton.DpadUp: return "D-pad up";
+                case GamepadButton.DpadDown: return "D-pad down";
+                case GamepadButton.DpadLeft: return "D-pad left";
+                case GamepadButton.DpadRight: return "D-pad right";
+                case GamepadButton.LeftStick: return "L-stick click";
+                case GamepadButton.RightStick: return "R-stick click";
+                case GamepadButton.Start: return "Menu";
+                case GamepadButton.Select: return "View";
+                default: return b.ToString();
             }
         }
 
@@ -184,7 +245,7 @@ namespace RexMagnum
                 return runOn || (TouchState.Active && TouchState.Move.magnitude > 0.95f);
             }
         }
-        public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && G.buttonSouth.wasPressedThisFrame);
+        public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame);
         public static bool ActionDown => TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
                                          (G != null && ActTrig.wasPressedThisFrame);
         public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
@@ -200,26 +261,26 @@ namespace RexMagnum
             }
         }
         public static bool CameraToggle => TouchState.Down("Camera") || (KDown("Camera")) ||
-                                           (G != null && G.rightStickButton.wasPressedThisFrame);
+                                           (G != null && PB("Camera").wasPressedThisFrame);
         public static bool SwapShoulder => (KDown("Shoulder")) ||
-                                           (G != null && G.dpad.left.wasPressedThisFrame);
-        public static bool Taunt => TouchState.Down("Taunt") || (KDown("Taunt")) || (G != null && G.dpad.up.wasPressedThisFrame);
-        public static bool Photo => TouchState.Down("Photo") || (KDown("Photo")) || (G != null && G.dpad.right.wasPressedThisFrame);
+                                           (G != null && PB("Shoulder").wasPressedThisFrame);
+        public static bool Taunt => TouchState.Down("Taunt") || (KDown("Taunt")) || (G != null && PB("Taunt").wasPressedThisFrame);
+        public static bool Photo => TouchState.Down("Photo") || (KDown("Photo")) || (G != null && PB("Photo").wasPressedThisFrame);
         /// <summary>Hands down/up: tap toggles (default); with "hold" the hands stay down only while the key is held
         /// (the controller reads it as press and release events).</summary>
         public static bool Hands => HandsHold
             ? (KDown("Hands") || (K != null && KeyFor("Hands") != Key.None && K[KeyFor("Hands")].wasReleasedThisFrame) ||
-               (G != null && (G.dpad.down.wasPressedThisFrame || G.dpad.down.wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
-            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && G.dpad.down.wasPressedThisFrame));
+               (G != null && (PB("Hands").wasPressedThisFrame || PB("Hands").wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
+            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame));
         public static bool Use => usedFrame != Time.frameCount &&
-                                  (TouchState.Down("Use") || (KDown("Use")) || (G != null && G.buttonWest.wasPressedThisFrame));
+                                  (TouchState.Down("Use") || (KDown("Use")) || (G != null && PB("Use").wasPressedThisFrame));
         static int usedFrame = -1;
         /// <summary>The Use press did something (pick up, eat, rescue...): nothing else reacts to it this frame.</summary>
         public static void ConsumeUse() => usedFrame = Time.frameCount;
-        public static bool Pause => TouchState.Down("Pause") || (KDown("Pause")) || (G != null && G.startButton.wasPressedThisFrame);
+        public static bool Pause => TouchState.Down("Pause") || (KDown("Pause")) || (G != null && PB("Pause").wasPressedThisFrame);
         /// <summary>Touch Weapon button: a short tap = next weapon, a hold opens the weapon wheel.</summary>
         public const float WheelHoldTime = 0.35f;
-        public static bool WheelHeld => KHeld("Wheel") || (G != null && G.buttonNorth.isPressed) ||
+        public static bool WheelHeld => KHeld("Wheel") || (G != null && PB("Wheel").isPressed) ||
                                         (TouchState.Held("Weapon") && TouchState.HeldFor("Weapon") >= WheelHoldTime);
         /// <summary>Wheel pointer: mouse / right stick / touch drag (screen-space direction).</summary>
         public static Vector2 WheelPointer
