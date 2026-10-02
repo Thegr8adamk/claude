@@ -179,7 +179,7 @@ namespace RexMagnum
                 else velocity.y += gravity * 0.5f * dt;                 // the kick: up and over the pool edge
                 if (InputEnabled && RMInput.Jump && Time.time >= lockedUntil && Time.time > kickUntil)
                 {
-                    velocity.y = 5.5f;
+                    velocity.y = 7.5f;          // ~1.6 m rise: enough to get over the pool coping
                     kickUntil = Time.time + 0.45f;
                 }
             }

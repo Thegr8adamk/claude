@@ -226,7 +226,7 @@ namespace RexMagnum
 
         void Update()
         {
-            if (!controller.InputEnabled) return;
+            if (!controller.InputEnabled) { Aiming = Scoped = false; return; }    // cart, ending: no scope left on
             if (wheel == null) wheel = GetComponent<WeaponWheel>();
             if (wheel != null && wheel.IsOpen) { Aiming = Scoped = false; return; }   // choosing a weapon: no attacks
             if (RMInput.NextWeapon) Cycle(1);
@@ -254,7 +254,9 @@ namespace RexMagnum
             }
             if (d.isGun)
             {
-                if (RMInput.ActionDown && Time.time >= nextShot) Shoot(d);
+                // touch: holding Action is the aim (scope), so the shot goes on release; a short tap = hip shot
+                bool fire = TouchState.Active ? RMInput.ActionUp : RMInput.ActionDown;
+                if (fire && Time.time >= nextShot) Shoot(d);
                 return;
             }
             if (RMInput.ActionDown) pressTime = Time.time;
@@ -352,7 +354,11 @@ namespace RexMagnum
                 return;
             }
             // hitscan from the camera (crosshair), tracer from the muzzle
-            Ray ray = new Ray(cameraRig.transform.position, (target - cameraRig.transform.position).normalized);
+            Vector3 dir = (target - cameraRig.transform.position).normalized;
+            // start past Rex: in tight rooms the third-person camera is close and the line passes through his capsule
+            Vector3 origin = cameraRig.transform.position;
+            origin += dir * Mathf.Max(0f, Vector3.Dot(transform.position + Vector3.up * 1.2f - origin, dir));
+            Ray ray = new Ray(origin, dir);
             if (Physics.Raycast(ray, out RaycastHit hit, d.reach, ~0, QueryTriggerInteraction.Ignore) &&
                 !hit.transform.IsChildOf(transform))
             {
@@ -439,8 +445,8 @@ namespace RexMagnum
 
         void ThrowCoconut(bool longThrow)
         {
-            Sfx.Play("coconut", transform.position);
             if (Ammo(WeaponId.Coconut) <= 0) return;
+            Sfx.Play("coconut", transform.position);
             ammo[WeaponId.Coconut]--;
             controller.SetTrigger(Animator.StringToHash("Throw"));       // overhand coconut throw
             controller.FaceAimFor(0.6f);

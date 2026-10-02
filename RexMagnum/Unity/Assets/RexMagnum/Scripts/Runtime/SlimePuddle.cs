@@ -32,7 +32,7 @@ namespace RexMagnum
         void Start()
         {
             born = Time.time;
-            mat = GetComponent<Renderer>().material;
+            mat = GetComponent<Renderer>().sharedMaterial;      // already its own copy (Spawn): no second copy
             c0 = mat.GetColor("_BaseColor");
         }
 

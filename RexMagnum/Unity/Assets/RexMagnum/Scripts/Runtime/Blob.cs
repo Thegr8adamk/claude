@@ -68,7 +68,8 @@ namespace RexMagnum
         Health health;
         Transform rex;
         Health rexHealth;
-        float nextAttack, stunUntil, angryUntil, busyUntil;
+        float nextAttack, stunUntil, angryUntil, busyUntil, alertUntil;
+        Vector3 startScale;
         bool wasStunned;
         MaterialPropertyBlock mpb;
         Color baseColor;
@@ -78,6 +79,7 @@ namespace RexMagnum
         void Awake()
         {
             agent = GetComponent<NavMeshAgent>();
+            startScale = transform.localScale;
             health = GetComponent<Health>();
             health.Damaged += OnDamaged;
             health.Died += OnDied;
@@ -131,7 +133,9 @@ namespace RexMagnum
             if (jellyRenderer != null)
             {
                 jellyRenderer.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", Color.Lerp(baseColor, baseColor * 0.45f, angry));
+                var dark = baseColor * 0.45f;
+                dark.a = baseColor.a;                          // darker, not more see-through
+                mpb.SetColor("_BaseColor", Color.Lerp(baseColor, dark, angry));
                 jellyRenderer.SetPropertyBlock(mpb);
             }
 
@@ -144,7 +148,7 @@ namespace RexMagnum
             }
             if (Disguised) { Wander(); return; }
             float dist = Vector3.Distance(transform.position, rex.position);
-            if (dist > sightRange && !IsAngry)
+            if (dist > sightRange && !IsAngry && Time.time >= alertUntil)
             {
                 if (agent.isOnNavMesh) agent.isStopped = true;
                 return;
@@ -181,7 +185,9 @@ namespace RexMagnum
             Vector3 mouth = transform.position + Vector3.up * HeightOf() * 0.6f + transform.forward * 0.4f;
             if (melee)
             {
-                if (Vector3.Distance(transform.position, rex.position) < attackRange + 0.6f && rexHealth != null)
+                // the whip reaches a few metres (attackRange is the distance to start an attack, also for spitting)
+                float reach = kind == Kind.Bouncer ? attackRange : kind == Kind.KingGlorp ? 4.5f : 2.4f;
+                if (Vector3.Distance(transform.position, rex.position) < reach + 0.6f && rexHealth != null)
                     rexHealth.Damage(damage, rex.position + Vector3.up, gameObject);
             }
             else
@@ -262,6 +268,10 @@ namespace RexMagnum
 
         void OnDamaged(float amount, Vector3 point, GameObject attacker)
         {
+            // hit from far away (sniper): it comes for Rex instead of sitting still outside its sight range
+            if (attacker != null && attacker.CompareTag("Player")) alertUntil = Mathf.Max(alertUntil, Time.time + 10f);
+            // a hit that does not kill: the weapon's death style (golf fling, knife leak) must not stay for a later kill
+            if (health.Current > 0f) { deathStyle = DeathStyle.Pop; flingSpeed = 0f; }
             if (!health.IsDead && !IsStunned) Play("Hit", 0.03f);
             Sfx.Play("blob_hit", point);
         }
@@ -333,7 +343,15 @@ namespace RexMagnum
                     rb.interpolation = RigidbodyInterpolation.Interpolate;
                     rb.AddForce(flingDirection.normalized * (flingSpeed > 0f ? flingSpeed : 14f), ForceMode.VelocityChange);
                     rb.AddTorque(Random.onUnitSphere * 8f, ForceMode.VelocityChange);
-                    yield return new WaitForSeconds(1.6f);
+                    // collide again (all colliders went off at death) so it lands instead of falling through the ground;
+                    // pop when it lands or hits water, at the latest after 3 s
+                    var body = GetComponent<CapsuleCollider>();
+                    if (body != null) body.enabled = true;
+                    for (float k = 0f; k < 3f; k += Time.deltaTime)
+                    {
+                        if (k > 0.4f && (rb.linearVelocity.sqrMagnitude < 1.5f || WaterVolume.Depth(t.position) > 0.3f)) break;
+                        yield return null;
+                    }
                     break;
                 case DeathStyle.Pinned:
                     Play("Pinned");
@@ -349,9 +367,12 @@ namespace RexMagnum
                 for (int i = 0; i < 2; i++)
                 {
                     Vector3 side = transform.right * (i == 0 ? -0.9f : 0.9f);
-                    var half = Instantiate(splitPrefab, transform.position + side, transform.rotation);
+                    // on the NavMesh (a golf-flung bouncer pops away from it); full-size base scale (a knife kill shrank it)
+                    Vector3 at = transform.position + side;
+                    if (NavMesh.SamplePosition(at, out NavMeshHit nh, 6f, NavMesh.AllAreas)) at = nh.position;
+                    var half = Instantiate(splitPrefab, at, transform.rotation);
                     half.isHalf = true;
-                    half.transform.localScale = transform.localScale * 0.5f;
+                    half.transform.localScale = startScale * 0.5f;
                     half.ApplyKind();
                 }
                 if (lastKiller != null && lastKiller.GetComponent<RexController>() != null)

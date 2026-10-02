@@ -76,7 +76,7 @@ namespace RexMagnum
                     {
                         hooked = blob;                                   // on the line: pull it in
                         hookedUntil = Time.time + 4f;
-                        RexVoice.Subtitle?.Invoke("F / X: pull the rope");
+                        RexVoice.Subtitle?.Invoke(RMInput.Btn("Use") + ": pull the rope");
                         return;
                     }
                 }

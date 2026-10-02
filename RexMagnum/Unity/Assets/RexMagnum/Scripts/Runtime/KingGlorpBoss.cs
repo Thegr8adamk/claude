@@ -99,7 +99,11 @@ namespace RexMagnum
             int p = health.Fraction > 0.66f ? 1 : health.Fraction > 0.33f ? 2 : 3;
             if (p != phase) { phase = p; StartCoroutine(PhaseChange()); }
             if (Time.time > nextAbsorb) { nextAbsorb = Time.time + (phase == 3 ? 12f : 18f); StartCoroutine(Absorb()); }
-            if (phase >= 2 && Time.time > nextMinions) { nextMinions = Time.time + 25f; Minions(); }
+            if (phase >= 2 && Time.time > nextMinions)
+            {
+                nextMinions = Time.time + 25f;
+                if (Blob.LivingNear(transform.position, 30f) < 7) Minions();     // a long fight does not pile up blobs
+            }
             if (phase == 3 && Time.time > nextWave) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
             if (Time.time > nextLine) { nextLine = Time.time + 14f; Say(GlorpLines[Random.Range(1, GlorpLines.Length)]); }
             // keep armor pieces stuck to the body (they ride along)

@@ -97,7 +97,8 @@ namespace RexMagnum
             if (driving && Mathf.Abs(speed) > 0.1f)
             {
                 float dist = Mathf.Abs(speed) * Time.fixedDeltaTime;
-                float uphill = Mathf.Max(0f, Vector3.Dot(transform.forward * Mathf.Sign(speed), Vector3.up)) * 3f;
+                // the cart's tilt is frozen, so climbing shows in the vertical speed
+                float uphill = Mathf.Clamp01(rb.linearVelocity.y / Mathf.Max(0.5f, Mathf.Abs(speed))) * 3f;
                 float drain = 0.05f * dist * (1f + (Mathf.Abs(speed) > 6f ? 0.6f : 0f) + uphill);
                 if (lights) drain += 0.6f / 60f * Time.fixedDeltaTime;
                 Progress.Add("cart_m_frac", Mathf.RoundToInt(dist * 100f));
@@ -119,6 +120,7 @@ namespace RexMagnum
         void Enter()
         {
             Driven = this;
+            RMInput.ConsumeUse();
             rex.InputEnabled = false;
             var cc = rex.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
@@ -128,7 +130,14 @@ namespace RexMagnum
         void Exit()
         {
             Driven = null;
+            // first free spot: left, right, behind, then on top (not inside a wall, a tree or the other cart)
             Vector3 p = transform.position - transform.right * 1.3f + Vector3.up * 0.2f;
+            foreach (var o in new[] { -transform.right * 1.3f, transform.right * 1.3f, -transform.forward * 2.4f, Vector3.up * 2.2f })
+            {
+                Vector3 q = transform.position + o + Vector3.up * 0.2f;
+                if (!Physics.CheckCapsule(q + Vector3.up * 0.35f, q + Vector3.up * 1.45f, 0.3f, ~0, QueryTriggerInteraction.Ignore)) { p = q; break; }
+            }
+            RMInput.ConsumeUse();
             rex.transform.position = p;
             var cc = rex.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = true;

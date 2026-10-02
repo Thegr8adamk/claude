@@ -118,10 +118,11 @@ namespace RexMagnum
             float dt = Time.deltaTime;
             if (InputEnabled)
             {
-                if (RMInput.CameraToggle)
+                if (RMInput.CameraToggle && !(weapons != null && weapons.Scoped))     // not while looking through the scope
                     SetMode(Mode == CameraMode.FirstPerson ? CameraMode.ThirdPerson : CameraMode.FirstPerson);
                 if (RMInput.SwapShoulder) side = -side;
                 Vector2 look = RMInput.LookDelta;
+                if (weapons != null && weapons.Scoped) look *= 12f / Mathf.Max(1f, FovSetting);   // scope (12°): same feel as unzoomed
                 if (VRControlled)
                 {
                     // the headset does up/down; the stick or mouse turns Rex (smooth, or 30-degree snaps: less sickness)
@@ -239,7 +240,7 @@ namespace RexMagnum
         {
             Ray ray = new Ray(transform.position, transform.forward);
             // aim assist (phone + controller, setting): pull the aim to the nearest blob within 4 degrees
-            if (RMInput.AimAssist && (TouchState.Active || UnityEngine.InputSystem.Gamepad.current != null))
+            if (RMInput.AimAssist && (TouchState.Active || RMInput.LookIsStick))      // not for mouse players
             {
                 Blob best = null;
                 float bestAng = 4f;

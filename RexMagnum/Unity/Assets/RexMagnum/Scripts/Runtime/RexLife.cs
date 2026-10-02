@@ -35,7 +35,7 @@ namespace RexMagnum
             startYaw = transform.eulerAngles.y;
             health.Damaged += (a, p, by) =>
             {
-                if (health.IsDead) return;
+                if (health.IsDead || health.Current <= 0f) return;    // the killing blow: no flinch saved for the respawn
                 ctrl.Hurt();
                 if (health.Fraction < 0.25f && !lowSaid) { lowSaid = true; RexVoice.Say(gameObject, "LowHealth", true); }
                 else RexVoice.Say(gameObject, "Hurt");
