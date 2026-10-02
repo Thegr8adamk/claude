@@ -2315,9 +2315,9 @@ def river_surface(ha, river, name="SlimeRiver"):
     rows = []
     for (x, y, z, d, slope, dist) in prof:
         side = Vector((-d.y, d.x, 0))
-        w = RIVER_HALF * (1.0 - min(slope * 2.0, 0.25))     # rapids squeeze the river a little
+        w = RIVER_HALF * (1.0 - min(slope * 0.6, 0.25))     # rapids squeeze the river a little
         rows.append([(bm.verts.new((x + side.x * a * w, y + side.y * a * w, z)), a * w, dist,
-                      min(max((slope - 0.03) / 0.09, 0.0), 1.0), min(slope / 0.12, 1.0), abs(a)) for a in across])
+                      min(max((slope - 0.12) / 0.25, 0.0), 1.0), min(slope / 0.3, 1.0), abs(a)) for a in across])
     for r in range(len(rows) - 1):
         for q in range(len(across) - 1):
             cs = (rows[r][q], rows[r][q + 1], rows[r + 1][q + 1], rows[r + 1][q])
@@ -2352,7 +2352,7 @@ def river_rocks(m, ha, river, skip=(), seed=31):
             continue
         side = Vector((-d.y, d.x, 0))
         c = Vector((x, y, 0))
-        w = RIVER_HALF * (1.0 - min(slope * 2.0, 0.25))
+        w = RIVER_HALF * (1.0 - min(slope * 0.6, 0.25))
         # banks: a boulder on each side about every 8-14 m, half buried, partly in the water
         for s in (-1, 1):
             if rng.random() < 0.3:
@@ -2364,7 +2364,7 @@ def river_rocks(m, ha, river, skip=(), seed=31):
                        m["wetrock"] if abs(o) < w + 0.3 else m["rock"], seed=rng.randrange(1 << 20),
                        base="BankRock", detail=2)
         # rapids: a few stream boulders + foam behind them
-        if slope > 0.05 and dist - last_rapid > 4.0:
+        if slope > 0.12 and dist - last_rapid > 5.0:
             last_rapid = dist
             for _ in range(rng.randint(1, 3)):
                 o = rng.uniform(-w * 0.75, w * 0.75)

@@ -91,7 +91,41 @@ def heightmap(res=RES, seed=304):
     # sea floor outside
     h = np.where(land > 0, h, -6 * (1 - land))
     h = np.where(land <= 0, -8.0, h - (1 - land) * 8)
+    h = carve_river(X, Y, h, rx, ry)
     return X, Y, h, (rx, ry)
+
+
+def river_surface_z(h, rx, ry):
+    """Water level along the river: ground + 0.25 m, never higher than the point upstream (water does not run
+    uphill). Same rule as island_assets.river_profile."""
+    n = h.shape[0] - 1
+    out, last = [], None
+    for x, y in zip(rx, ry):
+        fx = min(max((x + SIZE / 2) / SIZE * n, 0), n - 1e-6)
+        fy = min(max((y + SIZE / 2) / SIZE * n, 0), n - 1e-6)
+        ix, iy, tx, ty = int(fx), int(fy), fx - int(fx), fy - int(fy)
+        z = (h[iy, ix] * (1 - tx) * (1 - ty) + h[iy, ix + 1] * tx * (1 - ty) + h[iy + 1, ix] * (1 - tx) * ty
+             + h[iy + 1, ix + 1] * tx * ty) + 0.25
+        z = max(z, 0.2)
+        last = z if last is None else min(z, last)
+        out.append(last)
+    return np.array(out)
+
+
+def carve_river(X, Y, h, rx, ry, half=8.0, bank=6.0, depth=0.8):
+    """Cut a channel along the river so the water surface always lies in it: bed = water level - depth across the
+    river, then a bank that rises back to the ground. Where the land bumps up above the water, this cuts a gorge."""
+    zs = river_surface_z(h, rx, ry)
+    bed = np.full_like(h, np.inf)
+    for x, y, z in zip(rx[::2], ry[::2], zs[::2]):
+        d = np.sqrt((X - x) ** 2 + (Y - y) ** 2)
+        m = d < half + bank
+        if not m.any():
+            continue
+        t = np.clip((d[m] - half * 0.8) / (half * 0.2 + bank), 0, 1)
+        target = z - depth * (1 - t) + t * t * 6.0          # flat bed, then a bank that climbs 6 m
+        bed[m] = np.minimum(bed[m], target)
+    return np.minimum(h, bed)
 
 
 def save_unity_raw(h, path):
