@@ -116,10 +116,20 @@ namespace RexMagnum
         public void Die()
         {
             SetTrigger(DeathHash);
+            SetDead(true);
             lockedUntil = Time.time + 999f;
         }
 
-        public void Revive() => lockedUntil = 0f;
+        public void Revive() { lockedUntil = 0f; SetDead(false); }
+
+        static readonly int DeadHash = Animator.StringToHash("Dead");
+        void SetDead(bool on)
+        {
+            // controllers built before the "Dead" parameter existed simply skip it
+            foreach (var a in new[] { bodyAnimator, armsAnimator })
+                if (a != null && a.isActiveAndEnabled)
+                    foreach (var p in a.parameters) if (p.nameHash == DeadHash) { a.SetBool(DeadHash, on); break; }
+        }
 
         /// <summary>Dead (or on the floor after a slip): no attacks.</summary>
         public bool Locked => Time.time < lockedUntil;

@@ -270,6 +270,7 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("Drive", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Push", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Hurt", AnimatorControllerParameterType.Bool);
+            ac.AddParameter("Dead", AnimatorControllerParameterType.Bool);     // a hit or a taunt must not stand a dead Rex up
             string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing", "Victory" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
@@ -355,6 +356,12 @@ namespace RexMagnum.EditorTools
                 outLimp.AddCondition(AnimatorConditionMode.IfNot, 0, "Hurt");
                 outLimp.hasExitTime = false;
                 outLimp.duration = 0.3f;
+                // hurt + in water: back to Locomotion, which then goes to Swim (else he limps while swimming)
+                toLimp.AddCondition(AnimatorConditionMode.IfNot, 0, "Swim");
+                var limpSwim = limp.AddTransition(loco);
+                limpSwim.AddCondition(AnimatorConditionMode.If, 0, "Swim");
+                limpSwim.hasExitTime = false;
+                limpSwim.duration = 0.1f;
             }
 
             var map = new Dictionary<string, string>
@@ -372,6 +379,7 @@ namespace RexMagnum.EditorTools
                 st.motion = clip;
                 var tin = sm.AddAnyStateTransition(st);
                 tin.AddCondition(AnimatorConditionMode.If, 0, kv.Key);
+                if (kv.Key != "Death") tin.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
                 tin.duration = 0.08f;
                 tin.canTransitionToSelf = false;
                 if (kv.Key == "Death") continue;   // stays down

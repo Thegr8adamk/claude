@@ -44,11 +44,13 @@ namespace RexMagnum.EditorTools
                     AssetDatabase.CreateAsset(existing, "Assets/Settings/RexMagnum_URP.asset");
                 }
                 GraphicsSettings.defaultRenderPipeline = existing;
+                int level = QualitySettings.GetQualityLevel();
                 for (int i = 0; i < QualitySettings.names.Length; i++)
                 {
                     QualitySettings.SetQualityLevel(i, false);
                     QualitySettings.renderPipeline = existing;
                 }
+                QualitySettings.SetQualityLevel(level, false);   // keep the editor on the level it had
                 notes.AppendLine("- URP turned on.");
             }
             var urp = (UniversalRenderPipelineAsset)GraphicsSettings.defaultRenderPipeline;

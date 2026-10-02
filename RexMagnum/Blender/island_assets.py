@@ -867,8 +867,10 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
                     bm.faces.new((bot[f], bot[f + 1], top[f + 1], top[f]))
                 k._ob("Curtain", bm, cm, smooth=True)
             k.box((xa, cy_ - 0.015, z + F - 0.12), (xb, cy_ + 0.015, z + F - 0.08), m["alu"], "CurtainRail")
-        # balcony furniture (north side) on ~60% of rooms
-        if rng.random() < 0.6:
+        # balcony furniture (north side) on ~60% of rooms; not on Rex's balcony (room304() furnishes it, and the towel
+        # pickup must not sit inside a random table or towel)
+        r304 = fl == 2 and i == ROOM304_BAY
+        if rng.random() < 0.6 and not r304:
             yb0 = y1 + 0.3
             xc = (xa + xb) / 2
             k.disc((xc, yb0 + 0.7, z + 0.25), 0.3, 0.02, m["alu"], base="TableTop").location.z = z + 0.95
@@ -881,7 +883,7 @@ def rooms(k, m, fl, z, F, x0, y0, y1, bay, B):
                               m["alu"], base="ChairLeg")
                 k.box((cx_ - 0.23, yb0 + 0.47, z + 0.7), (cx_ + 0.23, yb0 + 0.93, z + 0.74), m["teak"], "ChairSeat")
                 k.box((cx_ - 0.23, yb0 + 0.9, z + 0.74), (cx_ + 0.23, yb0 + 0.94, z + 1.15), m["teak"], "ChairBack")
-        if rng.random() < 0.3:   # towel draped over the balcony rail (both sides of the top rail)
+        if rng.random() < 0.3 and not r304:   # towel draped over the balcony rail (both sides of the top rail)
             xc = rng.uniform(xa + 0.4, xb - 1.2)
             tm = rng.choice([m["towel1"], m["towel2"], m["cushion"]])
             k.box((xc, y1 + 1.6, z + 0.7), (xc + 0.8, y1 + 1.66, z + 1.21), tm, "Towel")
