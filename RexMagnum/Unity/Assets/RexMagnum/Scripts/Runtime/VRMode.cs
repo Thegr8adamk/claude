@@ -34,6 +34,7 @@ namespace RexMagnum
         Vector3 headPos, headZero;
         bool zeroed;
         float yawZero;
+        int viewBefore = 1;
 
         void Awake()
         {
@@ -85,6 +86,7 @@ namespace RexMagnum
             if (m == null)
             {
                 Status = "VR is not installed. In Unity: Rex Magnum > Add VR Support.";
+                PlayerPrefs.SetInt(PrefKey, 0);          // the setting shows OFF again, and no retry at every start
                 busy = false;
                 yield break;
             }
@@ -94,6 +96,7 @@ namespace RexMagnum
             if (loader == null)
             {
                 Status = "No VR headset found. Connect the headset (Quest Link / SteamVR), then turn VR on again.";
+                PlayerPrefs.SetInt(PrefKey, 0);
                 busy = false;
                 yield break;
             }
@@ -106,6 +109,7 @@ namespace RexMagnum
             {
                 StopXRNow();
                 Status = "The headset did not start. Put it on, check the headset app (Quest Link / SteamVR), then turn VR on again.";
+                PlayerPrefs.SetInt(PrefKey, 0);
                 yield break;
             }
             Active = true;
@@ -138,6 +142,7 @@ namespace RexMagnum
             if (dev != null && cam != null) dev.Invoke(null, new object[] { cam, true });
             if (rig != null)
             {
+                viewBefore = PlayerPrefs.GetInt("RexMagnum_CameraMode", 1);     // SetMode below saves first person
                 rig.SetMode(RexCameraRig.CameraMode.FirstPerson, true);
                 rig.VRControlled = true;
             }
@@ -147,7 +152,12 @@ namespace RexMagnum
 
         void Leave()
         {
-            if (rig != null) rig.VRControlled = false;
+            if (rig != null)
+            {
+                rig.VRControlled = false;
+                // back to the view the player had chosen (VR forced first person)
+                rig.SetModeFromSettings(viewBefore == 0 ? RexCameraRig.CameraMode.FirstPerson : RexCameraRig.CameraMode.ThirdPerson);
+            }
             if (cam != null) cam.nearClipPlane = 0.03f;
             Changed?.Invoke(false);
         }

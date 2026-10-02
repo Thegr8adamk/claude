@@ -14,7 +14,10 @@ namespace RexMagnum
         Camera cam;
         RexController rex;
         bool slipped, heroed;
-        int lastCall = -1;
+        int lastCall = -1, nextCall;
+        // the call is timed by its voice clips (Marty's long line is 5 s): the receipt and "I'm back" follow it
+        float nextCallAt = 7f, tReceipt = 99f, tBack = 99f, tEnd = 99f;
+        AudioSource voice;
 
         static readonly string[] Marty =
         {
@@ -38,10 +41,12 @@ namespace RexMagnum
                 rex.InputEnabled = false;
                 // Rex cannot move in the cutscene: blobs still near him stop for its length (about 26 s)
                 foreach (var b in Blob.All)
-                    if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) { b.Stun(30f); stunned.Add(b); }
+                    if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) { b.Stun(45f); stunned.Add(b); }
             }
             var main = Camera.main;
             cam = new GameObject("EndingCam").AddComponent<Camera>();
+            voice = cam.gameObject.AddComponent<AudioSource>();
+            voice.spatialBlend = 0f;
             if (main != null) { cam.CopyFrom(main); cam.depth = main.depth + 20f; }
             cam.fieldOfView = 50f;
         }
@@ -60,8 +65,25 @@ namespace RexMagnum
         {
             if (PauseMenu.Open) return;      // wait behind the pause menu (it runs on unscaled time; keys there must not skip it)
             t += Time.unscaledDeltaTime;
-            if (t > 3f && RMInput.AnyKey && t < 22f) t = 22f;                 // skip to "I'm back."
-            if (rex == null) { if (t > 26f) Destroy(gameObject); return; }
+            if (t > 3f && RMInput.AnyKey && t < tBack)                       // skip to "I'm back."
+            {
+                if (voice != null) voice.Stop();
+                tReceipt = tBack = t;
+                tEnd = Mathf.Max(t, 7f) + 4f;      // the hero shot comes after the phone video
+                lastCall = nextCall = Marty.Length;
+            }
+            if (t >= 7f && nextCall < Marty.Length && t >= nextCallAt)
+            {
+                lastCall = nextCall++;
+                nextCallAt = t + PlayLine($"Voice/Ending/call_{lastCall + 1:00}") + 0.3f;
+            }
+            else if (nextCall == Marty.Length && tReceipt > 98f && t >= nextCallAt)
+            {
+                tReceipt = t;
+                tBack = t + 8f;
+                tEnd = tBack + 4f;
+            }
+            if (rex == null) { if (t > tEnd) Destroy(gameObject); return; }
             Vector3 p = rex.transform.position, f = rex.transform.forward, r = rex.transform.right;
             if (t < 7f)
             {
@@ -71,10 +93,10 @@ namespace RexMagnum
                 cam.transform.position = p + f * zoom + r * 1.2f + Vector3.up * 1.1f + Random.insideUnitSphere * 0.015f;
                 cam.transform.LookAt(p + Vector3.up * 0.8f);
             }
-            else if (t < 22f)
+            else if (t < tBack)
             {
                 // the call and the receipt: slow push-in on Rex
-                float k = (t - 7f) / 15f;
+                float k = Mathf.Clamp01((t - 7f) / 15f);
                 cam.transform.position = p + f * Mathf.Lerp(3f, 2f, k) + r * 0.6f + Vector3.up * 1.6f;
                 cam.transform.LookAt(p + Vector3.up * 1.5f);
             }
@@ -85,17 +107,21 @@ namespace RexMagnum
                 cam.transform.position = p + f * 3.2f - r * 0.8f + Vector3.up * 0.5f;
                 cam.transform.LookAt(p + Vector3.up * 1.4f);
             }
-            if (t > 26f) Destroy(gameObject);
+            if (t > tEnd) Destroy(gameObject);
         }
 
-        void PlayLine(string path)
+        /// <summary>Plays a line on the ending's own voice source (Voices volume, stops on skip); returns its length.</summary>
+        float PlayLine(string path)
         {
             var clip = Resources.Load<AudioClip>(path);
-            if (clip != null) AudioSource.PlayClipAtPoint(clip, cam != null ? cam.transform.position : Vector3.zero, 1f);
+            if (clip == null) return 1.75f;
+            if (voice != null) voice.PlayOneShot(clip, AudioMix.Voice);
+            return clip.length;
         }
 
         void OnGUI()
         {
+            if (PauseMenu.Open) return;
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             var big = new GUIStyle(GUI.skin.label) { fontSize = (int)(44 * s), alignment = TextAnchor.MiddleCenter, wordWrap = true, fontStyle = FontStyle.Bold };
             var mid = new GUIStyle(big) { fontSize = (int)(30 * s) };
@@ -122,17 +148,16 @@ namespace RexMagnum
                 return;
             }
             GUI.color = new Color(0, 0, 0, 0.7f);
-            if (t < 14f)
+            if (t < tReceipt)
             {
                 GUI.DrawTexture(new Rect(0, h * 0.72f, w, h * 0.2f), Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                int i = Mathf.Clamp((int)((t - 7f) / 1.75f), 0, Marty.Length - 1);
-                if (i != lastCall) { lastCall = i; PlayLine($"Voice/Ending/call_{i + 1:00}"); }
+                int i = Mathf.Clamp(lastCall, 0, Marty.Length - 1);
                 mid.normal.textColor = new Color(1f, 0.85f, 0.4f);
                 GUI.Label(new Rect(w * 0.1f, h * 0.72f, w * 0.8f, h * 0.2f), (t < 7.8f ? "(phone rings) " : "") + Marty[i], mid);
                 return;
             }
-            if (t < 22f)
+            if (t < tBack)
             {
                 // the receipt
                 float rw = h * 0.55f, rh = h * 0.8f, rx = w * 0.62f, ry = h * 0.1f;
@@ -143,7 +168,7 @@ namespace RexMagnum
                 var head = new GUIStyle(mono) { fontSize = (int)(30 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
                 GUI.Label(new Rect(rx, ry + 20 * s, rw, 40 * s), "ISLA GRANDE RESORT", head);
                 GUI.Label(new Rect(rx, ry + 60 * s, rw, 30 * s), "Guest: R. MAGNUM, room 304", new GUIStyle(mono) { alignment = TextAnchor.MiddleCenter });
-                int shown = Mathf.Clamp((int)((t - 14f) / 0.6f), 0, Tab.Length);
+                int shown = Mathf.Clamp((int)((t - tReceipt) / 0.6f), 0, Tab.Length);
                 for (int i = 0; i < shown; i++)
                 {
                     GUI.Label(new Rect(rx + 24 * s, ry + (120 + i * 46) * s, rw * 0.65f, 40 * s), Tab[i].item, mono);

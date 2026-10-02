@@ -71,7 +71,20 @@ namespace RexMagnum
                 var go = new GameObject("SelfieCam");
                 selfie = go.AddComponent<Camera>();
                 var main = Camera.main;
-                if (main != null) { selfie.CopyFrom(main); selfie.depth = main.depth + 10f; }
+                if (main != null)
+                {
+                    selfie.CopyFrom(main);
+                    selfie.depth = main.depth + 10f;
+                    // CopyFrom does not copy URP's camera data: same post-processing and anti-aliasing as the game
+                    var md = main.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                    if (md != null)
+                    {
+                        if (!go.TryGetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>(out var sd))
+                            sd = go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                        sd.renderPostProcessing = md.renderPostProcessing;
+                        sd.antialiasing = md.antialiasing;
+                    }
+                }
                 selfie.fieldOfView = 70f;
                 Vector3 head = rex.position + Vector3.up * 1.65f;
                 Vector3 look = target != null ? Vector3.Lerp(head, target.position + Vector3.up * 1.2f, 0.4f) : head;

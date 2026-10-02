@@ -107,6 +107,7 @@ namespace RexMagnum
         void OnGUI()
         {
             if (!Open) return;
+            GUI.depth = -100;            // on top of every other OnGUI (ending bars, door fade, boss bar, toasts)
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             Styles(s);
             GUI.color = new Color(0, 0, 0, 0.82f);
