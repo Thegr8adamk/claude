@@ -16,6 +16,7 @@ namespace RexMagnum
         public float maxSpeed = 9f, accel = 5f, turnRate = 70f;
         public float battery = 100f;
         public static GolfCart Driven { get; private set; }
+        bool pushMode;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => Driven = null;      // editor with Domain Reload off
@@ -59,10 +60,17 @@ namespace RexMagnum
                 else if (Driven == null && rex.InputEnabled && Vector3.Distance(rex.transform.position, transform.position) < 3f)
                 { Enter(); nextUse = Time.time + 0.5f; }
             }
+            // charging (also parked: ChargeStation says carts within 3.5 m charge)
+            foreach (var c in chargers)
+                if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
+                    battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
             if (!driving) return;
             if (RMInput.Hands) SetLights(!lights);
             // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
-            bool pushing = battery <= 0f;
+            // pushing until 15% (not back in the seat at the first 0.1% of charge)
+            if (battery <= 0f) pushMode = true;
+            else if (battery >= 15f) pushMode = false;
+            bool pushing = pushMode;
             if (pushing)
             {
                 Vector3 behind = transform.position - transform.forward * 1.9f;
@@ -76,17 +84,13 @@ namespace RexMagnum
                 rex.bodyAnimator.SetBool("Push", pushing);
                 rex.bodyAnimator.SetFloat("Speed", Mathf.Abs(speed));
             }
-            // charging
-            foreach (var c in chargers)
-                if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
-                    battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
         }
 
         void FixedUpdate()
         {
             bool driving = Driven == this;
             Vector2 mv = driving ? RMInput.Move : Vector2.zero;
-            float top = battery > 0f ? maxSpeed : maxSpeed * 0.15f;
+            float top = !pushMode ? maxSpeed : maxSpeed * 0.15f;      // pushing: walking pace
             speed = Mathf.MoveTowards(speed, mv.y * top, accel * Time.fixedDeltaTime);
             if (Mathf.Abs(mv.y) < 0.05f) speed = Mathf.MoveTowards(speed, 0f, accel * 1.5f * Time.fixedDeltaTime);
             float turn = mv.x * turnRate * Mathf.Clamp01(Mathf.Abs(speed) / 2f) * Mathf.Sign(speed == 0 ? 1 : speed);

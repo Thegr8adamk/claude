@@ -1643,11 +1643,6 @@
    "tris": 2994
   },
   {
-   "name": "Hotel",
-   "fbx": "Buildings/Hotel.fbx",
-   "tris": 186764
-  },
-  {
    "name": "Golf",
    "fbx": "Buildings/Golf.fbx",
    "tris": 15392
@@ -1661,6 +1656,11 @@
    "name": "CaveTunnels",
    "fbx": "Buildings/CaveTunnels.fbx",
    "tris": 31112
+  },
+  {
+   "name": "Hotel",
+   "fbx": "Buildings/Hotel.fbx",
+   "tris": 186856
   }
  ],
  "vegetation": {
@@ -121435,7 +121435,7 @@
  "terrain": {
   "size": 1000.0,
   "minH": -8.0,
-  "maxH": 160.0,
+  "maxH": 210.0,
   "res": 1025,
   "raw": "island_heightmap_1025.raw",
   "splat": [

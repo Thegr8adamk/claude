@@ -870,7 +870,7 @@ namespace RexMagnum.EditorTools
                 var hall = Pts(json.Substring(fac, Math.Min(600, json.Length - fac)), "hall");
                 if (hall.Count > 0)
                     DoorPair("RuinsTunnel", ruins[1], ruins[1] + (ruins[0] - ruins[1]).normalized * 4f,
-                             hall[0] + new Vector3(-10f, 0f, 8f), hall[0] + new Vector3(-8f, 0f, 6f), root);
+                             hall[0] + new Vector3(-10f, 0f, 8f), hall[0] + new Vector3(-6f, 0f, 2f), root);   // exit on open floor, not in a slime vat
             }
             // ship branch end <-> a rock crack beside the crash site
             if (ship.Count >= 2)
@@ -996,6 +996,15 @@ namespace RexMagnum.EditorTools
             ApplyFix(model.transform);
             foreach (var r in model.GetComponentsInChildren<MeshRenderer>())
                 if (r.name.EndsWith("_LOD1") || r.name.EndsWith("_LOD2")) r.gameObject.SetActive(false);
+            // the cart FBX has its vertices where the first cart was parked (world coordinates): move the body to
+            // this prefab's origin (wheels on the ground), where the collider and the seat are
+            var body = model.GetComponentsInChildren<MeshRenderer>().Where(r => r.name.EndsWith("_LOD0")).ToArray();
+            if (body.Length > 0)
+            {
+                var bb = body[0].bounds;
+                foreach (var r in body) bb.Encapsulate(r.bounds);
+                model.transform.position -= new Vector3(bb.center.x, bb.min.y, bb.center.z) - root.transform.position;
+            }
             var box = root.AddComponent<BoxCollider>();
             box.center = new Vector3(0, 0.95f, 0.02f);
             box.size = new Vector3(1.3f, 1.4f, 2.45f);
@@ -1085,7 +1094,13 @@ namespace RexMagnum.EditorTools
             for (int fl = 1; fl <= 4; fl++)                       // hotel corridors, every floor
                 foreach (float x in new[] { -25f, 5f, 28f }) extra.Add(HotelPt(h, x, 0.4f, fl));
             for (int i = 0; i < 10; i++) extra.Add(pool + new Vector3(-30f + i * 6.5f, 0f, i % 2 == 0 ? 15f : -15f));
-            for (int i = 0; i < 8; i++) extra.Add(pool + new Vector3(-40f + i * 12f, -3.5f, -95f));     // beach
+            var ter = Terrain.activeTerrain;
+            for (int i = 0; i < 8; i++)                                                                   // beach: on the sand
+            {
+                var b = pool + new Vector3(-40f + i * 12f, -3.5f, -95f);
+                if (ter != null) b.y = ter.SampleHeight(b) + ter.transform.position.y;
+                extra.Add(b);
+            }
             extra.Add(HotelPt(h, -6f, -8f, 0)); extra.Add(HotelPt(h, 12f, 7.5f, 0)); extra.Add(HotelPt(h, 22f, 7.5f, 0));
             var rngE = new System.Random(304);
             for (int i = 0; i < extra.Count; i++)

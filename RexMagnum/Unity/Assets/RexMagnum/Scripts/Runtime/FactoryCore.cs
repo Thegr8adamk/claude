@@ -65,6 +65,7 @@ namespace RexMagnum
             if (hallLights != null) foreach (var l in hallLights) if (l != null) l.intensity *= 0.2f;
             foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
             {
+                if (sp.transform.parent == transform.parent) { sp.enabled = false; continue; }   // the factory's own spawner stops
                 if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;
                 sp.factoryScale = 1f / 3f;          // kept by DayNight (it used to reset maxAlive every frame)
                 sp.maxAlive = Mathf.Max(1, sp.maxAlive / 3);

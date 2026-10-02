@@ -60,7 +60,9 @@ namespace RexMagnum
                 float k = 1f - Vector3.Distance(p, col.ClosestPoint(p)) / radius;
                 var blob = h.GetComponent<Blob>();
                 if (blob != null) blob.deathStyle = DeathStyle.Blast;
+                if (blob != null) blob.creditWeapon = WeaponId.Coconut;
                 h.Damage(damage * Mathf.Clamp01(k + 0.2f) * (h.CompareTag("Player") ? 0.4f : 1f), p, owner);
+                if (blob != null) blob.creditWeapon = null;
                 if (h.IsDead && blob != null) { killed = true; kills++; }
             }
             for (int i = 0; i < 6; i++)                    // slime rain

@@ -14,7 +14,7 @@ import numpy as np
 
 SIZE = 1000.0          # terrain square (m), centered on 0
 RES = 1025             # Unity terrain heightmap resolution (2^n + 1)
-MAX_H = 160.0          # max terrain height (m) for the RAW scale
+MAX_H = 210.0          # max terrain height (m) for the RAW scale (the ship hill reaches ~204 m)
 
 # zone anchor points (x, y) in meters
 Z = {

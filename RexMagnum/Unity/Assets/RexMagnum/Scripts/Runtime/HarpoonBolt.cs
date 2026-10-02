@@ -56,7 +56,9 @@ namespace RexMagnum
                 if (hp != null && !hp.IsDead)
                 {
                     if (blob != null) { blob.deathStyle = DeathStyle.Pinned; blob.Pin(3f); }
+                    if (blob != null) blob.creditWeapon = WeaponId.Harpoon;
                     hp.Damage(damage, hit.point, owner);
+                    if (blob != null) blob.creditWeapon = null;
                     transform.SetParent(hp.transform, true);
                     if (hp.IsDead)
                     {

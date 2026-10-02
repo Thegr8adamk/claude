@@ -204,6 +204,8 @@ namespace RexMagnum
 
         float nextPath;
         Vector3 lastTarget;
+        /// <summary>Set by thrown / fired weapons just around their Damage call: the weapon that gets the kill.</summary>
+        [System.NonSerialized] public WeaponId? creditWeapon;
 
         float HeightOf() => kind == Kind.Tourist ? 1.25f : kind == Kind.Lifeguard ? 1.9f : kind == Kind.Bouncer ? (isHalf ? 1.1f : 2.15f) : 4.2f;
 
@@ -299,7 +301,7 @@ namespace RexMagnum
             {
                 Progress.Add("kills");
                 var w = killer.GetComponent<RexWeapons>();
-                if (w != null) Progress.Add("kills_" + w.Current.id);
+                if (w != null) Progress.Add("kills_" + (creditWeapon ?? w.Current.id));   // a coconut / harpoon kill after a switch counts for it
                 if (kind == Kind.KingGlorp) Progress.Set("glorp", 1);
             }
             agent.enabled = false;
@@ -335,8 +337,7 @@ namespace RexMagnum
                     if (animator) animator.speed = 0f;
                     yield return new WaitForSeconds(0.6f);
                     SlimeFX.Splat(t.position + Vector3.up * HeightOf() * 0.5f, Vector3.up, new Color(0.85f, 0.95f, 1f), 24);
-                    Destroy(gameObject);
-                    yield break;
+                    break;                                     // shatters (no slime burst below); a bouncer still splits
                 case DeathStyle.Fling:         // golf: flies away (into the pool / sea), then pops
                     var rb = gameObject.AddComponent<Rigidbody>();
                     rb.mass = 30f;
@@ -361,7 +362,8 @@ namespace RexMagnum
                     yield return new WaitForSeconds(0.4f);
                     break;
             }
-            SlimeFX.Burst(transform.position + Vector3.up * HeightOf() * 0.5f, BaseColor(), HeightOf());
+            if (deathStyle != DeathStyle.Freeze) SlimeFX.Burst(transform.position + Vector3.up * HeightOf() * 0.5f, BaseColor(), HeightOf());
+            if (deathStyle == DeathStyle.Freeze && jellyRenderer != null) jellyRenderer.enabled = false;      // gone in the shatter
             if (kind == Kind.Bouncer && !isHalf && splitPrefab != null)
             {
                 for (int i = 0; i < 2; i++)

@@ -34,6 +34,7 @@ namespace RexMagnum
             for (float t = 0; t < 1f; t += Time.deltaTime / 0.35f) { fade = t; yield return null; }
             fade = 1f;
             rex.Teleport(exit.position, exit.eulerAngles.y);
+            if (rex.cameraRig != null) rex.cameraRig.SetYaw(exit.eulerAngles.y);    // look out of the exit, not back in
             if (name.StartsWith("Cave")) Progress.Set("zone_cave", 1);
             yield return new WaitForSeconds(0.25f);
             for (float t = 1f; t > 0f; t -= Time.deltaTime / 0.5f) { fade = t; yield return null; }

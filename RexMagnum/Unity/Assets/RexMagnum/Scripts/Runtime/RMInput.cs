@@ -256,7 +256,7 @@ namespace RexMagnum
         public static bool ActionDown => !KillCam.Active && Time.frameCount != ActionBlockedFrame && (TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
                                          (G != null && ActTrig.wasPressedThisFrame));
         public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
-        public static bool ActionUp => TouchState.Up("Action") || (M != null && M.leftButton.wasReleasedThisFrame) ||
+        public static bool ActionUp => (!KillCam.Active && Time.frameCount - ActionBlockedFrame > 30 && TouchState.Up("Action")) ||   // a tap that skipped the kill cam does not fire (M != null && M.leftButton.wasReleasedThisFrame) ||
                                        (G != null && ActTrig.wasReleasedThisFrame);
         public static bool Aim
         {

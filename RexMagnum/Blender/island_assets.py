@@ -914,6 +914,23 @@ def slab(k, m, z, x0, x1, y0, y1, holes=True, name="Slab"):
             k.box((a, ya, z), (b, yb, z + 0.35), m["trim"], name)
 
 
+def ceiling(k, mat, x0, x1, y0, y1, z0, z1, name):
+    """Thin ceiling with the same stair and elevator openings as slab() (a full plate there sealed the stairwell
+    and the elevator shaft: Rex walked across the stairs and the cab could not carry him through)."""
+    xs = [x0, STAIR_X[0], STAIR_X[1], ELEV_X[0], ELEV_X[1], x1]
+    for i in range(5):
+        a, b = max(xs[i], x0), min(xs[i + 1], x1)
+        if b <= a:
+            continue
+        if i in (1, 3):           # opening column: only the strips beside the corridor
+            if y0 < -1.6:
+                k.box((a, y0, z0), (b, -1.6, z1), mat, name)
+            if y1 > 1.6:
+                k.box((a, 1.6, z0), (b, y1, z1), mat, name)
+        else:
+            k.box((a, y0, z0), (b, y1, z1), mat, name)
+
+
 def stairs(k, m, z, F):
     """Switchback stairs from floor top z to z + F inside the stairwell: flight A goes west on the south half,
     landing at the west end, flight B goes east on the north half and arrives at the east edge of the opening."""
@@ -957,7 +974,7 @@ def corridor(k, m, fl, z, F, x0, x1, bay, B):
     paper = textured("A_CorridorPaper", "stucco", (0.72, 0.66, 0.52), (0.8, 0.74, 0.6), 0.85, 2.0, 0.05)
     door = textured("A_DoorWood", "planks", (0.32, 0.2, 0.1), (0.38, 0.24, 0.12), 0.6, 1.0, 0.2)
     k.box((xa, -1.6, zf), (xb, 1.6, zf + 0.02), carpet, "CorridorCarpet")
-    k.box((x0 + 0.35, -1.6, zc - 0.02), (x1 - 0.35, 1.6, zc), m["trim"], "CorridorCeiling")
+    ceiling(k, m["trim"], x0 + 0.35, x1 - 0.35, -1.6, 1.6, zc - 0.02, zc, "CorridorCeiling")
     for i in range(B):
         xc = x0 + (i + 0.5) * bay
         if STAIR_X[0] < xc < STAIR_X[1] + 1 or ELEV_X[0] - 1 < xc < ELEV_X[1]:
@@ -1005,7 +1022,7 @@ def ground_floor(k, m, z, F, x0, x1, y0, y1):
     xin0, xin1 = x0 + 0.35, x1 - 0.35
     k.box((STAIR_X[1], y0 + 0.27, zf), (ELEV_X[0] - 0.15, y1 - 0.27, zf + 0.02), marble, "LobbyFloor")
     k.box((9, y0 + 0.7, zf + 0.02), (27, y1 - 0.7, zf + 0.03), casino, "CasinoCarpet")
-    k.box((xin0, y0 + 0.27, zc - 0.02), (xin1, y1 - 0.27, zc), m["trim"], "LobbyCeiling")
+    ceiling(k, m["trim"], xin0, xin1, y0 + 0.27, y1 - 0.27, zc - 0.02, zc, "LobbyCeiling")
     # partitions between zones (wide openings in the middle)
     for xp in (-15.0, 9.0, 27.0):
         k.box((xp - 0.1, y0 + 0.7, zf), (xp + 0.1, -3.0, zc), m["stucco"], "Partition")
@@ -1233,7 +1250,8 @@ def hotel(m):
             else:                     # lobby level: columns at the facades only (open plan)
                 for yy in (y0, y1 - 0.7):
                     k.box((x - 0.35, yy, z + 0.35), (x + 0.35, yy + 0.7, z + F), m["stucco"], "Pier")
-                if 0 < i < B and i % 2 == 0:
+                if 0 < i < B and i % 2 == 0 and not (ELEV_X[0] - 1 < x < ELEV_X[1] + 1) \
+                        and not (STAIR_X[0] - 1 < x < STAIR_X[1] + 1):      # not in front of the elevator / stairs
                     k.cyl((x, 0, z + 0.35), (x, 0, z + F), 0.35, m["trim"], segs=20, base="Column")
         if fl == 0:                   # lobby: tall glass with mullions + entrance canopy (south)
             for i in range(B * 2 + 1):
