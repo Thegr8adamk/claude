@@ -134,7 +134,7 @@ namespace RexMagnum
         {
             zeroed = false;
             // Unity's own camera tracking would add the pose a second time: this script places the camera itself
-            var dev = typeof(XRDevice).GetMethod("DisableAutoXRCameraTracking");
+            var dev = Type.GetType("UnityEngine.XR.XRDevice, UnityEngine.XRModule")?.GetMethod("DisableAutoXRCameraTracking");   // by name: not in every Unity 6 version
             if (dev != null && cam != null) dev.Invoke(null, new object[] { cam, true });
             if (rig != null)
             {

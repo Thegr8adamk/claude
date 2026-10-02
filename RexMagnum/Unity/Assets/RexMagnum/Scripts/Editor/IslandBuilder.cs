@@ -418,7 +418,6 @@ namespace RexMagnum.EditorTools
                 var c = new GameObject(a.name + "_Collision");
                 c.transform.SetParent(r.transform, false);
                 c.AddComponent<MeshCollider>().sharedMesh = col;
-                GameObjectUtility.SetStaticEditorFlags(c, StaticEditorFlags.NavigationStatic);
             }
             string path = $"{Prefabs}/{a.name}.prefab";
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
@@ -1255,7 +1254,7 @@ namespace RexMagnum.EditorTools
                         usePrototypeMesh = true, prototype = dp, renderMode = DetailRenderMode.VertexLit,
                         useInstancing = true, minWidth = 0.8f, maxWidth = 1.4f, minHeight = 0.7f, maxHeight = 1.4f,
                         healthyColor = Color.white, dryColor = new Color(0.85f, 0.8f, 0.6f), noiseSpread = 0.3f,
-                        alignToGround = 0.6f, density = 1f
+                        alignToGround = 60f, density = 1f     // Unity 6: percent (0-100)
                     });
                     continue;
                 }
@@ -1286,6 +1285,9 @@ namespace RexMagnum.EditorTools
             {
                 td.detailPrototypes = detailProtos.ToArray();
                 int dr = 1024;
+                // Unity 6 terrains default to coverage mode (values out of 255): our maps hold grass counts per cell
+                var scatter = typeof(TerrainData).GetMethod("SetDetailScatterMode");
+                if (scatter != null) scatter.Invoke(td, new object[] { Enum.Parse(scatter.GetParameters()[0].ParameterType, "InstanceCountMode") });
                 td.SetDetailResolution(dr, 32);
                 var rng = new System.Random(5);
                 var maps = new int[detailProtos.Count][,];
@@ -1418,7 +1420,15 @@ namespace RexMagnum.EditorTools
             vol.isGlobal = true;
             var prof = AssetDatabase.LoadAssetAtPath<VolumeProfile>(Gen + "/IslandPost.asset");
             if (prof == null) { prof = ScriptableObject.CreateInstance<VolumeProfile>(); AssetDatabase.CreateAsset(prof, Gen + "/IslandPost.asset"); }
-            T Get<T>() where T : VolumeComponent { if (!prof.TryGet(out T c)) c = prof.Add<T>(true); c.active = true; return c; }
+            // components must be sub-assets of the profile file, or they are lost when Unity restarts (no ACES, no bloom);
+            // an older profile can hold such lost (null) entries: drop them first
+            prof.components.RemoveAll(x => x == null);
+            T Get<T>() where T : VolumeComponent
+            {
+                if (!prof.TryGet(out T c)) { c = prof.Add<T>(true); AssetDatabase.AddObjectToAsset(c, prof); }
+                c.active = true;
+                return c;
+            }
             var tm = Get<Tonemapping>(); tm.mode.Override(TonemappingMode.ACES);
             var bl = Get<Bloom>(); bl.threshold.Override(1.1f); bl.intensity.Override(0.35f); bl.scatter.Override(0.6f);
             var ca = Get<ColorAdjustments>(); ca.postExposure.Override(0.25f); ca.contrast.Override(12f); ca.saturation.Override(8f);
