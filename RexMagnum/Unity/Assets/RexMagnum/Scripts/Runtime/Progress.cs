@@ -7,7 +7,8 @@ namespace RexMagnum
 {
     /// <summary>
     /// Save system + accomplishments (brief section 2 / step 8). One JSON file in Application.persistentDataPath
-    /// (save.json): counters, unlocked accomplishments, photo album, visited zones. Saved on every change (small file).
+    /// (save.json): counters, unlocked accomplishments, photo album, visited zones, rescue clues, owned weapons + ammo.
+    /// Saved on every change (small file).
     /// Accomplishment groups: Fight, Sniper, Rescue, Explore, Big goals, Rex, Photos.
     /// </summary>
     public static class Progress
@@ -19,6 +20,9 @@ namespace RexMagnum
             public List<int> values = new List<int>();
             public List<string> unlocked = new List<string>();
             public List<Photo> photos = new List<Photo>();
+            public List<string> clues = new List<string>();          // rescue clues, shown in the pause map
+            public List<int> weapons = new List<int>();             // owned WeaponIds (survive a relaunch)
+            public List<int> ammoIds = new List<int>(), ammo = new List<int>();
         }
 
         public class Def { public string id, group, name, desc, counter; public int need; }
@@ -67,7 +71,12 @@ namespace RexMagnum
             if (data != null) return data;
             try { data = File.Exists(PathFile) ? JsonUtility.FromJson<Data>(File.ReadAllText(PathFile)) : new Data(); }
             catch { data = new Data(); }
-            return data ?? (data = new Data());
+            if (data == null) data = new Data();
+            // saves from before these lists existed load them as null
+            if (data.clues == null) data.clues = new List<string>();
+            if (data.weapons == null) data.weapons = new List<int>();
+            if (data.ammoIds == null || data.ammo == null || data.ammoIds.Count != data.ammo.Count) { data.ammoIds = new List<int>(); data.ammo = new List<int>(); }
+            return data;
         }
 
         static bool dirty;
@@ -135,6 +144,73 @@ namespace RexMagnum
             if (Value("zone_" + zone) > 0) return;
             Set("zone_" + zone, 1);
             Add("zones");
+        }
+
+        // ------------------------------------------------------------ rescue clues
+
+        public static IReadOnlyList<string> Clues => Get().clues;
+
+        /// <summary>Keeps a clue for the pause map (once). Returns false if it was known already.</summary>
+        public static bool AddClue(string clue)
+        {
+            var d = Get();
+            if (d.clues.Contains(clue)) return false;
+            d.clues.Add(clue);
+            Save();
+            return true;
+        }
+
+        // ------------------------------------------------------------ weapons + ammo (RexWeapons calls these)
+
+        /// <summary>Remembers the owned weapons and their ammo. Cheap: marks the file dirty only on a change
+        /// (ProgressTracker writes it within 2 s), so it can be called after every shot or pickup.</summary>
+        public static void SaveWeapons(IEnumerable<WeaponId> owned, Func<WeaponId, int> ammoOf)
+        {
+            var d = Get();
+            bool changed = false;
+            // the saved list is the inventory now: a weapon that is gone (beer bottle broken) is gone after a reload too
+            var now = new HashSet<int>();
+            foreach (var id in owned) now.Add((int)id);
+            if (d.weapons.RemoveAll(w => !now.Contains(w)) > 0) changed = true;
+            foreach (var id in owned)
+            {
+                if (!d.weapons.Contains((int)id)) { d.weapons.Add((int)id); changed = true; }
+                int a = ammoOf(id), i = d.ammoIds.IndexOf((int)id);
+                if (i < 0) { d.ammoIds.Add((int)id); d.ammo.Add(a); changed = true; }
+                else if (d.ammo[i] != a) { d.ammo[i] = a; changed = true; }
+            }
+            if (changed) Save();
+        }
+
+        /// <summary>Puts the saved weapons and ammo into RexWeapons' lists (call in its Start, before Equip).
+        /// Returns false when nothing is saved (new game).</summary>
+        public static bool LoadWeapons(List<WeaponId> owned, Dictionary<WeaponId, int> ammo)
+        {
+            var d = Get();
+            foreach (int w in d.weapons)
+                if (Enum.IsDefined(typeof(WeaponId), w) && !owned.Contains((WeaponId)w)) owned.Add((WeaponId)w);
+            for (int i = 0; i < d.ammoIds.Count; i++)
+                if (Enum.IsDefined(typeof(WeaponId), d.ammoIds[i])) ammo[(WeaponId)d.ammoIds[i]] = d.ammo[i];
+            return d.weapons.Count > 0;
+        }
+
+        // ------------------------------------------------------------ new game
+
+        /// <summary>
+        /// NEW GAME (title menu): clears counters, accomplishments, the album (list and picture files), clues, weapons,
+        /// and the factory / King Glorp / voice mail flags. Settings and key bindings stay.
+        /// </summary>
+        public static void ResetAll()
+        {
+            try { if (Directory.Exists(AlbumDir)) Directory.Delete(AlbumDir, true); }
+            catch (Exception e) { Debug.LogWarning(e); }
+            data = new Data();
+            dirty = true;
+            Flush();
+            PlayerPrefs.DeleteKey(FactoryCore.SaveKey);
+            PlayerPrefs.DeleteKey(KingGlorpBoss.SaveKey);
+            PlayerPrefs.DeleteKey("RexMagnum_VoiceMail");      // MartyPhone: the voice mails start again
+            PlayerPrefs.Save();
         }
     }
 }

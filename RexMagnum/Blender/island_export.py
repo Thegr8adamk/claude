@@ -42,7 +42,16 @@ BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). B
     "A_Thatch": (4, 4, False), "PalmBark": (2, 2, True), "JungleBark": (2, 2, True),
     "A_Carpet": (2, 2, False), "A_Wallpaper": (2, 2, True), "A_Sheets": (2, 2, False), "A_Duvet": (2, 2, False),
     "A_DoorWood": (4, 3.6, True),
+    # node-driven materials that used to export as flat 0.8 grey (tiles: whole pattern periods, half tile too)
+    "A_Fairway": (7.5398, 7.5398, False), "A_Green": (2.5133, 2.5133, False), "A_BunkerSand": (2, 2, False),
+    "A_CasinoCarpet": (2, 2, False), "A_CorridorCarpet": (2, 2, False), "A_CorridorPaper": (2, 2, True),
+    "A_Marble": (2, 2, False), "A_StairStone": (2, 2, False), "A_SpaWood": (2, 1.8, False),
+    "A_AlienFloor": (4, 4, False), "A_JungleFall": (1, 1, True), "A_CaveRock": (6, 6, True),
 }
+UV_OWN = {"A_JungleFall"}          # baked in the mesh's own UV space (0..1 = one tile), not metres
+# plain materials get a fine noise bump at bake time so their normal map is not flat: name -> (noise scale, strength)
+MICRO_BUMP = {"A_Trim": (40, 0.15), "A_Aluminum": (60, 0.08), "A_Cushion": (25, 0.3), "A_SignBoard": (30, 0.15)}
+BUMP_DIST = 0.02     # Blender 4.2+ creates Bump nodes with Distance 0.001 (was 1.0): far too flat to bake
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
 WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime", "A_RiverWater": "river"}
 FALL = {"A_Fall", "A_SmallFall"}
@@ -130,6 +139,23 @@ def bake_material(mat, size, wall, res, name=None):
         next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     p = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
     surf_src = out.inputs["Surface"].links[0].from_socket if out.inputs["Surface"].links else None
+    for b in nt.nodes:
+        if b.type == "BUMP" and b.inputs["Distance"].default_value < 0.005:
+            b.inputs["Distance"].default_value = BUMP_DIST
+    tmp_nodes = []
+    if name in MICRO_BUMP and not p.inputs["Normal"].links:
+        sc_, st_ = MICRO_BUMP[name]
+        tcm = nt.nodes.new("ShaderNodeTexCoord")
+        nzm = nt.nodes.new("ShaderNodeTexNoise")
+        nzm.inputs["Scale"].default_value = sc_
+        nzm.inputs["Detail"].default_value = 8
+        bm_ = nt.nodes.new("ShaderNodeBump")
+        bm_.inputs["Strength"].default_value = st_
+        bm_.inputs["Distance"].default_value = BUMP_DIST
+        nt.links.new(tcm.outputs["Object"], nzm.inputs["Vector"])
+        nt.links.new(nzm.outputs["Fac"], bm_.inputs["Height"])
+        nt.links.new(bm_.outputs[0], p.inputs["Normal"])
+        tmp_nodes = [tcm, nzm, bm_]
     tex = nt.nodes.new("ShaderNodeTexImage")
     nt.nodes.active = tex
     bpy.ops.object.select_all(action="DESELECT")
@@ -160,6 +186,8 @@ def bake_material(mat, size, wall, res, name=None):
     bpy.ops.object.bake(type="NORMAL", normal_space="TANGENT", margin=0)
     results["nrm"] = _to_np(im)
     nt.nodes.remove(tex)
+    for n_ in tmp_nodes:
+        nt.nodes.remove(n_)
     bpy.data.objects.remove(ob)
     base = _tileable(results["base"])
     rough = _tileable(results["rough"])[..., 0]
@@ -250,9 +278,33 @@ def terrain_layer_material(name, c0, c1, scale, bump, ripples=False, litter=Fals
     ramp = nt.nodes.new("ShaderNodeValToRGB")
     ramp.color_ramp.elements[0].color = (*c0, 1)
     ramp.color_ramp.elements[1].color = (*c1, 1)
+    # noise Fac stays near 0.5 (std ~0.07): stretch 0.35..0.65 to the full ramp, or the layer bakes flat
+    ramp.color_ramp.elements[0].position = 0.35
+    ramp.color_ramp.elements[1].position = 0.65
     nt.links.new(nz.outputs["Fac"], ramp.inputs[0])
     col = ramp.outputs[0]
-    h = nz.outputs["Fac"]
+    # fine grain (sand grains, soil crumbs, grass blades): +-12 % brightness and most of the bump detail
+    gr = nt.nodes.new("ShaderNodeTexNoise")
+    gr.inputs["Scale"].default_value = scale * 25
+    gr.inputs["Detail"].default_value = 6
+    nt.links.new(tc.outputs["Object"], gr.inputs["Vector"])
+    grm = nt.nodes.new("ShaderNodeMapRange")
+    grm.inputs["From Min"].default_value = 0.3
+    grm.inputs["From Max"].default_value = 0.7
+    grm.inputs["To Min"].default_value = 0.88
+    grm.inputs["To Max"].default_value = 1.12
+    nt.links.new(gr.outputs["Fac"], grm.inputs["Value"])
+    gmul = nt.nodes.new("ShaderNodeVectorMath")
+    gmul.operation = "SCALE"
+    nt.links.new(col, gmul.inputs[0])
+    nt.links.new(grm.outputs[0], gmul.inputs["Scale"])
+    col = gmul.outputs[0]
+    hsum = nt.nodes.new("ShaderNodeMath")
+    hsum.operation = "MULTIPLY_ADD"          # height = coarse noise + 0.5 * grain
+    hsum.inputs[1].default_value = 0.5
+    nt.links.new(gr.outputs["Fac"], hsum.inputs[0])
+    nt.links.new(nz.outputs["Fac"], hsum.inputs[2])
+    h = hsum.outputs[0]
     if litter:   # leaf litter: voronoi cells of brown / dark
         vo = nt.nodes.new("ShaderNodeTexVoronoi")
         vo.inputs["Scale"].default_value = 9
@@ -275,6 +327,7 @@ def terrain_layer_material(name, c0, c1, scale, bump, ripples=False, litter=Fals
     p.inputs["Roughness"].default_value = 0.9
     b = nt.nodes.new("ShaderNodeBump")
     b.inputs["Strength"].default_value = bump
+    b.inputs["Distance"].default_value = BUMP_DIST
     nt.links.new(h, b.inputs["Height"])
     nt.links.new(b.outputs[0], p.inputs["Normal"])
     return m
@@ -612,7 +665,9 @@ def material_rows(mats_used, res, skip_bake):
             rows.append(dict(name=n, kind="lit", baseMap=f"Textures/{files['base']}",
                              normalMap=f"Textures/{files['nrm']}", maskMap=f"Textures/{files['mask']}",
                              color=[1, 1, 1, 1], metallic=round(p.inputs["Metallic"].default_value, 3),
-                             smoothness=1.0, tile=su))
+                             smoothness=1.0, tile=su, tileV=sv))
+            if "emission" in principled_row(m):
+                rows[-1]["emission"] = principled_row(m)["emission"]
         elif n in GLASS:
             r = principled_row(m)
             r.update(kind="glass", alpha=GLASS[n], smoothness=0.95)

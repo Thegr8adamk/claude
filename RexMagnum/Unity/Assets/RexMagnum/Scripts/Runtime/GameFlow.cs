@@ -1,12 +1,14 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace RexMagnum
 {
     /// <summary>
     /// First playable flow (brief section 2 "Opening"):
-    ///  1. Title screen: picture of the hotel and the beach (Resources/UI/title_bg), title, PLAY / SETTINGS / QUIT
-    ///     (mouse, keyboard or controller), content warning, title music. SETTINGS opens the shared SettingsPanel.
+    ///  1. Title screen: picture of the hotel and the beach (Resources/UI/title_bg), title, PLAY / NEW GAME / SETTINGS /
+    ///     HELP / QUIT (mouse, keyboard or controller), content warning, title music. SETTINGS and HELP open the shared
+    ///     SettingsPanel. NEW GAME asks first, then clears the save (Progress.ResetAll) and reloads the scene.
     ///  2. Chaos sounds, fade in on Rex face-down on the bed in room 304, wake-up line.
     ///  3. Rex stands next to the bed; controls are taught one hint at a time (look/walk, punch the stuck door,
     ///     pick up the beer, taunt at the mirror, camera switch, towel on the balcony rail). A hint stays until the player
@@ -34,7 +36,9 @@ namespace RexMagnum
         readonly SettingsPanel settings = new SettingsPanel();
         RexWeapons weapons;
         Vector3 hintStartPos;
-        static readonly string[] MenuItems = { "PLAY", "SETTINGS", "QUIT" };
+        static readonly string[] MenuItems = { "PLAY", "NEW GAME", "SETTINGS", "HELP", "QUIT" };
+        bool confirmNew;          // NEW GAME asks first: the save is cleared
+        int confirmSel = 1;       // NO is chosen first
         const float DayVolume = 0.35f, FightVolume = 0.55f;
         int hint;
         float hintTime;
@@ -62,9 +66,15 @@ namespace RexMagnum
         }
 
         public static bool Busy { get; private set; }
+        /// <summary>The room tutorial hints still show (the HUD hides the objective line meanwhile).</summary>
+        public static bool TutorialActive { get; private set; }
+        /// <summary>Seconds since Rex woke up (the HUD shows the control list for the first minute).</summary>
+        public static float PlaySeconds => playStart < 0f ? Time.timeSinceLevelLoad : Time.time - playStart;   // no GameFlow (test scene): since load
+        static float playStart = -1f;
+        static bool newGameStart;        // set before the NEW GAME reload: skip the title once
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => Busy = false;      // editor with Domain Reload off
+        static void ResetStatics() { Busy = false; TutorialActive = false; playStart = -1f; newGameStart = false; }   // editor with Domain Reload off
 
         void Start()
         {
@@ -92,6 +102,14 @@ namespace RexMagnum
             }
             if (skipTitle) { StartCoroutine(Intro()); return; }
             SetPlayerActive(false);
+            if (newGameStart)
+            {
+                // NEW GAME reloaded the scene: straight to the wake-up in room 304 (the screen is still black)
+                newGameStart = false;
+                Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false;
+                StartCoroutine(Intro());
+                return;
+            }
             Play("Music/title_theme");
         }
 
@@ -133,6 +151,7 @@ namespace RexMagnum
                 UpdateHint();
                 FightMusic();
             }
+            TutorialActive = state == State.Play && hint < HintCount;
         }
 
         void TitleMenu()
@@ -142,20 +161,44 @@ namespace RexMagnum
                 if (settings.Update()) { inSettings = false; settings.CancelWait(); PlayerPrefs.Save(); }
                 return;
             }
-            int n = Application.isMobilePlatform ? 2 : 3;      // phones have no QUIT
+            if (confirmNew)
+            {
+                if (MenuNav.Up || MenuNav.Down || MenuNav.Left || MenuNav.Right) confirmSel = 1 - confirmSel;
+                if (MenuNav.Back) { MenuNav.Consume(); confirmNew = false; }
+                else if (MenuNav.Ok) { MenuNav.Consume(); Confirm(confirmSel == 0); }
+                return;
+            }
+            int n = MenuCount;
             if (MenuNav.Up) menuSel = (menuSel + n - 1) % n;
             if (MenuNav.Down) menuSel = (menuSel + 1) % n;
             var g = UnityEngine.InputSystem.Gamepad.current;
             if (MenuNav.Ok || (g != null && g.startButton.wasPressedThisFrame)) { MenuNav.Consume(); Choose(menuSel); }
         }
 
+        static int MenuCount => Application.isMobilePlatform ? MenuItems.Length - 1 : MenuItems.Length;      // phones have no QUIT
+
         void Choose(int i)
         {
             if (state != State.Title) return;
             Sfx.Play("bottle_clink", playerCamera != null ? playerCamera.transform.position : Vector3.zero, 0.5f);   // at the listener
             if (i == 0) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; StartCoroutine(Intro()); }
-            else if (i == 1) { inSettings = true; settings.page = 0; }
-            else if (i == 2) Application.Quit();
+            else if (i == 1) { confirmNew = true; confirmSel = 1; }
+            else if (i == 2) { inSettings = true; settings.page = 0; }
+            else if (i == 3) { inSettings = true; settings.page = SettingsPanel.HelpPage; }
+            else if (i == 4) Application.Quit();
+        }
+
+        /// <summary>NEW GAME answer. Yes: clear the save (settings and keys stay), reload the scene, wake up in room 304.</summary>
+        void Confirm(bool yes)
+        {
+            confirmNew = false;
+            if (!yes) return;
+            Progress.ResetAll();
+            int scene = SceneManager.GetActiveScene().buildIndex;
+            if (scene < 0) { Choose(0); return; }      // scene not in the build list (editor test scene): just play
+            newGameStart = true;
+            Busy = true;
+            SceneManager.LoadScene(scene);
         }
 
         /// <summary>The next hint shows when the player has done this one (or after a time-out).</summary>
@@ -229,6 +272,7 @@ namespace RexMagnum
             fadeTarget = 0f;
             hintTime = Time.time;
             if (rex != null) hintStartPos = rex.transform.position;
+            playStart = Time.time;
         }
 
         GUIStyle menuBtn, menuSelStyle;
@@ -288,10 +332,11 @@ namespace RexMagnum
                 return;
             }
 
-            int n = Application.isMobilePlatform ? 2 : 3;
+            if (confirmNew) { DrawConfirm(x, w, h, s); return; }
+            int n = MenuCount;
             for (int i = 0; i < n; i++)
             {
-                var r = new Rect(x, h * 0.42f + i * 78 * s, 420 * s, 66 * s);
+                var r = new Rect(x, h * 0.36f + i * 72 * s, 420 * s, 66 * s);
                 bool hover = r.Contains(Event.current.mousePosition);
                 if (hover && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) menuSel = i;
                 bool on = i == menuSel;
@@ -311,10 +356,40 @@ namespace RexMagnum
             }
             var sm = new GUIStyle(small) { alignment = TextAnchor.LowerLeft, fontSize = (int)(19 * s) };
             var g = UnityEngine.InputSystem.Gamepad.current;
-            GUI.Label(new Rect(x, h * 0.42f + n * 78 * s + 16 * s, w * 0.5f, 40 * s),
+            GUI.Label(new Rect(x, h * 0.36f + n * 72 * s + 16 * s, w * 0.5f, 40 * s),
                       g != null ? "Controller: " + g.displayName + "   (D-pad / stick, A = OK)" : "Mouse, or arrow keys + Enter. Controllers work too.", sm);
             GUI.Label(new Rect(x, h - 80 * s, w * 0.6f, 60 * s),
                       "CONTENT WARNING: crude adult humor, rude gestures, strong language, cartoon slime violence.", sm);
+        }
+
+        /// <summary>NEW GAME: "are you sure" with YES / NO (mouse, keys, controller).</summary>
+        void DrawConfirm(float x, float w, float h, float s)
+        {
+            var q = new GUIStyle(mid) { alignment = TextAnchor.UpperLeft, fontSize = (int)(30 * s), wordWrap = true };
+            GUI.Label(new Rect(x, h * 0.36f, w * 0.5f, 170 * s),
+                      "Start a NEW GAME?\nThis clears your progress, accomplishments, photo album, clues, weapons and big goals.\n" +
+                      "Settings and key bindings stay.", q);
+            string[] opts = { "YES, START OVER", "NO, GO BACK" };
+            for (int i = 0; i < 2; i++)
+            {
+                var r = new Rect(x, h * 0.36f + 190 * s + i * 72 * s, 520 * s, 66 * s);
+                bool hover = r.Contains(Event.current.mousePosition);
+                if (hover && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) confirmSel = i;
+                bool on = i == confirmSel;
+                if (on)
+                {
+                    GUI.color = i == 0 ? new Color(1f, 0.35f, 0.25f, 0.9f) : new Color(1f, 0.75f, 0.2f, 0.9f);
+                    GUI.DrawTexture(new Rect(r.x - 22 * s, r.y + 14 * s, 8 * s, r.height - 28 * s), Texture2D.whiteTexture);
+                    GUI.color = Color.white;
+                }
+                GUI.Label(r, (on ? "  " : "") + opts[i], on ? menuSelStyle : menuBtn);
+                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
+                {
+                    Event.current.Use();
+                    Confirm(i == 0);
+                    return;
+                }
+            }
         }
 
         void Styles()
@@ -339,7 +414,7 @@ namespace RexMagnum
             else if (state == State.Play && hint < HintCount && !PauseMenu.Open)
             {
                 box.fontSize = (int)(30 * s);
-                var r = new Rect(w * 0.18f, h * 0.05f, w * 0.64f, 92 * s);
+                var r = new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);      // under the HUD compass
                 GUI.color = new Color(0f, 0f, 0f, 0.7f);
                 GUI.DrawTexture(r, Texture2D.whiteTexture);
                 GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f);

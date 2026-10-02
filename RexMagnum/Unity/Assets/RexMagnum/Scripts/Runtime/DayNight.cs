@@ -20,7 +20,7 @@ namespace RexMagnum
         public static float Night { get; private set; }
         float baseSun, baseAmbient, baseFog, baseExposure;
         Material sky;
-        float nextLine, nextEnv;
+        float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f;
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
@@ -29,6 +29,7 @@ namespace RexMagnum
         {
             if (sun == null) sun = RenderSettings.sun;
             baseSun = sun != null ? sun.intensity : 2f;
+            probeTime = timeOfDay;      // the probe renders once on awake with this sky
             baseAmbient = RenderSettings.ambientIntensity;
             baseFog = RenderSettings.fogDensity;
             sky = RenderSettings.skybox != null ? new Material(RenderSettings.skybox) : null;   // do not edit the asset
@@ -67,12 +68,14 @@ namespace RexMagnum
             Night = 1f - Mathf.Clamp01(elev * 4f + 0.6f);
             if (sun != null)
             {
-                float pitch = Mathf.Lerp(-10f, 75f, Mathf.Max(0f, elev));
+                // never below 2 deg: a sun under the horizon lit the island from below at dawn / dusk
+                float pitch = Mathf.Lerp(2f, 75f, Mathf.Max(0f, elev));
                 // turn the sun in small steps: a tiny turn every frame makes all shadow edges crawl
                 var want = Quaternion.Euler(elev > 0 ? pitch : 30f, sunAzimuth + (timeOfDay - 0.5f) * 180f, 0f);
                 if (Quaternion.Angle(sun.transform.rotation, want) > 0.25f) sun.transform.rotation = want;
                 sun.color = sunColor.Evaluate(timeOfDay);
-                sun.intensity = Mathf.Lerp(0.12f, baseSun, day);                 // night: moonlight
+                // low sun fades to moonlight strength by the horizon, so the switch to the high moon angle is not seen
+                sun.intensity = Mathf.Lerp(0.12f, baseSun, Mathf.Clamp01(elev * 3f));   // night: moonlight
                 sun.shadowStrength = Mathf.Lerp(0.5f, 0.9f, day);
             }
             RenderSettings.ambientIntensity = Mathf.Lerp(0.25f, baseAmbient, day);
@@ -88,14 +91,21 @@ namespace RexMagnum
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)
             {
-                nextEnv = Time.time + 2f;
+                nextEnv = Time.time + 5f;
                 DynamicGI.UpdateEnvironment();
                 if (islandProbe == null)
                 {
                     var go = GameObject.Find("ReflectionProbe");
                     if (go != null && go.TryGetComponent(out islandProbe)) islandProbe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
                 }
-                if (islandProbe != null && Mathf.Repeat(Time.time, 10f) < 2f) islandProbe.RenderProbe();   // about every 10 s
+                // the 2.4 km probe is expensive: at most every 30 s, and only when the sky has really changed
+                float dt = Mathf.Abs(Mathf.DeltaAngle(timeOfDay * 360f, probeTime * 360f)) / 360f;
+                if (islandProbe != null && Time.time >= nextProbe && dt > 0.015f)
+                {
+                    islandProbe.RenderProbe();
+                    probeTime = timeOfDay;
+                    nextProbe = Time.time + 30f;
+                }
             }
             if (Night > 0.8f && Time.time > nextLine)
             {

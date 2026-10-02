@@ -9,6 +9,9 @@ namespace RexMagnum
         public bool ammoOnly;
         public int ammoAmount = 12;
         public float radius = 2f;
+        /// <summary>World ammo comes back this many seconds after it is taken (0 = one time: weapons, blob loot).</summary>
+        public float respawnSeconds = 300f;
+        float backAt = -1f;
         Light glow;
         Vector3 basePos;
         public static WeaponPickup Nearby { get; private set; }
@@ -17,7 +20,8 @@ namespace RexMagnum
         void Start()
         {
             basePos = transform.position;
-            glow = new GameObject("Glow").AddComponent<Light>();
+            if (Time.timeSinceLevelLoad > 2f) respawnSeconds = 0f;     // dropped in play (guest reward, blob loot): one time
+            glow =new GameObject("Glow").AddComponent<Light>();
             glow.transform.SetParent(transform, false);
             glow.type = LightType.Point;
             glow.range = 1.5f;
@@ -27,6 +31,12 @@ namespace RexMagnum
 
         void Update()
         {
+            if (backAt > 0f)
+            {
+                if (Time.time < backAt) return;
+                backAt = -1f;
+                Show(true);
+            }
             transform.position = basePos + Vector3.up * (0.25f + Mathf.Sin(Time.time * 2f) * 0.05f);
             transform.Rotate(0, 60f * Time.deltaTime, 0, Space.World);
             glow.intensity = 1.2f + Mathf.Sin(Time.time * 3f) * 0.4f;
@@ -49,8 +59,15 @@ namespace RexMagnum
                 RexVoice.ShowSubtitle($"GOT: {WeaponDef.Get(weapon).name.ToUpper()}   ({RMInput.Btn("Wheel")}: weapon wheel)", 2.5f);
                 Sfx.Play("bottle_clink", basePos, 0.6f);
                 if (Nearby == this) Nearby = null;
-                Destroy(gameObject);
+                if (ammoOnly && respawnSeconds > 0f) { Show(false); backAt = Time.time + respawnSeconds; }
+                else Destroy(gameObject);
             }
+        }
+
+        void Show(bool on)
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = on;
+            if (glow != null) glow.enabled = on;
         }
 
         public string Label => ammoOnly ? $"{RMInput.Btn("Use")}: take ammo ({WeaponDef.Get(weapon).name})"

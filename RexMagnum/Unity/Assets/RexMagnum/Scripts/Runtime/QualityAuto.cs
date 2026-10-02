@@ -56,15 +56,22 @@ namespace RexMagnum
             float[] shadowDist     = { 40f,   80f,   140f,  220f };
             int[]   msaa           = { 1,     2,     4,     4 };
             float[] treeDist       = { 250f,  400f,  650f,  900f };
-            float[] detailDist     = { 40f,   70f,   110f,  160f };
-            float[] detailDensity  = { 0.25f, 0.5f,  0.8f,  1f };
+            // grass: max 1 clump (~200 tris) per m2 in the map; worst-case view ~0.1 / 0.6 / 1.4 / 2.6 M triangles
+            float[] detailDist     = { 35f,   60f,   80f,   100f };
+            float[] detailDensity  = { 0.15f, 0.25f, 0.35f, 0.45f };
             float[] lodBias        = { 0.6f,  1f,    1.5f,  2f };
             float[] pixelError     = { 12f,   6f,    3f,    2f };
+            int[]   cascades       = { 1,     2,     4,     4 };
+            int[]   shadowRes      = { 1024,  2048,  4096,  4096 };
             int i = (int)t;
             if (urp != null)
             {
                 urp.renderScale = renderScale[i];
                 urp.shadowDistance = shadowDist[i];
+                SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", cascades[i]);
+                SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", shadowRes[i]);
+                SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
+                SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t >= QualityTier.High);   // lamp / torch shadows
                 urp.msaaSampleCount = msaa[i];
                 urp.supportsCameraDepthTexture = true;    // water depth colour + shore foam
                 urp.supportsCameraOpaqueTexture = false;
@@ -88,6 +95,28 @@ namespace RexMagnum
             Debug.Log($"[Rex Magnum] Graphics: {t} (GPU {SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB, " +
                       $"RAM {SystemInfo.systemMemorySize} MB, {SystemInfo.processorCount} cores)");
         }
+
+        /// <summary>Sets a URP asset setting on every URP version: the public property if it has a public setter,
+        /// otherwise its serialized field (some shadow settings only have internal setters). Enums take the int value.</summary>
+        public static void SetUrp(UniversalRenderPipelineAsset urp, string prop, string field, object value)
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Instance |
+                                                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+            if (urp == null) return;
+            var t = typeof(UniversalRenderPipelineAsset);
+            try
+            {
+                var p = t.GetProperty(prop, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                var set = p != null ? p.GetSetMethod(false) : null;
+                if (set != null) { set.Invoke(urp, new[] { ToType(value, p.PropertyType) }); return; }
+                var f = t.GetField(field, F);
+                if (f != null) f.SetValue(urp, ToType(value, f.FieldType));
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[Rex Magnum] URP setting {prop}: {e.Message}"); }
+        }
+
+        static object ToType(object v, System.Type to) =>
+            to.IsEnum ? System.Enum.ToObject(to, v) : System.Convert.ChangeType(v, to);
 
         // ---- Settings > Graphics extras (saved in PlayerPrefs; 0 / default = follow the quality tier)
         public static readonly string[] RenderScaleNames = { "FROM QUALITY", "50%", "67%", "75%", "85%", "100%", "125%" };

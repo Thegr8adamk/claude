@@ -114,8 +114,27 @@ namespace RexMagnum
             {
                 if (TouchState.Active) return DeviceKind.Touch;
                 double k = System.Math.Max(K != null ? K.lastUpdateTime : 0, M != null ? M.lastUpdateTime : 0);
-                return G != null && G.lastUpdateTime > k ? DeviceKind.Gamepad : DeviceKind.Keyboard;
+                return G != null && PadUsedTime() > k ? DeviceKind.Gamepad : DeviceKind.Keyboard;
             }
+        }
+
+        // a PlayStation pad sends reports all the time (gyro, noise): its lastUpdateTime is always "now". The pad
+        // counts as used only on a real button press or a stick / trigger past 0.2. Checked once per frame.
+        static double padUsed;
+        static int padFrame = -1;
+        static double PadUsedTime()
+        {
+            if (padFrame == Time.frameCount || G == null) return padUsed;
+            padFrame = Time.frameCount;
+            bool used = G.leftStick.ReadValue().sqrMagnitude > 0.04f || G.rightStick.ReadValue().sqrMagnitude > 0.04f ||
+                        G.leftTrigger.ReadValue() > 0.2f || G.rightTrigger.ReadValue() > 0.2f;
+            if (!used)
+                foreach (var bc in new[] { G.buttonSouth, G.buttonEast, G.buttonWest, G.buttonNorth, G.leftShoulder, G.rightShoulder,
+                                           G.startButton, G.selectButton, G.leftStickButton, G.rightStickButton,
+                                           G.dpad.up, G.dpad.down, G.dpad.left, G.dpad.right })
+                    if (bc.isPressed) { used = true; break; }
+            if (used) padUsed = G.lastUpdateTime;          // same clock as the keyboard / mouse lastUpdateTime
+            return padUsed;
         }
 
         static readonly System.Collections.Generic.Dictionary<string, string> PadNames = new System.Collections.Generic.Dictionary<string, string>
@@ -233,12 +252,23 @@ namespace RexMagnum
                 Vector2 v = Vector2.zero;
                 if (LookBlocked) return v;
                 if (M != null) v += M.delta.ReadValue() * MouseSensitivity;
-                if (G != null) v += LookStick * StickSensitivity * Time.unscaledDeltaTime;
+                if (G != null) v += LookCurve(LookStick) * StickSensitivity * Time.unscaledDeltaTime;
                 if (TouchState.Active) v += TouchState.LookDelta;
                 v.x *= LookScaleX; v.y *= LookScaleY;
                 if (InvertY) v.y = -v.y;
                 return v;
             }
+        }
+
+        /// <summary>Look stick response: radial dead zone 0.15, then a squared curve (fine aim near the centre,
+        /// full speed at the edge).</summary>
+        public const float LookDeadZone = 0.15f;
+        static Vector2 LookCurve(Vector2 s)
+        {
+            float m = s.magnitude;
+            if (m <= LookDeadZone) return Vector2.zero;
+            float k = Mathf.Clamp01((m - LookDeadZone) / (1f - LookDeadZone));
+            return s / m * (k * k);
         }
 
         public static bool Run

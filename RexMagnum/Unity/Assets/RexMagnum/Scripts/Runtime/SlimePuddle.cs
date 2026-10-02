@@ -5,7 +5,7 @@ namespace RexMagnum
     /// <summary>Slime puddle (brief: Rex slips on slime puddles - comedy fall). Fades out after a while.</summary>
     public class SlimePuddle : MonoBehaviour
     {
-        public float slipChance = 0.6f;     // when Rex runs over it
+        public float slipChance = 0.25f;    // when Rex runs over it (RexController keeps 4 s between slips)
         public float lifetime = 25f;
         float born;
         Material mat;

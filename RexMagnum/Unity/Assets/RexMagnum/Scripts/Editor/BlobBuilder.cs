@@ -117,11 +117,12 @@ namespace RexMagnum.EditorTools
                 m.SetInt("_ZWrite", 1);   // stops sorting problems inside the body
                 m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 m.renderQueue = (int)RenderQueue.Transparent;
-                m.SetColor("_BaseColor", new Color(c[1].r, c[1].g, c[1].b, 0.72f));
+                var mid = c[1].gamma;      // Blobs.json holds Blender linear colours; SetColor wants sRGB
+                m.SetColor("_BaseColor", new Color(mid.r, mid.g, mid.b, 0.72f));
                 m.SetFloat("_Smoothness", 0.96f);
                 m.SetFloat("_Metallic", 0f);
                 m.EnableKeyword("_EMISSION");
-                m.SetColor("_EmissionColor", c[2] * 0.15f);
+                m.SetColor("_EmissionColor", IslandBuilder.Hdr(c[2] * 0.15f));
                 m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             });
             var brain = Make("Blob_Brain", m =>

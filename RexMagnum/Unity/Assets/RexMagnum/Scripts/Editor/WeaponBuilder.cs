@@ -117,7 +117,9 @@ namespace RexMagnum.EditorTools
                 var m = AssetDatabase.LoadAssetAtPath<Material>(p);
                 if (m == null) { m = new Material(lit); AssetDatabase.CreateAsset(m, p); }
                 m.shader = lit;
-                var c = new Color(r.color[0], r.color[1], r.color[2], r.transparent ? 0.55f : 1f);
+                var lin = new Color(r.color[0], r.color[1], r.color[2]);         // Blender linear
+                var c = lin.gamma;                                                 // SetColor expects sRGB (Linear project)
+                c.a = r.transparent ? 0.55f : 1f;
                 m.SetColor("_BaseColor", string.IsNullOrEmpty(r.baseMap) ? c : new Color(1, 1, 1, c.a));
                 if (!string.IsNullOrEmpty(r.baseMap))
                     m.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/Textures/{r.baseMap}"));
@@ -148,7 +150,7 @@ namespace RexMagnum.EditorTools
                 if (r.emission > 0f)
                 {
                     m.EnableKeyword("_EMISSION");
-                    m.SetColor("_EmissionColor", c * Mathf.Min(r.emission, 8f));
+                    m.SetColor("_EmissionColor", IslandBuilder.Hdr(lin * Mathf.Min(r.emission, 8f)));
                 }
                 EditorUtility.SetDirty(m);
                 d[r.name] = m;

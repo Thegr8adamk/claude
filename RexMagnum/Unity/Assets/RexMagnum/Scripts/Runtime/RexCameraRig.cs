@@ -59,7 +59,10 @@ namespace RexMagnum
         /// <summary>Field of view from Settings (third person; first person is 10 more).</summary>
         public static float FovSetting = 65f;
 
-        float side = 1f, currentDist, blend;
+        float side = 1f, currentDist, blend, aimT, wallDist = -1f, shake;
+
+        /// <summary>Short camera shake (heavy hit, Rex hit). amount ~0.1 small .. 0.4 big; fades in ~0.25 s.</summary>
+        public void Shake(float amount) => shake = Mathf.Max(shake, amount);
         bool wasScoped, snapHeld, bodyHiddenNear;
         readonly RaycastHit[] camHits = new RaycastHit[16];
         Transform head;
@@ -88,6 +91,9 @@ namespace RexMagnum
             int def = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);     // settings: 0 FP, 1 TP, 2 remember last
             bool fp = def == 0 || (def == 2 && PlayerPrefs.GetInt(PrefKey, 1) == 0);
             SetMode(fp ? CameraMode.FirstPerson : CameraMode.ThirdPerson, true);
+            // Rex is hit: a small shake (bigger hits shake more)
+            var hp = target.GetComponent<Health>();
+            if (hp != null) hp.Damaged += (a, p, by) => { if (!hp.IsDead) Shake(Mathf.Clamp(a * 0.012f, 0.08f, 0.3f)); };
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -197,13 +203,30 @@ namespace RexMagnum
                 if (h.collider.GetComponentInParent<UnityEngine.AI.NavMeshAgent>() != null) continue;
                 nearest = Mathf.Min(nearest, h.distance);
             }
-            if (nearest < float.MaxValue) tp = pivot + offset.normalized * Mathf.Max(0.2f, nearest - 0.05f);
+            // fast in, slow out: a wall pulls the camera in at once; when it clears, the camera eases back out
+            // (no pop from 0.5 m to 2.6 m in one frame when Rex steps past a pillar)
+            float free = nearest < float.MaxValue ? Mathf.Max(0.2f, nearest - 0.05f) : offset.magnitude;
+            wallDist = wallDist < 0f || free < wallDist ? free : Mathf.MoveTowards(wallDist, free, dt * 4f);
+            tp = pivot + offset.normalized * Mathf.Min(wallDist, offset.magnitude);
 
             float b = blend * blend * (3f - 2f * blend);
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);
+            if (VRControlled) shake = 0f;                      // no shake in a headset (sickness)
+            if (shake > 0.001f)
+            {
+                // unscaled: a shake during the hit-stop still plays out; random roll/pitch kick, no position jump through walls
+                float s = shake;
+                transform.rotation *= Quaternion.Euler(Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 4f);
+                shake = Mathf.MoveTowards(shake, 0f, Time.unscaledDeltaTime * 1.6f);
+            }
             fov = FovSetting; fpFov = FovSetting + 10f; aimFov = FovSetting - 15f;
             if (!VRControlled)      // in VR the headset sets the field of view
-                cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, IsAiming ? 1f : 0f), fpFov, b);
+            {
+                // aim zoom blends over ~0.15 s (no snap); unscaled so it also works in the weapon wheel's slow motion
+                aimT = Mathf.MoveTowards(aimT, IsAiming ? 1f : 0f, Time.unscaledDeltaTime / 0.15f);
+                float ak = aimT * aimT * (3f - 2f * aimT);
+                cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, ak), fpFov, b);
+            }
 
             // third person against a wall: the camera comes very close to Rex; hide his body (shadow stays) so the
             // view is not inside his head

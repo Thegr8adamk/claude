@@ -16,7 +16,7 @@ namespace RexMagnum
         public Animator armsAnimator;     // first-person arms (optional)
 
         [Header("Move")]
-        public float walkSpeed = 2.2f;
+        public float walkSpeed = 3.0f;
         public float runSpeed = 6.0f;
         public float handsDownBonus = 1.15f;   // brief: hands down = runs faster
         public float acceleration = 10f;
@@ -48,15 +48,16 @@ namespace RexMagnum
         static readonly int SwimHash = Animator.StringToHash("Swim");
         float lockedUntil, lastInputTime;
         bool hasSwimParam, saidSlimeSwim;
-        float kickUntil;
+        float kickUntil, nextSlip;
 
         /// <summary>Comedy fall on slime. Rex cannot move for a moment.</summary>
         public void Slip()
         {
-            if (Time.time < lockedUntil) return;
+            if (Time.time < lockedUntil || Time.time < nextSlip) return;
+            nextSlip = Time.time + 4f;                 // a slime-covered fight is not a chain of falls
             Progress.Add("slips");
             SetTrigger(SlipHash);
-            lockedUntil = Time.time + 1.7f;
+            lockedUntil = Time.time + 1.1f;
             velocity.x *= 0.3f;
             velocity.z *= 0.3f;
             RexVoice.Say(gameObject, "Slip");

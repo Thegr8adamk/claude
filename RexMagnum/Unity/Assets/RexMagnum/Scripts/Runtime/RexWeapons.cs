@@ -39,7 +39,13 @@ namespace RexMagnum
             WeaponId.Swordfish, WeaponId.Pistol, WeaponId.Harpoon, WeaponId.Sniper, WeaponId.Coconut,
         };
 
-        void Start() => Equip(WeaponId.Fists);
+        void Start()
+        {
+            Progress.LoadWeapons(owned, ammo);             // weapons + ammo from the save (keeps them after a restart)
+            Equip(WeaponId.Fists);
+        }
+
+        void SaveInventory() => Progress.SaveWeapons(owned, Ammo);
 
         /// <summary>Owned weapons in the fixed wheel / cycle order.</summary>
         public List<WeaponId> OwnedInOrder()
@@ -92,9 +98,11 @@ namespace RexMagnum
             }
         }
 
-        /// <summary>A line after a kill: the weapon's line, or sometimes one about the blob type or the fight.</summary>
-        void KillLine(WeaponDef d, Blob blob)
+        /// <summary>A line after a kill: the weapon's line, or sometimes one about the blob type or the fight.
+        /// Only ~40% of plain kills get one (a line every pop wears thin); kill cams and special kills always do.</summary>
+        void KillLine(WeaponDef d, Blob blob, bool always = false)
         {
+            if (!always && Random.value > 0.4f) return;
             string group = d.id == WeaponId.Fists ? "Fists" : d.id.ToString();
             float roll = Random.value;
             if (blob != null && roll < 0.3f)
@@ -115,6 +123,7 @@ namespace RexMagnum
                 if (d.isGun) ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + d.startAmmo);   // keep ammo found before the weapon
                 Equip(id);
                 RexVoice.Say(gameObject, "WeaponFound", true);
+                SaveInventory();
             }
             else if (d.isGun) AddAmmo(id, d.startAmmo);
         }
@@ -123,6 +132,7 @@ namespace RexMagnum
         {
             var d = WeaponDef.Get(id);
             ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + n);
+            SaveInventory();
         }
 
         void Cycle(int dir)
@@ -273,11 +283,26 @@ namespace RexMagnum
         void Melee(WeaponDef d, bool heavy)
         {
             controller.SetTrigger(Animator.StringToHash(heavy ? d.holdTrigger : d.tapTrigger));
-            busyUntil = Time.time + (heavy ? 0.9f : 0.5f);
-            controller.FaceAimFor(heavy ? 0.9f : 0.5f);
-            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.2f));
-            string swing = d.id == WeaponId.Towel ? "towel_crack" : d.id == WeaponId.GolfClub ? "golf_swing" : null;
-            if (swing != null) StartCoroutine(PlayLater(swing, heavy ? 0.4f : 0.15f));
+            // tap = a quick jab (0.42 s); heavy = 0.75 s but ~3x the damage, knockback, hit-stop and shake
+            busyUntil = Time.time + (heavy ? 0.75f : 0.42f);
+            controller.FaceAimFor(heavy ? 0.75f : 0.42f);
+            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f));
+            // a whoosh on every swing: the weapon's own sound, else the golf swing pitched up (short and light)
+            string swing = d.id == WeaponId.Towel ? "towel_crack" : "golf_swing";
+            float pitch = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub ? 1f : heavy ? 1.35f : 1.7f;
+            float vol = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub ? 1f : heavy ? 0.55f : 0.35f;
+            StartCoroutine(PlayLater(swing, heavy ? 0.4f : 0.12f, vol, pitch));
+        }
+
+        /// <summary>Heavy hit: the game freezes for 60 ms (real time) so the hit lands. Skipped while the pause menu,
+        /// kill cam or weapon wheel owns the time scale, and only undone if nobody took it over meanwhile.</summary>
+        IEnumerator HitStop()
+        {
+            const float stopScale = 0.02f;
+            if (KillCam.Active || PauseMenu.Open || !Mathf.Approximately(Time.timeScale, 1f)) yield break;
+            Time.timeScale = stopScale;
+            yield return new WaitForSecondsRealtime(0.06f);
+            if (Mathf.Approximately(Time.timeScale, stopScale)) Time.timeScale = 1f;
         }
 
         IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay)
@@ -307,17 +332,24 @@ namespace RexMagnum
                 }
                 float dmg = (heavy ? d.holdDamage : d.tapDamage) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
                 h.Damage(dmg, col.ClosestPoint(c), gameObject);
+                if (blob != null) RexTestHUD.HitMarker();
                 if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
                 if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
+                if (blob != null && !h.IsDead) blob.Knockback(transform.forward, heavy ? 1.5f : 0.4f);
                 if (h.IsDead && blob != null)       // blobs only: the stuck door also has Health (no kill cam for a door)
                 {
-                    KillLine(d, blob);
                     // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
                     if ((heavy && d.killCamOnHold) || Blob.LivingNear(transform.position, 30f) == 0)
                         KillCam.Show(h.transform, transform.position,
                             d.id == WeaponId.GolfClub && heavy ? KillCam.Style.Follow :
                             d.id == WeaponId.Towel ? KillCam.Style.Towel :
                             d.id == WeaponId.Fists ? KillCam.Style.Fist : KillCam.Style.Orbit);
+                    KillLine(d, blob, KillCam.Active || (heavy && d.id == WeaponId.GolfClub));   // golf fling: always a line
+                }
+                if (heavy && blob != null)
+                {
+                    if (cameraRig != null) cameraRig.Shake(0.18f);
+                    StartCoroutine(HitStop());
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
@@ -339,9 +371,13 @@ namespace RexMagnum
             if (Ammo(d.id) <= 0)
             {
                 nextShot = Time.time + 0.4f;
+                // dry fire: a short, quiet, high click (the start of the shot sound)
+                var click = Sfx.Play("pistol", transform.position, 0.12f, 2.4f);
+                if (click != null) Destroy(click.gameObject, 0.05f);
                 return;
             }
             ammo[d.id]--;
+            SaveInventory();
             nextShot = Time.time + (d.id == WeaponId.Sniper ? 1.2f : d.id == WeaponId.Harpoon ? 1.0f : 0.25f);
             controller.FaceAimFor(0.6f);
             Sfx.Play(d.id == WeaponId.Sniper ? "sniper" : d.id == WeaponId.Harpoon ? "harpoon" : "pistol", transform.position);
@@ -370,12 +406,14 @@ namespace RexMagnum
                     bool brain = blob != null && Vector3.Cross(ray.direction, blob.BrainPoint - ray.origin).magnitude < blob.BrainRadius;
                     if (brain && d.id == WeaponId.Sniper) Progress.Add("sniper_brains");
                     h.Damage(d.tapDamage * (brain ? 2f : 1f), hit.point, gameObject);
+                    if (blob != null) RexTestHUD.HitMarker();
                     if (h.IsDead)
                     {
-                        KillLine(d, blob);
-                        if (d.id == WeaponId.Sniper && Vector3.Distance(from, hit.point) >= 150f) Progress.Add("sniper_long");
+                        bool longShot = d.id == WeaponId.Sniper && Vector3.Distance(from, hit.point) >= 150f;
+                        if (longShot) Progress.Add("sniper_long");
                         if (d.id == WeaponId.Sniper) KillCam.Show(h.transform, from, true);   // full bullet cam
                         else if (blob != null && Blob.LivingNear(transform.position, 30f) == 0) KillCam.Show(h.transform, from, true);
+                        KillLine(d, blob, KillCam.Active || brain || longShot);
                     }
                 }
                 SlimeFX.Splat(hit.point, hit.normal, new Color(1f, 0.9f, 0.6f), 4);
@@ -443,10 +481,10 @@ namespace RexMagnum
             return dir.normalized * (longThrow ? 15f : 8f);
         }
 
-        System.Collections.IEnumerator PlayLater(string sfx, float t)
+        System.Collections.IEnumerator PlayLater(string sfx, float t, float volume = 1f, float pitch = 1f)
         {
             yield return new WaitForSeconds(t);
-            Sfx.Play(sfx, transform.position);
+            Sfx.Play(sfx, transform.position, volume, pitch);
         }
 
         void ThrowCoconut(bool longThrow)
@@ -454,6 +492,7 @@ namespace RexMagnum
             if (Ammo(WeaponId.Coconut) <= 0) return;
             Sfx.Play("coconut", transform.position);
             ammo[WeaponId.Coconut]--;
+            SaveInventory();
             controller.SetTrigger(Animator.StringToHash("Throw"));       // overhand coconut throw
             controller.FaceAimFor(0.6f);
             busyUntil = Time.time + 0.7f;

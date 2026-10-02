@@ -8,12 +8,6 @@ namespace RexMagnum
         string toast; float toastUntil;
         Transform rex;
         bool wasNight;
-        static readonly (string zone, Vector3 at, float r)[] Zones =
-        {
-            ("hotel", new Vector3(40, 0, -300), 60), ("pool", new Vector3(40, 0, -255), 60), ("beach", new Vector3(40, 0, -345), 80),
-            ("golf", new Vector3(-280, 0, -40), 110), ("jungle", new Vector3(60, 0, 60), 90), ("ruins", new Vector3(300, 0, 70), 45),
-            ("cave", new Vector3(-160, 0, 230), 25), ("ship", new Vector3(40, 0, 300), 60),
-        };
 
         void OnEnable() => Progress.Unlocked += Show;
         void OnDisable() => Progress.Unlocked -= Show;
@@ -29,10 +23,10 @@ namespace RexMagnum
         {
             if (Time.unscaledTime > nextFlush) { nextFlush = Time.unscaledTime + 2f; Progress.Flush(); }
             if (rex != null && Time.frameCount % 30 == 0)
-                foreach (var z in Zones)
+                foreach (var z in GameGuide.Zones)        // zone centres: GameGuide (also the HUD compass and the map)
                 {
                     var p = rex.position; p.y = 0;
-                    if (Vector3.Distance(p, z.at) < z.r) Progress.Visit(z.zone);
+                    if (Vector3.Distance(p, z.at) < z.r) Progress.Visit(z.id);
                 }
             bool night = DayNight.Night > 0.8f;
             if (wasNight && !night) Progress.Add("nights");

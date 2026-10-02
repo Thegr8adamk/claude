@@ -6,8 +6,8 @@ using UnityEngine.AI;
 namespace RexMagnum
 {
     /// <summary>
-    /// Resort guest (brief section 3): runs from blobs and hides; can be rescued (no blob near, Rex close, press Use)
-    /// and then gives ammo / health and a line; talks only when Rex's hands are down (Action = Talk: Rex flirts, the
+    /// Resort guest (brief section 3): runs from blobs and hides; can be rescued (no blob within 10 m, Rex close, press Use)
+    /// and then gives a clue (saved for the pause map) plus ammo / health; talks only when Rex's hands are down (Action = Talk: Rex flirts, the
     /// guest answers, brief section 9); reacts to the taunt (laughs or throws a drink). Carmen (security) never runs:
     /// she stays at her post and always rejects Rex. Uses Rex's animator (Humanoid): Speed, Hit.
     /// Voice: Resources/Voice/Guests/&lt;Name&gt;/answer_NN (optional; subtitles always).
@@ -32,6 +32,16 @@ namespace RexMagnum
         float nextThink, nextTalk;
         static readonly int SpeedHash = Animator.StringToHash("Speed");
         static readonly int HitHash = Animator.StringToHash("Hit");
+        /// <summary>No living blob this close: the guest dares to come out (rescue).</summary>
+        public const float SafeRadius = 10f;
+        /// <summary>Active guests (HUD Use prompts, objective marker).</summary>
+        public static readonly List<Guest> All = new List<Guest>();
+        /// <summary>Hiding and reachable: Use near the guest rescues (when no blob is near).</summary>
+        public bool CanRescue => state == State.Hiding && !lockedIn;
+        public bool Rescued => state == State.Rescued;
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
 
         void Start()
         {
@@ -92,7 +102,8 @@ namespace RexMagnum
                 WeaponPickup.Nearby == null && FoodPickup.Nearby == null)
             {
                 NearestBlob(out float safeDist);
-                if (safeDist > panicRadius * 1.5f) Rescue();
+                if (safeDist > SafeRadius) Rescue();
+                else { RMInput.ConsumeUse(); RexTestHUD.Notice("Not safe yet: blobs nearby", 2f); }   // say why nothing happens
             }
             if (Time.time < nextThink || !agent.isOnNavMesh) return;
             nextThink = Time.time + 0.4f;
@@ -187,10 +198,15 @@ namespace RexMagnum
             Progress.Add("rescues");
             if (rex != null) RexVoice.Say(rex.gameObject, "Rescue", true);
             Vector3 drop = transform.position + transform.forward * 0.8f + Vector3.up * 0.3f;
-            float roll = Random.value;
-            if (roll < 0.3f)                                              // brief: ammo / health / clue
-                RexVoice.Subtitle?.Invoke(guestName.ToUpper() + ": " + Clues[Random.Range(0, Clues.Length)]);
-            else if (roll < 0.6f || rewardPrefabs == null || rewardPrefabs.Length == 0)
+            // brief: ammo / health / clue. Every rescue gives a clue (a new one while any are left, kept in the pause
+            // map), and also ammo or food
+            int start = Random.Range(0, Clues.Length);
+            string clue = Clues[start];
+            for (int i = 0; i < Clues.Length; i++)
+                if (Progress.AddClue(Clues[(start + i) % Clues.Length])) { clue = Clues[(start + i) % Clues.Length]; break; }
+            // own HUD line (not a subtitle): Rex's rescue line does not push it off, and it shows with subtitles off
+            RexTestHUD.Notice($"CLUE from {guestName}: \"{clue}\"  (Pause > Map keeps it)", 6f);
+            if (Random.value < 0.5f || rewardPrefabs == null || rewardPrefabs.Length == 0)
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
             else
                 Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], drop - Vector3.up * 0.3f, Quaternion.identity);

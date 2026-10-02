@@ -28,6 +28,7 @@ namespace RexMagnum
         /// <summary>True while the boss fight runs (its power ballad plays; the normal fight music stays quiet).</summary>
         public static bool Fighting { get; private set; }
         int phase = 1;
+        float lastHitByRex = -999f;
         float nextAbsorb, nextWave, nextMinions, nextLine;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
         AudioSource music;
@@ -83,13 +84,9 @@ namespace RexMagnum
             if (!started)
             {
                 if (d > 40f) return;
-                started = true;
-                Fighting = true;
-                if (music.clip != null) music.Play();
-                Say(GlorpLines[0]);
-                RexVoice.Say(rex.gameObject, "Glorp", true);
+                StartFight();
             }
-            else if (d > 90f)
+            else if (d > 90f && Time.time - lastHitByRex > 20f)      // a sniper duel from far away keeps the fight on
             {
                 // Rex died (woke in room 304) or ran away: stop the ballad and the boss bar until he comes back
                 started = false;
@@ -167,8 +164,24 @@ namespace RexMagnum
             }
         }
 
+        /// <summary>Ballad, boss bar, intro lines. From walking within 40 m, or from the first hit at any range.</summary>
+        void StartFight()
+        {
+            started = true;
+            Fighting = true;
+            if (music.clip != null && !music.isPlaying) music.Play();
+            Say(GlorpLines[0]);
+            if (rex != null) RexVoice.Say(rex.gameObject, "Glorp", true);
+        }
+
         void OnDamaged(float amount, Vector3 point, GameObject by)
         {
+            // a sniper shot from the ship approach (or any hit) starts the whole fight: phases, armor, minions
+            if (!dead && by != null && rex != null && by.transform == rex)
+            {
+                lastHitByRex = Time.time;
+                if (!started) StartFight();
+            }
             if (armor.Count == 0 || dead) return;
             // the nearest armor piece takes the hit (health is given back); heavy hits knock it off
             int best = 0; float bd = float.MaxValue;

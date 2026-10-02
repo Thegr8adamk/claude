@@ -72,6 +72,7 @@ namespace RexMagnum.EditorTools
                 var r = human ? an.GetBoneTransform(HumanBodyBones.RightUpperArm) : null;
                 if (l != null && r != null && Vector3.Dot(Vector3.Cross(r.position - l.position, Vector3.up), Vector3.forward) < 0f)
                     inst.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                EyeMeshes(inst, human ? an.GetBoneTransform(HumanBodyBones.Head) : null, g.name);
                 var agent = root.AddComponent<NavMeshAgent>();
                 agent.radius = 0.3f;
                 agent.height = 1.75f;
@@ -88,6 +89,68 @@ namespace RexMagnum.EditorTools
             }
             Debug.Log($"[Rex Magnum] Guests: {string.Join(", ", result.Keys)}");
             return result;
+        }
+
+        /// <summary>The Blender eyeballs are UV-less spheres (iris came from shader nodes, so they showed blank grey).
+        /// Swap in a sphere of the same size whose UVs put the front pole (looking forward) at the centre of
+        /// Textures/Eye_BC.png (iris + pupil + highlight), with more texels on the visible front half.</summary>
+        static void EyeMeshes(GameObject inst, Transform head, string who)
+        {
+            int k = 0;
+            foreach (var mf in inst.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mr = mf.GetComponent<MeshRenderer>();
+                if (mf.sharedMesh == null || mr == null || mr.sharedMaterial == null || mr.sharedMaterial.name != "Rex_Eye") continue;
+                var b = mf.sharedMesh.bounds;
+                float rad = Mathf.Max(b.extents.x, Mathf.Max(b.extents.y, b.extents.z));
+                // forward = from the head bone to the eye, flattened; fall back to the character's forward
+                Vector3 fw = inst.transform.forward;
+                if (head != null)
+                {
+                    var d = mf.transform.TransformPoint(b.center) - head.position;
+                    d.y = 0f;
+                    if (d.sqrMagnitude > 1e-6f) fw = d.normalized;
+                }
+                Vector3 f = mf.transform.InverseTransformDirection(fw).normalized;
+                Vector3 up = Vector3.ProjectOnPlane(mf.transform.InverseTransformDirection(Vector3.up), f).normalized;
+                Vector3 right = Vector3.Cross(up, f);
+                const int rings = 24, segs = 32;
+                var verts = new List<Vector3>(); var norms = new List<Vector3>(); var uvs = new List<Vector2>(); var tris = new List<int>();
+                for (int i = 0; i <= rings; i++)
+                {
+                    float th = Mathf.PI * i / rings;                       // 0 = front pole (pupil)
+                    float r = 0.5f * Mathf.Pow(th / Mathf.PI, 0.6f);       // must match Blender/eye_texture.py
+                    for (int j = 0; j <= segs; j++)
+                    {
+                        float ph = 2f * Mathf.PI * j / segs;
+                        var n = f * Mathf.Cos(th) + (right * Mathf.Cos(ph) + up * Mathf.Sin(ph)) * Mathf.Sin(th);
+                        verts.Add(b.center + n * rad); norms.Add(n);
+                        uvs.Add(new Vector2(0.5f + r * Mathf.Cos(ph), 0.5f + r * Mathf.Sin(ph)));
+                    }
+                }
+                for (int i = 0; i < rings; i++)
+                    for (int j = 0; j < segs; j++)
+                    {
+                        int a = i * (segs + 1) + j, c = a + segs + 1;
+                        tris.AddRange(new[] { a, c, a + 1, a + 1, c, c + 1 });
+                    }
+                var mesh = new Mesh { name = $"{who}_Eye{k}" };
+                mesh.SetVertices(verts); mesh.SetNormals(norms); mesh.SetUVs(0, uvs); mesh.SetTriangles(tris, 0);
+                // winding must face outwards: flip if a triangle on the middle ring (not the degenerate pole) points inwards
+                int q0 = rings / 2 * segs * 6;
+                var t0 = Vector3.Cross(verts[tris[q0 + 1]] - verts[tris[q0]], verts[tris[q0 + 2]] - verts[tris[q0]]);
+                if (Vector3.Dot(t0, verts[tris[q0]] - b.center) < 0f)
+                {
+                    for (int q = 0; q < tris.Count; q += 3) { int s = tris[q + 1]; tris[q + 1] = tris[q + 2]; tris[q + 2] = s; }
+                    mesh.SetTriangles(tris, 0);
+                }
+                mesh.RecalculateTangents();
+                mesh.RecalculateBounds();
+                string p = $"{Prefabs}/{who}_Eye{k++}.asset";
+                AssetDatabase.DeleteAsset(p);
+                AssetDatabase.CreateAsset(mesh, p);
+                mf.sharedMesh = mesh;
+            }
         }
 
         static void Textures()
@@ -128,7 +191,8 @@ namespace RexMagnum.EditorTools
                 var m = AssetDatabase.LoadAssetAtPath<Material>(p);
                 if (m == null) { m = new Material(lit); AssetDatabase.CreateAsset(m, p); }
                 m.shader = lit;
-                var c = r.color != null && r.color.Length >= 3 ? new Color(r.color[0], r.color[1], r.color[2]) : Color.white;
+                // Blender linear colour -> sRGB (SetColor expects sRGB in a Linear project)
+                var c = r.color != null && r.color.Length >= 3 ? new Color(r.color[0], r.color[1], r.color[2]).gamma : Color.white;
                 m.SetColor("_BaseColor", c);
                 m.SetFloat("_Smoothness", r.smoothness > 0 ? r.smoothness : 0.35f);
                 var bm = string.IsNullOrEmpty(r.baseMap) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/{r.baseMap}");
@@ -136,7 +200,8 @@ namespace RexMagnum.EditorTools
                 var nm = string.IsNullOrEmpty(r.normalMap) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/{r.normalMap}");
                 if (nm != null) { m.SetTexture("_BumpMap", nm); m.EnableKeyword("_NORMALMAP"); }
                 var mk = string.IsNullOrEmpty(r.maskMap) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>($"{Dir}/{r.maskMap}");
-                if (mk != null) { m.SetTexture("_MetallicGlossMap", mk); m.EnableKeyword("_METALLICSPECGLOSSMAP"); m.SetFloat("_Smoothness", 1f); }
+                // skin mask alpha is ~0.55 (oily look): scale it to ~0.45
+                if (mk != null) { m.SetTexture("_MetallicGlossMap", mk); m.EnableKeyword("_METALLICSPECGLOSSMAP"); m.SetFloat("_Smoothness", r.name.EndsWith("_Skin") ? 0.8f : 1f); }
                 if (r.alphaClip)
                 {
                     m.SetFloat("_AlphaClip", 1f);

@@ -135,7 +135,8 @@ namespace RexMagnum.EditorTools
                 }
                 m.shader = lit;
                 m.enableInstancing = true;
-                var c = r.color != null && r.color.Length >= 3 ? new Color(r.color[0], r.color[1], r.color[2]) : Color.white;
+                // Blender linear colour -> sRGB (SetColor expects sRGB in a Linear project)
+                var c = r.color != null && r.color.Length >= 3 ? new Color(r.color[0], r.color[1], r.color[2]).gamma : Color.white;
                 m.SetColor("_BaseColor", c);
                 m.SetFloat("_Metallic", r.metallic);
                 m.SetFloat("_Smoothness", r.smoothness);
@@ -153,7 +154,8 @@ namespace RexMagnum.EditorTools
                 {
                     m.SetTexture("_MetallicGlossMap", AssetDatabase.LoadAssetAtPath<Texture2D>($"{Tex}/{r.maskMap}"));
                     m.EnableKeyword("_METALLICSPECGLOSSMAP");
-                    m.SetFloat("_Smoothness", 1f);
+                    // skin mask alpha is ~0.57 (oily look); scale it to ~0.45
+                    m.SetFloat("_Smoothness", r.name.Contains("Skin") ? 0.8f : 1f);
                 }
                 if (r.alphaClip)
                 {

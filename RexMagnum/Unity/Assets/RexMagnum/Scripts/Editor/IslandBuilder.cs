@@ -36,6 +36,7 @@ namespace RexMagnum.EditorTools
             public string name, kind, baseMap, normalMap, maskMap, emissionMap, water;
             public float[] color, emission;
             public float metallic, smoothness, alpha, tile, flow;
+            public float tileV, uvTile;      // uvTile: metres per UV unit in the FBX when it differs from the baked tile
             public bool twoSided;
         }
         [Serializable] class AssetRow { public string name, fbx; public int tris; }
@@ -163,6 +164,8 @@ namespace RexMagnum.EditorTools
 
         // ---------------------------------------------------------------- import settings
 
+        const float FoliageCutoff = 0.45f;     // leaf material _Cutoff = texture alphaTestReferenceValue
+
         static void ConfigureTextures()
         {
             AssetDatabase.StartAssetEditing();     // one import pass for all files (much faster)
@@ -180,6 +183,9 @@ namespace RexMagnum.EditorTools
                     ti.alphaSource = (mask || alpha) ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
                     ti.alphaIsTransparency = alpha;
                     ti.mipmapEnabled = true;
+                    // cut-out leaves: keep the alpha coverage in small mips so far trees do not thin out / vanish
+                    ti.mipMapsPreserveCoverage = n.StartsWith("leaf_");
+                    ti.alphaTestReferenceValue = FoliageCutoff;
                     ti.wrapMode = n.StartsWith("leaf_") ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
                     ti.anisoLevel = 8;
                     ti.maxTextureSize = 2048;
@@ -261,7 +267,20 @@ namespace RexMagnum.EditorTools
         static Texture2D Tex(string file) =>
             string.IsNullOrEmpty(file) ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(Dir + "/" + file);
 
-        static Color C(float[] c, float a = 1f) => c == null || c.Length < 3 ? Color.gray : new Color(c[0], c[1], c[2], a);
+        // Island.json colours are Blender linear values; Material.SetColor expects sRGB in a Linear project -> .gamma
+        static Color C(float[] c, float a = 1f) => c == null || c.Length < 3 ? Color.gray : Srgb(c[0], c[1], c[2], a);
+        static Color Srgb(float r, float g, float b, float a) { var s = new Color(r, g, b).gamma; s.a = a; return s; }
+
+        /// <summary>HDR emission (linear, may be > 1): convert the colour part to sRGB and keep the intensity.</summary>
+        public static Color Hdr(Color lin)
+        {
+            float k = Mathf.Max(1f, lin.maxColorComponent);
+            var g = new Color(lin.r / k, lin.g / k, lin.b / k).gamma;
+            return g * Mathf.LinearToGammaSpace(k);
+        }
+
+        static Color E(float[] e) => e == null || e.Length < 3 ? Color.black : Hdr(new Color(e[0], e[1], e[2]));
+
 
         static Material Asset(string name, Shader sh)
         {
@@ -329,7 +348,8 @@ namespace RexMagnum.EditorTools
                         m.SetFloat("_Smoothness", 0.95f);
                         m.SetFloat("_Metallic", 0f);
                         Transparent(m);
-                        if (r.emission != null && r.emission.Length >= 3) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", C(r.emission)); }
+                        m.SetShaderPassEnabled("ShadowCaster", false);     // clear glass must not cast solid shadows
+                        if (r.emission != null && r.emission.Length >= 3) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", E(r.emission)); }
                         break;
                     case "foliage":
                         m = Asset(r.name, lit);
@@ -337,7 +357,7 @@ namespace RexMagnum.EditorTools
                         m.SetColor("_BaseColor", Color.white);
                         m.SetFloat("_Smoothness", r.smoothness);
                         m.SetFloat("_AlphaClip", 1f);
-                        m.SetFloat("_Cutoff", 0.45f);
+                        m.SetFloat("_Cutoff", FoliageCutoff);
                         m.EnableKeyword("_ALPHATEST_ON");
                         m.SetFloat("_Cull", 0f);
                         m.renderQueue = (int)RenderQueue.AlphaTest;
@@ -351,6 +371,9 @@ namespace RexMagnum.EditorTools
                         m.SetFloat("_Smoothness", Mathf.Clamp01(r.smoothness));
                         var nm = Tex(r.normalMap);
                         if (nm != null) { m.SetTexture("_BumpMap", nm); m.EnableKeyword("_NORMALMAP"); }
+                        // re-baked tiles on old FBX UVs (2 m per UV unit): scale so the tile keeps its real size
+                        m.SetTextureScale("_BaseMap", r.uvTile > 0f && r.tile > 0f
+                            ? new Vector2(r.uvTile / r.tile, r.uvTile / (r.tileV > 0f ? r.tileV : r.tile)) : Vector2.one);
                         var mk = Tex(r.maskMap);
                         if (mk != null)
                         {
@@ -362,7 +385,7 @@ namespace RexMagnum.EditorTools
                         {
                             m.EnableKeyword("_EMISSION");
                             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                            m.SetColor("_EmissionColor", C(r.emission) * 0.6f);
+                            m.SetColor("_EmissionColor", Hdr(new Color(r.emission[0], r.emission[1], r.emission[2]) * 0.6f));
                             var em = Tex(r.emissionMap);
                             if (em != null) m.SetTexture("_EmissionMap", em);
                         }
@@ -616,6 +639,17 @@ namespace RexMagnum.EditorTools
                 if (Physics.Raycast(mid + Vector3.up * 30f, Vector3.down, out RaycastHit sand, 60f))
                     Pickup("Ammo_Coconut", sand.point + Vector3.up * 0.1f, root);
             }
+            // blobs from the sea (brief section 4): walk south from the beach until the seabed is under water; the
+            // spawner sits on the sea surface there (inside the pool NavMesh box, z > -405)
+            Vector3 sea = U(40f, -380f, 0f);
+            for (float y = -335f; y >= -400f; y -= 2f)
+            {
+                var q = U(40f, y, 0f);
+                if (Physics.Raycast(q + Vector3.up * 60f, Vector3.down, out RaycastHit bed, 120f, ~0, QueryTriggerInteraction.Ignore) &&
+                    bed.point.y < -0.8f) { sea = q; break; }
+            }
+            sea.y = 0f;                                       // sea level (Ocean at y 0)
+            ZoneSpawner("BeachBlobs", sea, 4, 12f, root);
         }
 
         // ---------------------------------------------------------------- hotel: pickups + elevator
@@ -627,6 +661,38 @@ namespace RexMagnum.EditorTools
             var p = (GameObject)PrefabUtility.InstantiatePrefab(pf, parent);
             p.transform.position = at;
             return p;
+        }
+
+        /// <summary>Healing on the way (playtest: long walks between food): a small teak crate with two cocktails on
+        /// top at ground point g. The drinks come back after 120 s.</summary>
+        static void DrinkStand(string name, Vector3 g, Transform parent)
+        {
+            var wood = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Teak.mat");
+            var crate = Box(name, g + Vector3.up * 0.35f, new Vector3(0.9f, 0.7f, 0.6f), wood, parent);
+            crate.isStatic = true;
+            FoodPickup.Spawn(FoodPickup.Kind.Cocktail, g + new Vector3(-0.22f, 0.72f, 0f), 120f, parent);
+            FoodPickup.Spawn(FoodPickup.Kind.Cocktail, g + new Vector3(0.22f, 0.72f, 0f), 120f, parent);
+        }
+
+        /// <summary>Ground under p (highest hit below p + 3 m), or p itself.</summary>
+        static Vector3 GroundAt(Vector3 p)
+        {
+            Physics.SyncTransforms();
+            return Physics.Raycast(p + Vector3.up * 3f, Vector3.down, out RaycastHit hit, 40f, ~0, QueryTriggerInteraction.Ignore) ? hit.point : p;
+        }
+
+        /// <summary>One more blob spawner for a zone, with the same blob prefabs as the pool spawner.</summary>
+        static BlobSpawner ZoneSpawner(string name, Vector3 at, int maxAlive, float radius, Transform parent)
+        {
+            var src = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
+            if (src == null) return null;
+            var sp = new GameObject(name).AddComponent<BlobSpawner>();
+            sp.transform.SetParent(parent, false);
+            sp.transform.position = at;
+            sp.prefabs = src.prefabs;
+            sp.maxAlive = maxAlive;
+            sp.radius = radius;
+            return sp;
         }
 
         static GameObject Box(string name, Vector3 center, Vector3 size, Material m, Transform parent)
@@ -729,6 +795,24 @@ namespace RexMagnum.EditorTools
             var root = new GameObject("Golf_Gameplay").transform;
             var club = Pts(golf, "golfClub");
             if (club.Count > 0) Pickup("Pickup_GolfClub", club[0] + Vector3.up * 0.1f, root);
+            // drinks at the pro shop, beside the club
+            var shop = Pts(golf, "proShop");
+            if (shop.Count > 0) DrinkStand("ProShopDrinks", GroundAt(shop[0] + new Vector3(-1.6f, 0.5f, -1.2f)), root);
+            // blobs on the course too (from the water hazards if any, else out of the rough), with their own NavMesh
+            var tees = Pts(golf, "tees");
+            if (tees.Count > 0)
+            {
+                Vector3 mid = Vector3.zero;
+                foreach (var t in tees) mid += t;
+                mid /= tees.Count;
+                var gs = ZoneSpawner("GolfBlobs", GroundAt(mid), 4, 16f, root);
+                if (gs != null)
+                {
+                    var gnav = gs.gameObject.AddComponent<RuntimeNavMesh>();
+                    gnav.center = mid + new Vector3(0f, 0f, -15f);          // course + pro shop (tees -100..32, shop -126)
+                    gnav.size = new Vector3(200f, 60f, 200f);
+                }
+            }
             foreach (var c in Pts(golf, "chargers"))
             {
                 var t = new GameObject("ChargeStation").transform;
@@ -775,6 +859,9 @@ namespace RexMagnum.EditorTools
                 ch.SetParent(root, false);
                 ch.position = at + Vector3.up * 0.05f;
                 ch.gameObject.AddComponent<ChargeStation>();
+                // drinks beside the charge station: heal before (or after) the factory fight
+                Vector3 side = Vector3.Cross(Vector3.up, outward).normalized;
+                DrinkStand("RuinsDrinks", GroundAt(at + side * 3f + Vector3.up * 0.5f), root);
             }
             var go = new GameObject("FactoryCore");
             go.transform.SetParent(root, false);
@@ -983,6 +1070,10 @@ namespace RexMagnum.EditorTools
                 if (mat != null) c.GetComponent<Renderer>().sharedMaterial = mat;
                 c.AddComponent<Rigidbody>().mass = 30f;
             }
+            // drinks on the ship approach, by the tunnel's rock-crack exit (~45 m out: before the fight starts)
+            var approach = U(14f, 293f, 0f);
+            if (terrain != null) approach.y = terrain.SampleHeight(approach) + terrain.transform.position.y;
+            DrinkStand("ShipApproachDrinks", GroundAt(approach + Vector3.up * 0.5f), g.transform.parent);
             var nav = new GameObject("ShipNavMesh").AddComponent<RuntimeNavMesh>();
             nav.center = at;
             nav.size = new Vector3(120f, 60f, 120f);
@@ -1268,7 +1359,7 @@ namespace RexMagnum.EditorTools
                     detailProtos.Add(new DetailPrototype
                     {
                         usePrototypeMesh = true, prototype = dp, renderMode = DetailRenderMode.VertexLit,
-                        useInstancing = true, minWidth = 0.8f, maxWidth = 1.4f, minHeight = 0.7f, maxHeight = 1.4f,
+                        useInstancing = true, minWidth = 1.0f, maxWidth = 1.8f, minHeight = 0.7f, maxHeight = 1.4f,   // wider: fewer clumps cover the same ground
                         healthyColor = Color.white, dryColor = new Color(0.85f, 0.8f, 0.6f), noiseSpread = 0.3f,
                         alignToGround = 60f, density = 1f     // Unity 6: percent (0-100)
                     });
@@ -1316,8 +1407,10 @@ namespace RexMagnum.EditorTools
                         float wx = x * ti.size / dr - ti.size / 2, wy = z * ti.size / dr - ti.size / 2;
                         if (Mathf.Abs(wx - 40f) < 58f && wy > -315f && wy < -226f) continue;   // hotel + pool deck
                         if ((wx + 280f) * (wx + 280f) + (wy + 40f) * (wy + 40f) < 115f * 115f) continue; // golf (mown)
-                        int n = Mathf.RoundToInt(g * 3f);
-                        for (int c = 0; c < n; c++) maps[rng.Next(maps.Length)][z, x] += 1;
+                        // at most 1 clump (~200 triangles) per 1 m cell: 3 per cell was 10-20 M grass triangles on High;
+                        // QualityAuto's per-tier density + distance keep High under ~1.5 M
+                        if (rng.NextDouble() > 0.5 + 0.5 * Mathf.InverseLerp(0.45f, 0.8f, g)) continue;
+                        maps[rng.Next(maps.Length)][z, x] = 1;
                     }
                 for (int i = 0; i < maps.Length; i++) td.SetDetailLayer(0, 0, i, maps[i]);
             }
@@ -1334,7 +1427,8 @@ namespace RexMagnum.EditorTools
             t.drawInstanced = true;
             t.treeDistance = 650f;
             t.treeBillboardDistance = 300f;
-            t.detailObjectDistance = 110f;
+            t.detailObjectDistance = 80f;          // = QualityAuto High (it sets the real value per tier at start)
+            t.detailObjectDensity = 0.35f;
             t.heightmapPixelError = 3f;
             t.basemapDistance = 400f;
             var tc = go.GetComponent<TerrainCollider>();
@@ -1446,8 +1540,10 @@ namespace RexMagnum.EditorTools
                 return c;
             }
             var tm = Get<Tonemapping>(); tm.mode.Override(TonemappingMode.ACES);
-            var bl = Get<Bloom>(); bl.threshold.Override(1.1f); bl.intensity.Override(0.35f); bl.scatter.Override(0.6f);
-            var ca = Get<ColorAdjustments>(); ca.postExposure.Override(0.25f); ca.contrast.Override(12f); ca.saturation.Override(8f);
+            // bloom only on real highlights (sun glints, neon, emissives), not on sunlit sand and white walls;
+            // no extra exposure: the albedos are now correct (sRGB-converted) so the scene is bright enough without it
+            var bl = Get<Bloom>(); bl.threshold.Override(1.5f); bl.intensity.Override(0.35f); bl.scatter.Override(0.6f);
+            var ca = Get<ColorAdjustments>(); ca.postExposure.Override(0f); ca.contrast.Override(12f); ca.saturation.Override(8f);
             var wb = Get<WhiteBalance>(); wb.temperature.Override(6f);
             var vg = Get<Vignette>(); vg.intensity.Override(0.18f);
             foreach (var c in prof.components) EditorUtility.SetDirty(c);

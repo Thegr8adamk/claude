@@ -62,6 +62,36 @@ namespace RexMagnum
             Play("Pinned");
         }
         public bool IsAngry => Time.time < angryUntil;
+        /// <summary>Top chase speed: below Rex's run speed (6.0), so running away always works.</summary>
+        public const float MaxChaseSpeed = 5.7f;
+
+        /// <summary>Hit reaction: slides the blob back along dir (flat) by metres over 0.15 s, on the NavMesh.
+        /// Not for the boss (too big to shove) or a blob that is already popping.</summary>
+        public void Knockback(Vector3 dir, float metres)
+        {
+            if (health.IsDead || kind == Kind.KingGlorp || !agent.enabled || !agent.isOnNavMesh) return;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.0001f) return;
+            if (knockRoutine != null) StopCoroutine(knockRoutine);
+            knockRoutine = StartCoroutine(KnockSlide(dir.normalized * metres, 0.15f));
+        }
+        Coroutine knockRoutine;
+
+        IEnumerator KnockSlide(Vector3 total, float time)
+        {
+            busyUntil = Mathf.Max(busyUntil, Time.time + time + 0.1f);      // stops chasing while it slides
+            float done = 0f;
+            for (float t = 0f; t < time; t += Time.deltaTime)
+            {
+                if (health.IsDead || !agent.enabled || !agent.isOnNavMesh) yield break;
+                float k = Mathf.Clamp01((t + Time.deltaTime) / time);
+                float eased = 1f - (1f - k) * (1f - k);                       // fast first, then settles
+                agent.Move(total * (eased - done));                          // Move keeps it on the NavMesh (no wall clipping)
+                done = eased;
+                yield return null;
+            }
+            knockRoutine = null;
+        }
 
         NavMeshAgent agent;
         float nextSlideSfx;
@@ -94,8 +124,8 @@ namespace RexMagnum
             switch (kind)
             {
                 case Kind.Tourist: speed = 1.2f; attackRange = 7f; attackInterval = 2.6f; damage = 8f; health.ResetHealth(40); break;
-                case Kind.Lifeguard: speed = 4.2f; attackRange = 11f; attackInterval = 2.0f; damage = 10f; health.ResetHealth(30); break;
-                case Kind.Bouncer: speed = 2.0f; attackRange = 2.6f; attackInterval = 1.8f; damage = 18f; health.ResetHealth(isHalf ? 40 : 90); break;
+                case Kind.Lifeguard: speed = 3.6f; attackRange = 11f; attackInterval = 2.0f; damage = 10f; health.ResetHealth(30); break;
+                case Kind.Bouncer: speed = 2.0f; attackRange = 2.6f; attackInterval = 1.8f; damage = isHalf ? 9f : 18f; health.ResetHealth(isHalf ? 40 : 90); break;
                 case Kind.KingGlorp: speed = 1.5f; attackRange = 14f; attackInterval = 1.6f; damage = 15f; health.ResetHealth(1200); break;
             }
             agent.speed = speed;
@@ -130,6 +160,8 @@ namespace RexMagnum
             // Angry: darker color + shake (brief); a little faster
             float angry = IsAngry ? 1f : 0f;
             agent.speed = speed * DayNight.BlobSpeed * (IsAngry ? 1.5f : 1f) * (IsStunned ? 0f : 1f);
+            // fairness: night + angry must never outrun Rex's run (6 m/s); the lifeguard's 3.6 is 5.76 at full night
+            if (kind != Kind.KingGlorp) agent.speed = Mathf.Min(agent.speed, MaxChaseSpeed);
             if (jellyRenderer != null)
             {
                 jellyRenderer.GetPropertyBlock(mpb);
@@ -289,7 +321,10 @@ namespace RexMagnum
             if (kind == Kind.KingGlorp || Random.value > chance) return;
             Vector3 p = transform.position + Vector3.up * 0.4f;
             if (Loot != null && Loot.Length > 0 && Random.value < 0.6f)
-                Instantiate(Loot[Random.Range(0, Loot.Length)], p - Vector3.up * 0.3f, Quaternion.identity);
+            {
+                var drop = Instantiate(Loot[Random.Range(0, Loot.Length)], p - Vector3.up * 0.3f, Quaternion.identity);
+                if (drop.TryGetComponent(out WeaponPickup wp)) wp.respawnSeconds = 0f;     // loot is one-time (world ammo comes back)
+            }
             else
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), p, 0f);
         }

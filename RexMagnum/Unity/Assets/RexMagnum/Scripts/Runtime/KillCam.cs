@@ -18,7 +18,7 @@ namespace RexMagnum
 
         public static int Setting
         {
-            get => PlayerPrefs.GetInt("RexMagnum_KillCam", 2);
+            get => PlayerPrefs.GetInt("RexMagnum_KillCam", 1);     // default "less often": the fight keeps its pace
             set => PlayerPrefs.SetInt("RexMagnum_KillCam", value);
         }
 
@@ -52,11 +52,37 @@ namespace RexMagnum
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() { riding = rideKilled = false; inst = null; coconut = null; }
 
-        /// <summary>Coconut (brief: camera rides the coconut, slime rain): ride it in slow motion when blobs are near.</summary>
+        /// <summary>Coconut (brief: camera rides the coconut, slime rain): ride it in slow motion only when it will land
+        /// near a blob (a living blob within 6 m of the predicted landing point); a throw at nothing is not a show.</summary>
         public static void WatchCoconut(Transform t)
         {
             coconut = t;
-            if (t != null && Blob.LivingNear(t.position, 25f) > 0 && Allowed()) Instance.StartCoroutine(Instance.Ride(t));
+            if (t == null) return;
+            var rb = t.GetComponent<Rigidbody>();
+            if (rb == null || !PredictLanding(t.position, rb.linearVelocity, rb, out Vector3 land)) return;
+            if (Blob.LivingNear(land, 6f) > 0 && Allowed()) Instance.StartCoroutine(Instance.Ride(t));
+        }
+
+        /// <summary>First thing the throw arc hits (ballistic steps of 0.04 s, up to the 3 s fuse). Rex and the
+        /// coconut itself do not count.</summary>
+        static bool PredictLanding(Vector3 p, Vector3 v, Rigidbody self, out Vector3 land)
+        {
+            const float step = 0.04f;
+            for (float t = 0f; t < 3f; t += step)
+            {
+                Vector3 n = p + v * step + 0.5f * Physics.gravity * step * step;
+                Vector3 seg = n - p;
+                foreach (var h in Physics.RaycastAll(p, seg.normalized, seg.magnitude, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (h.rigidbody == self || h.collider.GetComponentInParent<RexController>() != null) continue;
+                    land = h.point;
+                    return true;
+                }
+                v += Physics.gravity * step;
+                p = n;
+            }
+            land = p;
+            return true;               // still flying when the fuse ends: it blows up in the air there
         }
 
         public static void CoconutDone(bool killed)

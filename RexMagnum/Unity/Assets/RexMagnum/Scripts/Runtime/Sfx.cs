@@ -23,10 +23,23 @@ namespace RexMagnum
             return c;
         }
 
-        public static void Play(string name, Vector3 pos, float volume = 1f)
+        /// <summary>One-shot 3D sound. Pitch varies +-8% each time (the same hit twice in a row sounds less canned).
+        /// Returns the source (null when the clip is missing) so a caller can cut it short.</summary>
+        public static AudioSource Play(string name, Vector3 pos, float volume = 1f, float pitch = 1f)
         {
             var c = Get(name);
-            if (c != null) AudioSource.PlayClipAtPoint(c, pos, volume * AudioMix.Effects);
+            if (c == null) return null;
+            // own source instead of PlayClipAtPoint: that one has no pitch
+            var go = new GameObject("Sfx_" + name);
+            go.transform.position = pos;
+            var a = go.AddComponent<AudioSource>();
+            a.clip = c;
+            a.spatialBlend = 1f;
+            a.volume = volume * AudioMix.Effects;
+            a.pitch = pitch * Random.Range(0.92f, 1.08f);
+            a.Play();
+            Object.Destroy(go, c.length / Mathf.Max(0.1f, a.pitch) + 0.1f);
+            return a;
         }
     }
 }

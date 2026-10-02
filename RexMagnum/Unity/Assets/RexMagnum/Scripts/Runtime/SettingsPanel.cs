@@ -7,17 +7,19 @@ using UnityEngine.InputSystem.LowLevel;
 namespace RexMagnum
 {
     /// <summary>
-    /// The settings screen, shared by the title screen and the pause menu. Four pages:
+    /// The settings screen, shared by the title screen and the pause menu. Five pages:
     /// GRAPHICS (quality, render scale, frame limit, V-sync, full screen, field of view),
     /// CAMERA &amp; VR (first / third person, head bob, look speeds, invert, kill cam, VR mode, VR turning),
     /// SOUND (master, music, voices, effects, subtitles),
-    /// CONTROLS (keyboard keys, controller buttons, controller and touch options).
+    /// CONTROLS (keyboard keys, controller buttons, controller and touch options),
+    /// HELP (the controls of the device used last, from GameGuide.Controls).
     /// Mouse: click. Keyboard / controller: Up/Down choose a line, Left/Right change it, Enter / A press it,
     /// Q/E or LB/RB change the page, Esc / B go back. Everything is saved in PlayerPrefs at once.
     /// </summary>
     public class SettingsPanel
     {
-        public static readonly string[] Pages = { "GRAPHICS", "CAMERA & VR", "SOUND", "CONTROLS" };
+        public static readonly string[] Pages = { "GRAPHICS", "CAMERA & VR", "SOUND", "CONTROLS", "HELP" };
+        public const int HelpPage = 4;
         public int page;
         /// <summary>Set by the pause menu: close the menu so the player can drag the touch buttons.</summary>
         public Action editTouchLayout;
@@ -39,7 +41,8 @@ namespace RexMagnum
             public string[] opts; public Func<int> get; public Action<int> set;
             public float min, max; public Func<float> getF; public Action<float> setF; public Func<float, string> fmt;
             public Func<string> pressText; public Action press;
-            public bool Selectable => !header && note == null;
+            public string info;                     // HELP: read-only "label   value" line
+            public bool Selectable => !header && note == null && info == null;
         }
 
         readonly List<Row> rows = new List<Row>();
@@ -62,6 +65,7 @@ namespace RexMagnum
 
         void Header(string t) => rows.Add(new Row { header = true, label = t });
         void Note(string t) => rows.Add(new Row { note = t });
+        void Info(string label, string value) => rows.Add(new Row { label = label, info = value });
         void Choice(string label, string[] opts, Func<int> get, Action<int> set) =>
             rows.Add(new Row { label = label, opts = opts, get = get, set = set });
         void Toggle(string label, string key, int def, Action after = null) =>
@@ -115,7 +119,7 @@ namespace RexMagnum
                     Slider("Look speed left/right", "RexMagnum_LookX", 1f, 0.3f, 2f, v => v.ToString("0.0") + "x");
                     Slider("Look speed up/down", "RexMagnum_LookY", 1f, 0.3f, 2f, v => v.ToString("0.0") + "x");
                     Toggle("Invert up/down", "RexMagnum_InvertY", 0);
-                    Choice("Kill cam", new[] { "OFF", "LESS OFTEN", "ALWAYS" }, () => PlayerPrefs.GetInt("RexMagnum_KillCam", 2),
+                    Choice("Kill cam", new[] { "OFF", "LESS OFTEN", "ALWAYS" }, () => PlayerPrefs.GetInt("RexMagnum_KillCam", 1),
                         v => PlayerPrefs.SetInt("RexMagnum_KillCam", v));
                     Header("VR");
                     Choice("VR mode", new[] { "OFF", "ON" }, () => VRMode.Wanted ? 1 : 0, v => VRMode.Set(v == 1));
@@ -177,6 +181,18 @@ namespace RexMagnum
                             PlayerPrefs.DeleteKey("RexMagnum_" + k);
                         ApplyAll();
                     });
+                    break;
+
+                case HelpPage:
+                    var dev = RMInput.LastDevice;
+                    Header(dev == RMInput.DeviceKind.Touch ? "HELP: TOUCH" : dev == RMInput.DeviceKind.Gamepad ? "HELP: CONTROLLER" : "HELP: KEYBOARD + MOUSE");
+                    Note("These follow the device you used last, and your own keys (CONTROLS page).");
+                    foreach (var c in GameGuide.Controls()) Info(c.what, c.how);
+                    Header("HOW TO PLAY");
+                    Note("The whole island is open. The NEXT line and the compass at the top of the screen show a goal. " +
+                         "Pause > MAP shows where you are, the zones you visited and the clues from rescued guests.");
+                    Note("Hands down: guests talk to you. Rescue hiding guests when no blob is near. Food and drinks heal. " +
+                         "If you die, you wake up in room 304 and keep your weapons.");
                     break;
             }
             if (sel < 0 || sel >= rows.Count || !rows[sel].Selectable) sel = Next(-1, 1);
@@ -267,6 +283,12 @@ namespace RexMagnum
             Build();
             if (MenuNav.PagePrev) { SetPage(page - 1); return false; }
             if (MenuNav.PageNext) { SetPage(page + 1); return false; }
+            if (page == HelpPage)
+            {
+                // nothing to choose on HELP: Up / Down scroll the list
+                if (MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 120f);
+                if (MenuNav.Down) scroll.y += 120f;
+            }
             if (MenuNav.Up) { sel = Next(sel, -1); scrollToSel = true; }
             if (MenuNav.Down) { sel = Next(sel, 1); scrollToSel = true; }
             var r = sel >= 0 && sel < rows.Count ? rows[sel] : null;
@@ -288,7 +310,7 @@ namespace RexMagnum
 
         // ------------------------------------------------------------ drawing (call from OnGUI)
 
-        GUIStyle hdr, lbl, small, btn, rowSel;
+        GUIStyle hdr, lbl, small, btn, rowSel, hdrValue;
         float styleScale = -1f;
 
         void Styles(float s)
@@ -299,6 +321,8 @@ namespace RexMagnum
             hdr.normal.textColor = new Color(1f, 0.8f, 0.25f);
             lbl = new GUIStyle(GUI.skin.label) { fontSize = (int)(22 * s), wordWrap = false, alignment = TextAnchor.MiddleLeft };
             lbl.normal.textColor = Color.white;
+            hdrValue = new GUIStyle(lbl) { fontStyle = FontStyle.Bold };
+            hdrValue.normal.textColor = new Color(1f, 0.9f, 0.6f);
             small = new GUIStyle(GUI.skin.label) { fontSize = (int)(17 * s), wordWrap = true };
             small.normal.textColor = new Color(0.8f, 0.85f, 0.9f);
             btn = new GUIStyle(GUI.skin.button) { fontSize = (int)(19 * s), fixedHeight = 40 * s };
@@ -329,6 +353,14 @@ namespace RexMagnum
                 var r = rows[i];
                 if (r.header) { GUILayout.Space(12 * s); GUILayout.Label(r.label, hdr); continue; }
                 if (r.note != null) { GUILayout.Label(r.note, small, GUILayout.Width(inner.width - 40)); continue; }
+                if (r.info != null)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label(r.label, lbl, GUILayout.Width(labelW), GUILayout.Height(34 * s));
+                    GUILayout.Label(r.info, hdrValue, GUILayout.Height(34 * s));
+                    GUILayout.EndHorizontal();
+                    continue;
+                }
                 bool on = i == sel && MenuNav.PadOrKeys;
                 if (on) GUILayout.BeginHorizontal(rowSel); else GUILayout.BeginHorizontal();
                 GUILayout.Label(r.label, lbl, GUILayout.Width(labelW), GUILayout.Height(40 * s));

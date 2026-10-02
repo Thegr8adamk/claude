@@ -413,14 +413,20 @@
   {
    "name": "A_Fairway",
    "kind": "lit",
+   "baseMap": "Textures/A_Fairway_base.png",
+   "normalMap": "Textures/A_Fairway_nrm.png",
+   "maskMap": "Textures/A_Fairway_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.2
+   "smoothness": 1.0,
+   "tile": 7.5398,
+   "tileV": 7.5398,
+   "uvTile": 2.0
   },
   {
    "name": "A_Fall",
@@ -660,14 +666,20 @@
   {
    "name": "A_Marble",
    "kind": "lit",
+   "baseMap": "Textures/A_Marble_base.png",
+   "normalMap": "Textures/A_Marble_nrm.png",
+   "maskMap": "Textures/A_Marble_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.8
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_Mirror",
@@ -1357,7 +1369,8 @@
    ],
    "metallic": 0.0,
    "smoothness": 1.0,
-   "tile": 4
+   "tile": 4,
+   "tileV": 4
   },
   {
    "name": "A_Tyre",
@@ -1527,14 +1540,20 @@
   {
    "name": "A_CaveRock",
    "kind": "lit",
+   "baseMap": "Textures/A_CaveRock_base.png",
+   "normalMap": "Textures/A_CaveRock_nrm.png",
+   "maskMap": "Textures/A_CaveRock_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.45
+   "smoothness": 1.0,
+   "tile": 6,
+   "tileV": 6,
+   "uvTile": 2.0
   },
   {
    "name": "A_Crystal",

@@ -6,7 +6,8 @@ namespace RexMagnum
     public enum DeathStyle { Pop, Leak, Freeze, Fling, Pinned, Blast }
     public enum Grip { Melee, Gun, Throw, None }
 
-    /// <summary>Weapon table from the project brief (section 5).</summary>
+    /// <summary>Weapon table from the project brief (section 5). Melee: the hold (heavy) attack does ~3x the tap
+    /// (blobs: tourist 40, lifeguard 30, bouncer 90 / half 40), so a heavy is worth the wind-up.</summary>
     public class WeaponDef
     {
         public WeaponId id;
@@ -26,22 +27,22 @@ namespace RexMagnum
         public static readonly WeaponDef[] All =
         {
             new WeaponDef { id = WeaponId.Fists, name = "Fists", word = "Punch", color = Orange, tapTrigger = "Jab", holdTrigger = "Heavy",
-                tapDamage = 12, holdDamage = 30, reach = 1.4f, grip = Grip.None },
+                tapDamage = 12, holdDamage = 36, reach = 1.4f, grip = Grip.None },
             new WeaponDef { id = WeaponId.Bottle, name = "Beer bottle", word = "Swing", model = "Weapon_Bottle", color = Yellow,
-                tapTrigger = "Swing", holdTrigger = "Heavy", tapDamage = 20, holdDamage = 35, reach = 1.6f, grip = Grip.Melee },
+                tapTrigger = "Swing", holdTrigger = "Heavy", tapDamage = 15, holdDamage = 45, reach = 1.6f, grip = Grip.Melee },
             new WeaponDef { id = WeaponId.BottleBroken, name = "Broken bottle", word = "Stab", model = "Weapon_BottleBroken", color = Red,
-                tapTrigger = "Stab", holdTrigger = "Heavy", tapDamage = 22, holdDamage = 40, reach = 1.4f, grip = Grip.Melee,
+                tapTrigger = "Stab", holdTrigger = "Heavy", tapDamage = 18, holdDamage = 54, reach = 1.4f, grip = Grip.Melee,
                 tapDeath = DeathStyle.Leak, holdDeath = DeathStyle.Leak },
             new WeaponDef { id = WeaponId.Towel, name = "Beach towel", word = "Whip", model = "Weapon_Towel", color = Cyan,
-                tapTrigger = "Whip", holdTrigger = "Whip", tapDamage = 8, holdDamage = 15, reach = 2.2f, grip = Grip.Melee },
+                tapTrigger = "Whip", holdTrigger = "Whip", tapDamage = 8, holdDamage = 24, reach = 2.2f, grip = Grip.Melee },
             new WeaponDef { id = WeaponId.Knife, name = "Steak knife", word = "Stab", model = "Weapon_Knife", color = Red,
-                tapTrigger = "Stab", holdTrigger = "Stab", tapDamage = 25, holdDamage = 45, reach = 1.4f, grip = Grip.Melee,
+                tapTrigger = "Stab", holdTrigger = "Stab", tapDamage = 25, holdDamage = 75, reach = 1.4f, grip = Grip.Melee,
                 tapDeath = DeathStyle.Leak, holdDeath = DeathStyle.Leak },
             new WeaponDef { id = WeaponId.GolfClub, name = "Golf club", word = "Swing", model = "Weapon_GolfClub", color = Green,
-                tapTrigger = "Swing", holdTrigger = "GolfSwing", tapDamage = 25, holdDamage = 60, reach = 2.0f, grip = Grip.Melee,
+                tapTrigger = "Swing", holdTrigger = "GolfSwing", tapDamage = 22, holdDamage = 66, reach = 2.0f, grip = Grip.Melee,
                 holdDeath = DeathStyle.Fling },
             new WeaponDef { id = WeaponId.Swordfish, name = "Frozen swordfish", word = "Swing", model = "Weapon_Swordfish", color = Cyan,
-                tapTrigger = "Swing", holdTrigger = "Heavy", tapDamage = 30, holdDamage = 70, reach = 2.4f, grip = Grip.Melee,
+                tapTrigger = "Swing", holdTrigger = "Heavy", tapDamage = 28, holdDamage = 84, reach = 2.4f, grip = Grip.Melee,
                 tapDeath = DeathStyle.Freeze, holdDeath = DeathStyle.Freeze },
             new WeaponDef { id = WeaponId.Pistol, name = "Chrome pistol", word = "Shoot", model = "Weapon_Pistol", color = Orange,
                 tapDamage = 25, holdDamage = 35, reach = 120, grip = Grip.Gun, isGun = true, maxAmmo = 60, startAmmo = 24 },

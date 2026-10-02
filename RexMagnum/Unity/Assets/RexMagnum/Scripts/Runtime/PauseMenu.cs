@@ -7,9 +7,11 @@ namespace RexMagnum
 {
     /// <summary>
     /// Pause menu (brief section 7: Pause = map, album, accomplishments, settings). Esc / Menu / touch II.
-    /// Tabs: Map (zones visited, big goals), Album (photos + captions), Accomplishments (by group),
-    /// Settings (SettingsPanel: graphics, camera + VR, sound, controls with keyboard and controller remap).
-    /// Controller: LT / RT or keys 1-4 change the tab, B / Menu resume. Settings are saved in PlayerPrefs.
+    /// Tabs: Map (island picture with Rex, zones and the next goal; next goal, zones visited, big goals, rescue clues),
+    /// Album (photos + captions), Accomplishments (by group),
+    /// Settings (SettingsPanel: graphics, camera + VR, sound, controls with keyboard and controller remap, help),
+    /// Help (the controls of the device used last).
+    /// Controller: LT / RT or keys 1-5 change the tab, B / Menu resume. Settings are saved in PlayerPrefs.
     /// </summary>
     public class PauseMenu : MonoBehaviour
     {
@@ -21,7 +23,7 @@ namespace RexMagnum
         Vector2 scroll;
         readonly SettingsPanel panel = new SettingsPanel();
         readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
-        static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS" };
+        static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS", "HELP" };
         GUIStyle title, label, button, small;
 
         void Start()
@@ -125,6 +127,13 @@ namespace RexMagnum
                 if (GUI.Button(new Rect(w * 0.5f - 160 * s, h - 90 * s, 320 * s, 60 * s), "RESUME", button)) SetOpen(false);
                 return;
             }
+            if (tab == 0)
+            {
+                // the island picture on the left, the lists beside it
+                float m = Mathf.Min(area.height, area.width * 0.52f);
+                DrawMap(new Rect(area.x, area.y, m, m), s);
+                area = new Rect(area.x + m + 24 * s, area.y, area.width - m - 24 * s, area.height);
+            }
             GUILayout.BeginArea(area);
             scroll = GUILayout.BeginScrollView(scroll);
             switch (tab)
@@ -132,23 +141,112 @@ namespace RexMagnum
                 case 0: MapTab(); break;
                 case 1: AlbumTab(s, area.width); break;
                 case 2: AccomplishmentsTab(); break;
+                case 4: HelpTab(s, area.width); break;
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             if (GUI.Button(new Rect(w * 0.5f - 160 * s, h - 90 * s, 320 * s, 60 * s), "RESUME", button)) SetOpen(false);
         }
 
+        Texture2D mapTex, arrowTex;
+        string objective;
+        Vector3 objectiveAt;
+        bool objectiveHas;
+
+        /// <summary>Island picture (Resources/UI/map) with the zones (green = visited), the next goal and Rex's arrow.</summary>
+        void DrawMap(Rect r, float s)
+        {
+            if (mapTex == null) mapTex = Resources.Load<Texture2D>("UI/map");
+            if (arrowTex == null) arrowTex = ArrowTexture();
+            var rex = FindAnyObjectByType<RexController>();
+            objective = GameGuide.Objective(rex != null ? rex.GetComponent<RexWeapons>() : null,
+                                            rex != null ? rex.transform.position : Vector3.zero, out objectiveAt, out objectiveHas);
+            if (mapTex != null) GUI.DrawTexture(r, mapTex, ScaleMode.StretchToFill);
+            else { GUI.color = new Color(0.1f, 0.3f, 0.5f); GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = Color.white; }
+            Vector2 P(Vector3 world) { var uv = GameGuide.MapUV(world); return new Vector2(r.x + uv.x * r.width, r.y + uv.y * r.height); }
+            void Dot(Vector2 p, float size, Color c)
+            {
+                GUI.color = Color.black;
+                GUI.DrawTexture(new Rect(p.x - size / 2 - 2 * s, p.y - size / 2 - 2 * s, size + 4 * s, size + 4 * s), Texture2D.whiteTexture);
+                GUI.color = c;
+                GUI.DrawTexture(new Rect(p.x - size / 2, p.y - size / 2, size, size), Texture2D.whiteTexture);
+            }
+            foreach (var z in GameGuide.Zones)
+                Dot(P(z.at), 16 * s, GameGuide.Visited(z.id) ? new Color(0.3f, 1f, 0.35f) : new Color(0.55f, 0.55f, 0.55f));
+            var old = GUI.matrix;
+            if (objectiveHas)
+            {
+                // the next goal: a yellow diamond that pulses
+                var p = P(objectiveAt);
+                float k = 22 * s * (1f + 0.15f * Mathf.Sin(Time.unscaledTime * 6f));
+                GUIUtility.RotateAroundPivot(45f, p);
+                Dot(p, k, new Color(1f, 0.85f, 0.15f));
+                GUI.matrix = old;
+            }
+            if (rex != null)
+            {
+                var p = P(rex.transform.position);
+                float a = 34 * s;
+                GUIUtility.RotateAroundPivot(rex.transform.eulerAngles.y, p);       // 0 = north (up), 90 = east (right)
+                GUI.color = Color.white;
+                GUI.DrawTexture(new Rect(p.x - a / 2, p.y - a / 2, a, a), arrowTex);
+                GUI.matrix = old;
+            }
+            GUI.color = Color.white;
+        }
+
+        /// <summary>"You are here": a red arrow with a white edge, pointing up.</summary>
+        static Texture2D ArrowTexture()
+        {
+            const int n = 64;
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false);
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                // y = 0 is the bottom row: tip at the top, notch at the bottom
+                float u = (x - n / 2f) / (n / 2f), v = y / (float)n;
+                float half = (1f - v) * 0.8f;                        // width at this height
+                bool inside = Mathf.Abs(u) < half && v > 0.12f + Mathf.Abs(u) * 0.35f;
+                bool core = Mathf.Abs(u) < half - 0.16f && v > 0.22f + Mathf.Abs(u) * 0.35f && v < 0.86f;
+                t.SetPixel(x, y, core ? new Color(0.95f, 0.15f, 0.1f) : inside ? Color.white : Color.clear);
+            }
+            t.Apply();
+            return t;
+        }
+
         void MapTab()
         {
+            if (!string.IsNullOrEmpty(objective)) GUILayout.Label("NEXT: " + objective, label);
+            GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
+            GUILayout.Space(10);
             GUILayout.Label("ISLAND ZONES", title);
-            foreach (var z in new[] { ("hotel", "Resort hotel"), ("pool", "Pool area"), ("beach", "Beach"), ("golf", "Golf course"),
-                                      ("jungle", "Thick jungle"), ("ruins", "Jungle ruins"), ("cave", "Cave"), ("ship", "Crashed alien ship") })
-                GUILayout.Label($"{(Progress.Value("zone_" + z.Item1) > 0 ? "[x]" : "[ ]")}  {z.Item2}", label);
+            foreach (var z in GameGuide.Zones)
+                GUILayout.Label($"{(GameGuide.Visited(z.id) ? "[x]" : "[ ]")}  {z.name}", label);
             GUILayout.Space(20);
             GUILayout.Label("BIG GOALS", title);
             GUILayout.Label($"{(FactoryCore.Stopped ? "[x]" : "[ ]")}  Stop the blob factory (ruins)", label);
             GUILayout.Label($"{(PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1 ? "[x]" : "[ ]")}  Pop King Glorp (ship)", label);
             GUILayout.Label($"Blobs popped: {Progress.Value("kills")}    Guests rescued: {Progress.Value("rescues")}    Photos: {Progress.Value("photos")}", small);
+            GUILayout.Space(20);
+            GUILayout.Label("CLUES", title);
+            var clues = Progress.Clues;
+            if (clues.Count == 0) GUILayout.Label("Rescue hiding guests: each one tells you a clue.", small);
+            for (int i = clues.Count - 1; i >= 0; i--) GUILayout.Label("- " + clues[i], small);
+        }
+
+        void HelpTab(float s, float width)
+        {
+            var dev = RMInput.LastDevice;
+            GUILayout.Label(dev == RMInput.DeviceKind.Touch ? "TOUCH" : dev == RMInput.DeviceKind.Gamepad ? "CONTROLLER" : "KEYBOARD + MOUSE", title);
+            foreach (var c in GameGuide.Controls())
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(c.what, label, GUILayout.Width(width * 0.3f));
+                GUILayout.Label(c.how, label);
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.Space(16);
+            GUILayout.Label("Keys and buttons: Settings > CONTROLS.  The NEXT line and the compass show a goal; the MAP tab shows where you are.", small);
         }
 
         void AlbumTab(float s, float width)

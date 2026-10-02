@@ -55,6 +55,13 @@ namespace RexMagnum.EditorTools
             }
             var urp = (UniversalRenderPipelineAsset)GraphicsSettings.defaultRenderPipeline;
             urp.supportsCameraDepthTexture = true;
+            // shadow defaults = High tier (QualityAuto lowers them at start on weaker hardware)
+            // (reflection helper: some of these setters are internal in URP 17)
+            RexMagnum.QualityAuto.SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", 4);
+            RexMagnum.QualityAuto.SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", 4096);
+            RexMagnum.QualityAuto.SetUrp(urp, "supportsMainLightShadows", "m_MainLightShadowsSupported", true);
+            RexMagnum.QualityAuto.SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
+            RexMagnum.QualityAuto.SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", true);
             EditorUtility.SetDirty(urp);
             // 2. Linear colour space
             if (PlayerSettings.colorSpace != ColorSpace.Linear) { PlayerSettings.colorSpace = ColorSpace.Linear; notes.AppendLine("- Colour space set to Linear."); }

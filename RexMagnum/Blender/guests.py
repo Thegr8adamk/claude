@@ -693,6 +693,8 @@ def export_guest(g, ob, arm, size, rex_export):
             if m.name == f"{name}_Skin":
                 row.update(baseMap=f"Textures/{name}_Skin_BC.png", normalMap=f"Textures/{name}_Skin_N.png",
                            maskMap=f"Textures/{name}_Skin_MS.png", color=[1, 1, 1, 1])
+            elif m.name == "Rex_Eye":      # iris is shader nodes in Blender: Unity uses eye_texture.py's map instead
+                row.update(baseMap="Textures/Eye_BC.png", color=[1, 1, 1, 1], smoothness=0.95)
             elif m.name.endswith("_Hair"):
                 row.update(baseMap="Textures/Hair_Strands.png", color=[*m["hair_rgb"], 1], alphaClip=True,
                            twoSided=True, smoothness=0.45)

@@ -3,7 +3,12 @@ using UnityEngine.UI;
 
 namespace RexMagnum
 {
-    /// <summary>Test-scene HUD: crosshair, camera mode, action word and the control list.</summary>
+    /// <summary>
+    /// HUD: crosshair + hit marker, health bar (smooth drain), action word, weapon + ammo, compass with the next goal,
+    /// "NEXT:" objective line (GameGuide), Use prompts (pickups, guests, golf cart, elevator), damage flash and
+    /// direction arc, subtitles and notices. The control list shows for the first minute of play (then Pause > HELP).
+    /// Touch: compass, objective and health move to the top left (the move stick and the top buttons need the space).
+    /// </summary>
     public class RexTestHUD : MonoBehaviour
     {
         public RexCameraRig rig;
@@ -15,6 +20,22 @@ namespace RexMagnum
         GameObject cross;
         bool paused, hudHidden;
 
+        static RexTestHUD inst;
+        static float hitUntil;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { inst = null; hitUntil = 0f; }      // editor with Domain Reload off
+
+        /// <summary>Rex hit a blob: the crosshair hit marker shows for 0.1 s (weapons call this; blob damage by Rex too).</summary>
+        public static void HitMarker() => hitUntil = Time.unscaledTime + 0.1f;
+
+        /// <summary>A game message on its own line above the subtitles (shown also with subtitles off).</summary>
+        public static void Notice(string text, float seconds)
+        {
+            if (inst == null || inst.notice == null) return;
+            inst.notice.text = text;
+            inst.noticeUntil = Time.time + seconds;
+        }
+
         void Awake()
         {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -25,11 +46,15 @@ namespace RexMagnum
             sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             sc.referenceResolution = new Vector2(1920, 1080);
             sc.matchWidthOrHeight = 0.5f;          // ultrawide and tall phones: text does not grow with width only
-            info = MakeText(go.transform, font, new Vector2(0, 1), new Vector2(30, -30), 24, TextAnchor.UpperLeft);
+            // control list (first minute only): left side, middle height, clear of the compass and the hint box
+            info = MakeText(go.transform, font, new Vector2(0, 0.5f), new Vector2(30, 0), 21, TextAnchor.UpperLeft);
+            info.rectTransform.sizeDelta = new Vector2(900, 480);
+            info.verticalOverflow = VerticalWrapMode.Overflow;
             action = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 40), 40, TextAnchor.LowerRight);
             subtitle = MakeText(go.transform, font, new Vector2(0.5f, 0), new Vector2(0, 120), 34, TextAnchor.LowerCenter);
             subtitle.rectTransform.sizeDelta = new Vector2(1600, 200);
-            hp = MakeText(go.transform, font, new Vector2(0, 0), new Vector2(40, 40), 36, TextAnchor.LowerLeft);
+            hp = MakeText(go.transform, font, new Vector2(0, 0), new Vector2(40, 72), 24, TextAnchor.LowerLeft);
+            hp.rectTransform.sizeDelta = new Vector2(500, 34);
             RexVoice.Subtitle = line => ShowLine(line, 3f);
             RexVoice.SubtitleTimed = ShowLine;
             RexVoice.SubtitleCrowd = line => { if (Time.time > subtitleUntil - 0.2f) ShowLine(line, 1.6f); };   // never over a real line
@@ -48,6 +73,176 @@ namespace RexMagnum
             cross = new GameObject("Crosshair", typeof(RectTransform), typeof(Image));
             cross.transform.SetParent(go.transform, false);
             cross.GetComponent<RectTransform>().sizeDelta = new Vector2(6, 6);
+            cross.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.8f);      // a dot that shows on a white sky
+            inst = this;
+            var root = go.transform;
+            notice = MakeText(root, font, new Vector2(0.5f, 0), new Vector2(0, 250), 30, TextAnchor.LowerCenter);
+            notice.rectTransform.sizeDelta = new Vector2(1500, 120);
+            notice.color = new Color(1f, 0.88f, 0.4f);
+            objectiveText = MakeText(root, font, new Vector2(0.5f, 1), new Vector2(0, -84), 26, TextAnchor.UpperCenter);
+            objectiveText.color = new Color(1f, 0.85f, 0.3f);
+            BuildCompass(root, font);
+            BuildHealthBar(root);
+            BuildHitMarker(root);
+            // damage: red screen edges + an arc that points at the attacker
+            flash = MakeImage(root, "DamageFlash", Color.clear, EdgeSprite());
+            flash.rectTransform.anchorMin = Vector2.zero;
+            flash.rectTransform.anchorMax = Vector2.one;
+            flash.rectTransform.sizeDelta = Vector2.zero;
+            arc = MakeImage(root, "DamageArc", Color.clear, ArcSprite());
+            arc.rectTransform.sizeDelta = new Vector2(520, 520);
+            arc.transform.SetAsFirstSibling();          // under the text and the scope
+            flash.transform.SetAsFirstSibling();
+            ApplyLayout(false);
+        }
+
+        // ------------------------------------------------------------ new HUD parts
+
+        Text notice, objectiveText, compassDist;
+        float noticeUntil;
+        Image flash, arc, hpFillImg;
+        RectTransform compass, compassMarker, hpBar, hpFill, hpGhost;
+        CanvasGroup markerGroup, hitGroup;
+        readonly Text[] compassLabels = new Text[8];
+        static readonly string[] Dirs = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+        const float HpW = 420f, CompassRange = 150f;      // health bar width; compass shows 150 degrees
+        float compassW = 640f;
+
+        static Image MakeImage(Transform parent, string name, Color c, Sprite sprite = null)
+        {
+            var g = new GameObject(name, typeof(RectTransform), typeof(Image));
+            g.transform.SetParent(parent, false);
+            var im = g.GetComponent<Image>();
+            im.sprite = sprite;
+            im.color = c;
+            im.raycastTarget = false;
+            return im;
+        }
+
+        static void Place(RectTransform rt, Vector2 anchor, Vector2 pos)
+        {
+            rt.anchorMin = rt.anchorMax = rt.pivot = anchor;
+            rt.anchoredPosition = pos;
+        }
+
+        void BuildCompass(Transform root, Font font)
+        {
+            var back = MakeImage(root, "Compass", new Color(0f, 0f, 0f, 0.5f));      // dark band: reads on a bright sky
+            compass = back.rectTransform;
+            var tick = MakeImage(compass, "Heading", Color.white);
+            Place(tick.rectTransform, new Vector2(0.5f, 1f), Vector2.zero);
+            tick.rectTransform.sizeDelta = new Vector2(3, 10);
+            for (int i = 0; i < 8; i++)
+            {
+                var t = MakeText(compass, font, new Vector2(0.5f, 0.5f), Vector2.zero, i % 2 == 0 ? 28 : 18, TextAnchor.MiddleCenter);
+                t.rectTransform.sizeDelta = new Vector2(60, 44);
+                t.text = Dirs[i];
+                compassLabels[i] = t;
+            }
+            var m = new GameObject("Goal", typeof(RectTransform), typeof(CanvasGroup));
+            m.transform.SetParent(compass, false);
+            compassMarker = m.GetComponent<RectTransform>();
+            markerGroup = m.GetComponent<CanvasGroup>();
+            var d = MakeImage(compassMarker, "Diamond", new Color(1f, 0.85f, 0.15f));
+            d.rectTransform.sizeDelta = new Vector2(14, 14);
+            d.rectTransform.anchoredPosition = new Vector2(0, -22);
+            d.rectTransform.localEulerAngles = new Vector3(0, 0, 45f);
+            d.gameObject.AddComponent<Outline>().effectColor = Color.black;
+            compassDist = MakeText(compassMarker, font, new Vector2(0.5f, 0.5f), new Vector2(0, -42), 18, TextAnchor.MiddleCenter);
+            compassDist.rectTransform.sizeDelta = new Vector2(140, 24);
+            compassDist.color = new Color(1f, 0.85f, 0.3f);
+        }
+
+        void BuildHealthBar(Transform root)
+        {
+            var back = MakeImage(root, "HealthBar", new Color(0f, 0f, 0f, 0.6f));
+            back.gameObject.AddComponent<Outline>().effectColor = new Color(1f, 1f, 1f, 0.35f);   // edge on dark ground too
+            hpBar = back.rectTransform;
+            hpBar.sizeDelta = new Vector2(HpW + 6, 28);
+            hpGhost = Bar(hpBar, new Color(1f, 0.95f, 0.8f, 0.85f)).rectTransform;   // the part just lost, drains slowly
+            hpFillImg = Bar(hpBar, Color.green);
+            hpFill = hpFillImg.rectTransform;
+        }
+
+        static Image Bar(RectTransform parent, Color c)
+        {
+            var im = MakeImage(parent, "Bar", c);
+            var rt = im.rectTransform;
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 0.5f);
+            rt.anchoredPosition = new Vector2(3f, 0f);
+            rt.sizeDelta = new Vector2(HpW, -6f);
+            return im;
+        }
+
+        void BuildHitMarker(Transform root)
+        {
+            var g = new GameObject("HitMarker", typeof(RectTransform), typeof(CanvasGroup));
+            g.transform.SetParent(root, false);
+            hitGroup = g.GetComponent<CanvasGroup>();
+            hitGroup.alpha = 0f;
+            for (int i = 0; i < 4; i++)
+            {
+                // four short diagonal lines around the crosshair
+                var im = MakeImage(g.transform, "Tick", Color.white);
+                im.gameObject.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.9f);
+                float sx = i % 2 == 0 ? 1f : -1f, sy = i < 2 ? 1f : -1f;
+                im.rectTransform.anchoredPosition = new Vector2(sx * 13f, sy * 13f);
+                im.rectTransform.sizeDelta = new Vector2(14f, 3f);
+                im.rectTransform.localEulerAngles = new Vector3(0f, 0f, sx * sy * 45f);
+            }
+        }
+
+        /// <summary>Red screen edges (clear in the middle), stretched over the screen.</summary>
+        static Sprite EdgeSprite()
+        {
+            const int s = 128;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+            {
+                float dx = (x - s / 2f) / (s / 2f), dy = (y - s / 2f) / (s / 2f);
+                float d = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) * 0.6f + Mathf.Sqrt(dx * dx + dy * dy) * 0.3f;
+                float a = Mathf.Clamp01((d - 0.5f) / 0.45f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * a));
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f));
+        }
+
+        /// <summary>A ring piece at the top (60 degrees); the HUD turns it toward the attacker.</summary>
+        static Sprite ArcSprite()
+        {
+            const int s = 256;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+            {
+                float dx = (x - s / 2f) / (s / 2f), dy = (y - s / 2f) / (s / 2f);
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float ang = Mathf.Abs(Mathf.Atan2(dx, dy) * Mathf.Rad2Deg);        // 0 = straight up
+                float a = Mathf.Clamp01(1f - Mathf.Abs(r - 0.86f) / 0.07f) * Mathf.Clamp01((30f - ang) / 10f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f));
+        }
+
+        bool layoutTouch;
+
+        /// <summary>Touch: compass, objective and health go to the top left (move stick bottom left, buttons along the top).</summary>
+        void ApplyLayout(bool touch)
+        {
+            layoutTouch = touch;
+            compassW = touch ? 420f : 640f;
+            compass.sizeDelta = new Vector2(compassW, 44);
+            Place(compass, touch ? new Vector2(0f, 1f) : new Vector2(0.5f, 1f), touch ? new Vector2(24, -10) : new Vector2(0, -8));
+            Place(objectiveText.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0.5f, 1f), touch ? new Vector2(24, -84) : new Vector2(0, -84));
+            objectiveText.alignment = touch ? TextAnchor.UpperLeft : TextAnchor.UpperCenter;
+            objectiveText.rectTransform.sizeDelta = new Vector2(touch ? 900 : 1400, 80);
+            Place(hpBar, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -170) : new Vector2(40, 40));
+            Place(hp.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -134) : new Vector2(40, 72));
         }
 
         static Sprite ScopeSprite()
@@ -132,13 +327,9 @@ namespace RexMagnum
                 rig.InputEnabled = !paused;
                 actions.controller.InputEnabled = !paused;
             }
-            string B(string a) => RMInput.Btn(a);
-            bool kb = RMInput.LastDevice == RMInput.DeviceKind.Keyboard;
-            info.text = $"REX MAGNUM\nCamera: {(rig.Mode == RexCameraRig.CameraMode.FirstPerson ? "FIRST person" : "THIRD person")}  ({B("Camera")})\n" +
-                        (kb ? $"{B("Forward")}{B("Left")}{B("Back")}{B("Right")} move · {B("Run")} run · {B("Jump")} jump · Mouse look\n"
-                            : $"Left stick move · {B("Run")} run · {B("Jump")} jump · right stick look\n") +
-                        $"{B("Action")}: tap = light, hold = heavy · {B("Wheel")}: weapon wheel\n" +
-                        $"{B("Taunt")} taunt · {B("Photo")} photo · {B("Hands")} hands down/up · {B("Shoulder")} swap shoulder · {B("Pause")} pause";
+            bool touch = RMInput.LastDevice == RMInput.DeviceKind.Touch;
+            if (touch != layoutTouch) ApplyLayout(touch);
+            ControlList();
             action.text = actions.ActionWord;
             if (actions.weapons != null)
             {
@@ -148,15 +339,228 @@ namespace RexMagnum
                 weapon.color = d.color;
             }
             if (Time.time > subtitleUntil) subtitle.text = "";
-            prompt.text = WeaponPickup.Nearby != null ? WeaponPickup.Nearby.Label : FoodPickup.Nearby != null ? FoodPickup.Nearby.Label : "";
+            if (Time.time > noticeUntil) notice.text = "";
+            prompt.text = UsePrompt();
             if (actions.weapons != null) scope.SetActive(actions.weapons.Scoped);
-            if (rexHealth != null)
-            {
-                int n = Mathf.CeilToInt(rexHealth.Fraction * 20);
-                hp.text = "HEALTH " + new string('|', n) + new string('.', 20 - n);
-                hp.color = Color.Lerp(new Color(1f, 0.3f, 0.2f), new Color(0.6f, 1f, 0.5f), rexHealth.Fraction);
-            }
+            HealthBar();
             action.color = actions.ActionWord == "Talk" ? new Color(0.5f, 0.9f, 1f) : new Color(1f, 0.6f, 0.2f);
+            HookBlobs();
+            hitGroup.alpha = Time.unscaledTime < hitUntil ? 1f : 0f;
+            Damage();
+            Objective();
+            Compass();
+        }
+
+        // ------------------------------------------------------------ control list (first minute of play)
+
+        float nextInfo;
+
+        void ControlList()
+        {
+            float t = GameFlow.PlaySeconds;
+            if (GameFlow.Busy || t > 60f) { info.text = ""; return; }
+            info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((60f - t) / 3f));      // fades out at the end
+            if (Time.unscaledTime < nextInfo) return;
+            nextInfo = Time.unscaledTime + 0.5f;                                      // follows the device used last
+            var sb = new System.Text.StringBuilder("CONTROLS  (Pause > HELP shows them again)\n");
+            foreach (var c in GameGuide.Controls())
+                sb.Append(c.what.Length > 0 ? c.what + ": " + c.how : c.how).Append('\n');
+            info.text = sb.ToString();
+        }
+
+        // ------------------------------------------------------------ health bar
+
+        float hpShown = 1f, hpLost = 1f, hpLostHold;
+
+        void HealthBar()
+        {
+            bool on = rexHealth != null;
+            hpBar.gameObject.SetActive(on && !hudHidden);
+            if (!on) { hp.text = ""; return; }
+            float f = rexHealth.Fraction;
+            hpShown = Mathf.Lerp(hpShown, f, 1f - Mathf.Exp(-12f * Time.deltaTime));     // quick, smooth
+            if (f >= hpLost) hpLost = f;                                                  // healing: no white part
+            else if (Time.time > hpLostHold) hpLost = Mathf.MoveTowards(hpLost, f, Time.deltaTime * 0.5f);
+            hpFill.sizeDelta = new Vector2(HpW * hpShown, -6f);
+            hpGhost.sizeDelta = new Vector2(HpW * hpLost, -6f);
+            var c = Color.HSVToRGB(Mathf.Lerp(0f, 0.33f, f), 0.85f, 1f);                 // red -> yellow -> green
+            if (f < 0.25f && f > 0f) c = Color.Lerp(c, Color.white, 0.35f * (0.5f + 0.5f * Mathf.Sin(Time.time * 10f)));   // low: pulse
+            hpFillImg.color = c;
+            hp.text = $"HEALTH  {Mathf.CeilToInt(rexHealth.Current)}";
+            hp.color = Color.white;
+        }
+
+        // ------------------------------------------------------------ hits and damage
+
+        readonly System.Collections.Generic.HashSet<Blob> hooked = new System.Collections.Generic.HashSet<Blob>();
+
+        /// <summary>Hit marker for every weapon (also the harpoon and the coconut): listen to each blob's damage.</summary>
+        void HookBlobs()
+        {
+            if (Time.frameCount % 15 != 0) return;
+            if (hooked.Count > 400) hooked.RemoveWhere(b => b == null);
+            foreach (var b in Blob.All)
+            {
+                if (b == null || hooked.Contains(b)) continue;
+                hooked.Add(b);
+                var h = b.GetComponent<Health>();
+                if (h != null) h.Damaged += OnBlobDamaged;
+            }
+        }
+
+        static void OnBlobDamaged(float amount, Vector3 point, GameObject attacker)
+        {
+            if (attacker != null && attacker.GetComponentInParent<RexController>() != null) HitMarker();
+        }
+
+        float flashA, arcA;
+        Vector3 dmgFrom;
+
+        void Start()
+        {
+            if (rexHealth != null) rexHealth.Damaged += OnRexDamaged;
+        }
+
+        void OnDestroy()
+        {
+            if (rexHealth != null) rexHealth.Damaged -= OnRexDamaged;
+            if (inst == this) inst = null;
+        }
+
+        void OnRexDamaged(float amount, Vector3 point, GameObject attacker)
+        {
+            flashA = Mathf.Clamp(0.35f + amount / 40f, 0.35f, 0.8f);
+            hpLostHold = Time.time + 0.5f;
+            // the attacker's position (blob melee passes Rex's own position as the point)
+            Vector3 src = attacker != null ? attacker.transform.position : point;
+            Vector3 d = src - rexHealth.transform.position;
+            d.y = 0f;
+            if (d.sqrMagnitude > 0.25f) { dmgFrom = src; arcA = 1f; }
+        }
+
+        Camera Cam => rig != null && rig.cam != null ? rig.cam : Camera.main;
+
+        void Damage()
+        {
+            flashA = Mathf.MoveTowards(flashA, 0f, Time.deltaTime * 1.4f);
+            float low = rexHealth != null && !rexHealth.IsDead && rexHealth.Fraction < 0.25f
+                ? 0.12f + 0.08f * Mathf.Sin(Time.time * 4f) : 0f;                       // low health: a soft red pulse
+            flash.color = new Color(0.9f, 0.05f, 0.02f, Mathf.Max(flashA, low));
+            arcA = Mathf.MoveTowards(arcA, 0f, Time.deltaTime * 0.8f);
+            var cam = Cam;
+            if (arcA > 0f && cam != null)
+            {
+                // follows the attacker while Rex turns
+                Vector3 d = dmgFrom - cam.transform.position;
+                Vector3 fwd = cam.transform.forward; fwd.y = 0f;
+                float a = Mathf.Atan2(Vector3.Dot(d, cam.transform.right), Vector3.Dot(d, fwd.normalized)) * Mathf.Rad2Deg;
+                arc.rectTransform.localEulerAngles = new Vector3(0f, 0f, -a);
+            }
+            arc.color = new Color(1f, 0.15f, 0.1f, arcA * 0.9f);
+        }
+
+        // ------------------------------------------------------------ objective + compass
+
+        string objective;
+        Vector3 objectiveAt;
+        bool objectiveHas;
+        float nextObjective;
+
+        Transform RexT => actions != null && actions.controller != null ? actions.controller.transform : rig != null ? rig.target : null;
+
+        void Objective()
+        {
+            if (Time.unscaledTime < nextObjective) return;
+            nextObjective = Time.unscaledTime + 0.5f;
+            var rex = RexT;
+            if (GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
+            else objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas);
+            objectiveText.text = objective != null ? "NEXT: " + objective : "";
+        }
+
+        void Compass()
+        {
+            var cam = Cam;
+            if (cam == null) return;
+            float yaw = cam.transform.eulerAngles.y;          // 0 = north (+Z), 90 = east (+X)
+            float px = compassW / CompassRange;
+            for (int i = 0; i < 8; i++)
+            {
+                float delta = Mathf.DeltaAngle(yaw, i * 45f);
+                var t = compassLabels[i];
+                t.rectTransform.anchoredPosition = new Vector2(delta * px, 0f);
+                float a = Mathf.Clamp01((CompassRange * 0.5f - Mathf.Abs(delta)) / 12f);   // fade at the ends
+                t.color = i == 0 ? new Color(1f, 0.45f, 0.35f, a) : new Color(1f, 1f, 1f, a);
+            }
+            var rex = RexT;
+            markerGroup.alpha = objectiveHas && rex != null ? 1f : 0f;
+            if (!objectiveHas || rex == null) return;
+            Vector3 to = objectiveAt - rex.position;
+            to.y = 0f;
+            float bearing = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+            float dm = Mathf.Clamp(Mathf.DeltaAngle(yaw, bearing), -CompassRange * 0.5f, CompassRange * 0.5f);   // off the strip: at its end
+            compassMarker.anchoredPosition = new Vector2(dm * px, 0f);
+            compassDist.text = Mathf.RoundToInt(to.magnitude) + " m";
+        }
+
+        // ------------------------------------------------------------ Use prompts
+
+        GolfCart[] carts;
+        Elevator[] elevators;
+        float nextFind, drivingSince = -1f;
+
+        /// <summary>What Use (or Action) does here: pickups, guests (rescue / knock / talk), golf cart, elevator.</summary>
+        string UsePrompt()
+        {
+            if (WeaponPickup.Nearby != null) return WeaponPickup.Nearby.Label;
+            if (FoodPickup.Nearby != null) return FoodPickup.Nearby.Label;
+            var rex = RexT;
+            if (rex == null || GameFlow.Busy) return "";
+            string U = RMInput.Btn("Use");
+            if (GolfCart.Driven != null)
+            {
+                if (drivingSince < 0f) drivingSince = Time.time;
+                return Time.time - drivingSince < 8f ? $"{U}: get out of the cart" : "";
+            }
+            drivingSince = -1f;
+            if (Time.unscaledTime > nextFind)
+            {
+                // cached: found again every 10 s (zones can load later)
+                nextFind = Time.unscaledTime + 10f;
+                carts = FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
+                elevators = FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+            }
+            Vector3 p = rex.position;
+            Guest near = null;
+            float nearD = 3f;
+            foreach (var g in Guest.All)
+            {
+                if (g == null || g.Rescued) continue;
+                float d = Vector3.Distance(g.transform.position, p);
+                if (d < nearD) { nearD = d; near = g; }
+            }
+            if (near != null && near.LockedIn) return $"{U}: knock on the door";
+            if (near != null && near.CanRescue)
+                return Blob.LivingNear(near.transform.position, Guest.SafeRadius) > 0
+                    ? $"Pop the blobs near {near.guestName} first, then {U}: rescue"
+                    : $"{U}: rescue {near.guestName}";
+            foreach (var c in carts)
+                if (c != null && Vector3.Distance(c.transform.position, p) < 3f) return $"{U}: drive the golf cart";
+            foreach (var e in elevators)
+            {
+                if (e == null || e.cab == null) continue;
+                Vector3 l = e.cab.InverseTransformPoint(p + Vector3.up * 0.5f);
+                if (Mathf.Abs(l.x) < e.cabHalfSize.x && l.y > -0.3f && l.y < e.cabHalfSize.y * 2f && Mathf.Abs(l.z) < e.cabHalfSize.z)
+                    return $"{U}: ride the elevator";
+                if (e.landingDoors != null)
+                    foreach (var door in e.landingDoors)
+                        if (door != null && Vector3.Distance(door.position, p) < 3f) return $"{U}: call the elevator";
+            }
+            if (near != null && nearD < 2.5f)
+                return actions.controller != null && actions.controller.HandsDown
+                    ? $"{RMInput.Btn("Action")}: talk to {near.guestName}"
+                    : $"{RMInput.Btn("Hands")}: hands down to talk to {near.guestName}";
+            return "";
         }
     }
 }

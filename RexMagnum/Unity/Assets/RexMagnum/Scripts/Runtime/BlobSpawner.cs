@@ -3,7 +3,8 @@ using UnityEngine.AI;
 
 namespace RexMagnum
 {
-    /// <summary>Test spawner: keeps a few blobs alive around the test area (brief: they spawn from water later).</summary>
+    /// <summary>Keeps a few blobs alive around its area; they rise out of water when there is some near (brief section 4).
+    /// Fair play: weighted types, never within 8 m of Rex, a 30 s break after the area is cleared, night cap 1.8x.</summary>
     public class BlobSpawner : MonoBehaviour
     {
         public Blob[] prefabs;
@@ -14,7 +15,37 @@ namespace RexMagnum
         public float radius = 14f;
         public float interval = 6f;
         [Range(0f, 1f)] public float disguiseChance = 0.15f;   // tourist blobs in a dress + sun hat
+        [Header("Fairness")]
+        public float minRexDistance = 8f;          // never pops up right next to Rex
+        public float clearedBreak = 30f;           // area cleared: a breather before it fills again
+        public float nightMaxScale = 1.8f;         // at most this many times baseMax at full night
+        // type weights (Tourist, Lifeguard, Bouncer): mostly easy tourists by day, more of the hard ones at night
+        static readonly float[] DayWeights = { 70f, 20f, 10f }, NightWeights = { 50f, 30f, 20f };
         float next;
+        int lastNear;
+        Transform rex;
+
+        /// <summary>A prefab picked by the type weights (day / night blend). KingGlorp or unknown kinds weigh 0.</summary>
+        Blob PickPrefab()
+        {
+            float night = DayNight.Night, sum = 0f;
+            foreach (var p in prefabs) sum += Weight(p, night);
+            if (sum <= 0f) return prefabs[Random.Range(0, prefabs.Length)];
+            float r = Random.value * sum;
+            foreach (var p in prefabs)
+            {
+                r -= Weight(p, night);
+                if (r <= 0f) return p;
+            }
+            return prefabs[prefabs.Length - 1];
+        }
+
+        static float Weight(Blob p, float night)
+        {
+            if (p == null || p.isHalf || (int)p.kind > 2) return 0f;
+            int k = (int)p.kind;
+            return Mathf.Lerp(DayWeights[k], NightWeights[k], night);
+        }
 
         /// <summary>Nearest walkable point that is NOT under water (the pool floor / seabed are on the NavMesh too):
         /// rings outward from the water point.</summary>
@@ -60,7 +91,13 @@ namespace RexMagnum
             float r2 = (radius * 3f) * (radius * 3f);
             foreach (var b in Blob.All)
                 if (b && !b.IsDead && (b.transform.position - transform.position).sqrMagnitude < r2) near++;
-            if (near >= maxAlive) return;
+            // Rex cleared the area: a break before new blobs come
+            if (near == 0 && lastNear > 0) { lastNear = 0; next = Time.time + clearedBreak; return; }
+            lastNear = near;
+            // DayNight scales maxAlive up at night; cap it here so night stays hard but fair
+            int cap = baseMax >= 0 ? Mathf.Max(1, Mathf.RoundToInt(baseMax * nightMaxScale * factoryScale)) : maxAlive;
+            if (near >= Mathf.Min(maxAlive, cap)) return;
+            if (rex == null) { var pl = GameObject.FindGameObjectWithTag("Player"); if (pl != null) rex = pl.transform; }
             Vector2 c = Random.insideUnitCircle.normalized * radius;
             Vector3 p = transform.position + new Vector3(c.x, 0, c.y);
             // brief section 4: blobs come out of the water (pool, sea, green river) when there is water near
@@ -68,9 +105,16 @@ namespace RexMagnum
             if (fromWater) p = water;
             NavMeshHit hit = default;
             bool found = fromWater ? DryShore(water, out hit) : NavMesh.SamplePosition(p, out hit, 4f, NavMesh.AllAreas);
+            // too close to Rex (the shore point or the rise from the water): try again soon, somewhere else
+            if (found && rex != null && ((hit.position - rex.position).sqrMagnitude < minRexDistance * minRexDistance ||
+                                         (fromWater && (water - rex.position).sqrMagnitude < minRexDistance * minRexDistance)))
+            {
+                next = Time.time + 1f;
+                return;
+            }
             if (found)
             {
-                var b = Instantiate(prefabs[Random.Range(0, prefabs.Length)], hit.position, Quaternion.identity);
+                var b = Instantiate(PickPrefab(), hit.position, Quaternion.identity);
                 if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
                 if (fromWater) StartCoroutine(Rise(b, water));
             }
