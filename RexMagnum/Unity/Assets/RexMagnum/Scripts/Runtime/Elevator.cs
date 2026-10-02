@@ -88,6 +88,7 @@ namespace RexMagnum
                 float dy = y - cab.position.y;
                 bool ride = RexInCab();
                 cab.position = new Vector3(cab.position.x, y, cab.position.z);
+                Physics.SyncTransforms();          // the cab floor collider is where it is drawn before Rex moves
                 if (ride) rex.Move(new Vector3(0f, dy, 0f));
             }
             else

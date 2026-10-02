@@ -26,6 +26,7 @@ namespace RexMagnum
             sc.radius = 0.065f / Mathf.Max(0.001f, go.transform.lossyScale.x);
             var rb = go.AddComponent<Rigidbody>();
             rb.mass = 1.5f;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;     // smooth in the slow-motion ride cam
             rb.linearVelocity = velocity;
             rb.angularVelocity = Random.insideUnitSphere * 8f;
             var mat = new PhysicsMaterial { bounciness = 0.35f, dynamicFriction = 0.6f };

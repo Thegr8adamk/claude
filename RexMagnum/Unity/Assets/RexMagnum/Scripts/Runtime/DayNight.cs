@@ -67,7 +67,9 @@ namespace RexMagnum
             if (sun != null)
             {
                 float pitch = Mathf.Lerp(-10f, 75f, Mathf.Max(0f, elev));
-                sun.transform.rotation = Quaternion.Euler(elev > 0 ? pitch : 30f, sunAzimuth + (timeOfDay - 0.5f) * 180f, 0f);
+                // turn the sun in small steps: a tiny turn every frame makes all shadow edges crawl
+                var want = Quaternion.Euler(elev > 0 ? pitch : 30f, sunAzimuth + (timeOfDay - 0.5f) * 180f, 0f);
+                if (Quaternion.Angle(sun.transform.rotation, want) > 0.25f) sun.transform.rotation = want;
                 sun.color = sunColor.Evaluate(timeOfDay);
                 sun.intensity = Mathf.Lerp(0.12f, baseSun, day);                 // night: moonlight
                 sun.shadowStrength = Mathf.Lerp(0.5f, 0.9f, day);

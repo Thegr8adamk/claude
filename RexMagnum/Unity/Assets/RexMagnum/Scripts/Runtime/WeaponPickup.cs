@@ -12,6 +12,7 @@ namespace RexMagnum
         Light glow;
         Vector3 basePos;
         public static WeaponPickup Nearby { get; private set; }
+        GameObject player;
 
         void Start()
         {
@@ -29,7 +30,8 @@ namespace RexMagnum
             transform.position = basePos + Vector3.up * (0.25f + Mathf.Sin(Time.time * 2f) * 0.05f);
             transform.Rotate(0, 60f * Time.deltaTime, 0, Space.World);
             glow.intensity = 1.2f + Mathf.Sin(Time.time * 3f) * 0.4f;
-            var p = GameObject.FindGameObjectWithTag("Player");
+            if (player == null) player = GameObject.FindGameObjectWithTag("Player");     // found once, not every frame
+            var p = player;
             if (p == null) return;
             // flat distance (a pickup on a table or a rail is higher than Rex's feet) plus a height window
             Vector3 dp = basePos - p.transform.position;

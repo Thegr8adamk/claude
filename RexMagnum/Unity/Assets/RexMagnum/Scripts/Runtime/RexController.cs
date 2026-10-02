@@ -186,7 +186,7 @@ namespace RexMagnum
             {
                 if (cc.isGrounded)
                 {
-                    if (velocity.y < 0f) velocity.y = -2f;
+                    if (velocity.y < 0f) velocity.y = -2f - new Vector2(velocity.x, velocity.z).magnitude;   // stays on slopes and steps down
                     if (InputEnabled && RMInput.Jump && Time.time >= lockedUntil)
                     {
                         velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);

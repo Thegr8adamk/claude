@@ -34,9 +34,12 @@ namespace RexMagnum
         Transform player;
         float nextLine;
 
+        readonly Plane[] frustum = new Plane[6];
+
         void Start()
         {
             rend = GetComponent<Renderer>();
+            rend.shadowCastingMode = ShadowCastingMode.Off;
             rt = new RenderTexture(Mathf.Max(256, Screen.width / 2), Mathf.Max(256, Screen.height / 2), 16) { name = "MirrorRT" };
             var go = new GameObject("MirrorCamera") { hideFlags = HideFlags.HideAndDontSave };
             mirrorCam = go.AddComponent<Camera>();
@@ -73,6 +76,11 @@ namespace RexMagnum
             if (Vector3.Distance(cam.transform.position, transform.position) > activeDistance || !rend.isVisible) return;
             Vector3 n = transform.TransformDirection(localNormal).normalized;
             Vector3 p = transform.position;
+            // a full scene render is costly: only when the player is in front of the mirror and it is on screen
+            // (isVisible is also true from the shadow pass and from behind)
+            if (Vector3.Dot(cam.transform.position - p, n) <= 0f) return;
+            GeometryUtility.CalculateFrustumPlanes(cam, frustum);
+            if (!GeometryUtility.TestPlanesAABB(frustum, rend.bounds)) return;
             float d = -Vector3.Dot(n, p);
             var refl = new Matrix4x4();
             refl.m00 = 1 - 2 * n.x * n.x; refl.m01 = -2 * n.x * n.y; refl.m02 = -2 * n.x * n.z; refl.m03 = -2 * d * n.x;

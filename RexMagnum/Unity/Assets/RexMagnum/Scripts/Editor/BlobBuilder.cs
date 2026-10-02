@@ -213,6 +213,7 @@ namespace RexMagnum.EditorTools
             var model = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(fbx), root.transform);
             model.name = "Model";
             if (!model.TryGetComponent<Animator>(out var anim)) anim = model.AddComponent<Animator>();
+            anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
             anim.runtimeAnimatorController = ctrl;
             anim.applyRootMotion = false;
             // Blender front is -Y; make the blob face +Z (eyes are in front)

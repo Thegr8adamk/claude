@@ -61,6 +61,7 @@ namespace RexMagnum
 
         float side = 1f, currentDist, blend;
         bool wasScoped, snapHeld, bodyHiddenNear;
+        readonly RaycastHit[] camHits = new RaycastHit[16];
         Transform head;
         Vector3 armsHeadLocal;
         readonly List<(Renderer r, ShadowCastingMode m)> saved = new List<(Renderer, ShadowCastingMode)>();
@@ -183,9 +184,19 @@ namespace RexMagnum
             currentDist = Mathf.Lerp(currentDist, want, dt * 8f);
             Vector3 offset = rot * new Vector3(shoulderOffset * side, 0.15f, -currentDist);
             Vector3 tp = pivot + offset;
-            if (Physics.SphereCast(pivot, collisionRadius, offset.normalized, out RaycastHit hit, offset.magnitude,
-                    collisionMask, QueryTriggerInteraction.Ignore) && !hit.transform.IsChildOf(target))
-                tp = pivot + offset.normalized * Mathf.Max(0.2f, hit.distance - 0.05f);
+            // only walls and static things pull the camera in; a blob, guest, cart or bottle passing between Rex
+            // and the camera does not make it jump
+            int n = Physics.SphereCastNonAlloc(pivot, collisionRadius, offset.normalized, camHits, offset.magnitude,
+                                               collisionMask, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < n; i++)
+            {
+                var h = camHits[i];
+                if (h.distance <= 0f || h.transform.IsChildOf(target) || h.rigidbody != null) continue;
+                if (h.collider.GetComponentInParent<UnityEngine.AI.NavMeshAgent>() != null) continue;
+                nearest = Mathf.Min(nearest, h.distance);
+            }
+            if (nearest < float.MaxValue) tp = pivot + offset.normalized * Mathf.Max(0.2f, nearest - 0.05f);
 
             float b = blend * blend * (3f - 2f * blend);
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);

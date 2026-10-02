@@ -16,7 +16,10 @@ namespace RexMagnum
             if (rb == null || rb.isKinematic || rb.mass > 20f) return;
             Vector3 dir = new Vector3(hit.moveDirection.x, 0.25f, hit.moveDirection.z).normalized;
             float speed = GetComponent<CharacterController>().velocity.magnitude;
-            rb.AddForceAtPosition(dir * force * Mathf.Max(1f, speed), hit.point, ForceMode.Impulse);
+            // this runs every frame of contact: push only while the prop is slow (a big impulse each frame sent
+            // bottles through the room's thin walls)
+            if (rb.linearVelocity.sqrMagnitude < 4f)
+                rb.AddForceAtPosition(dir * Mathf.Clamp(speed, 1f, 3f), hit.point, ForceMode.VelocityChange);
             if (Time.time > nextSound)
             {
                 nextSound = Time.time + 0.15f;

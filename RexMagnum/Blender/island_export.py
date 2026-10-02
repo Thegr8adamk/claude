@@ -830,7 +830,18 @@ def main():
         zones={k: list(v) for k, v in I.Z.items()},
         note="Blender coordinates (x east, y north, z up). Unity = (x, z, y).",
     )
-    with open(os.path.join(OUT, "Island.json"), "w") as f:
+    # keep what only the --rebuild path makes (golf / factory / tunnel markers, the CaveTunnels asset): a full
+    # export used to drop them, and Unity then had no golf carts, factory core or tunnel doors
+    old_path = os.path.join(OUT, "Island.json")
+    if os.path.exists(old_path):
+        with open(old_path) as f:
+            old = json.load(f)
+        for key in ("golf", "factory", "tunnels"):
+            if key in old:
+                data[key] = old[key]
+        have = {x["name"] for x in data["assets"]}
+        data["assets"] += [x for x in old.get("assets", []) if x["name"] not in have]
+    with open(old_path, "w") as f:
         json.dump(data, f, indent=1)
     print(f"[Export] done: {len(assets)} buildings, {len(protos)} plant types, {len(inst) // 6} plants, "
           f"{len(rows)} materials", flush=True)

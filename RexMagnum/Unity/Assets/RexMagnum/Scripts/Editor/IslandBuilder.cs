@@ -512,6 +512,7 @@ namespace RexMagnum.EditorTools
                 var rb = b.gameObject.AddComponent<Rigidbody>();
                 rb.mass = 0.35f;
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;   // small and fast: no tunnelling
             }
             rex.AddComponent<RexKick>();
             // pickups: full beer on the table, towel on the balcony rail

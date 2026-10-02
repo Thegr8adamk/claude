@@ -64,6 +64,7 @@ namespace RexMagnum.EditorTools
                 var root = new GameObject(g.name);
                 var inst = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
                 if (!inst.TryGetComponent<Animator>(out var an)) an = inst.AddComponent<Animator>();
+                an.cullingMode = AnimatorCullingMode.CullUpdateTransforms;     // ~50 guests: no bone updates off screen
                 an.runtimeAnimatorController = controller;
                 an.applyRootMotion = false;
                 bool human = an.avatar != null && an.avatar.isHuman;

@@ -152,7 +152,13 @@ namespace RexMagnum
             if (agent.isOnNavMesh)
             {
                 agent.isStopped = false;
-                agent.SetDestination(rex.position);
+                // a new path only when Rex has moved or every 0.25 s (path search for every blob every frame is costly)
+                if (Time.time > nextPath || (rex.position - lastTarget).sqrMagnitude > 0.25f)
+                {
+                    agent.SetDestination(rex.position);
+                    lastTarget = rex.position;
+                    nextPath = Time.time + 0.25f;
+                }
             }
             Vector3 to = rex.position - transform.position;
             to.y = 0f;
@@ -189,6 +195,9 @@ namespace RexMagnum
         /// <summary>The pink brain: inside the upper body (sniper head shot, X-ray).</summary>
         public Vector3 BrainPoint => transform.position + Vector3.up * HeightOf() * 0.62f;
         public float BrainRadius => HeightOf() * 0.14f;
+
+        float nextPath;
+        Vector3 lastTarget;
 
         float HeightOf() => kind == Kind.Tourist ? 1.25f : kind == Kind.Lifeguard ? 1.9f : kind == Kind.Bouncer ? (isHalf ? 1.1f : 2.15f) : 4.2f;
 
@@ -321,6 +330,7 @@ namespace RexMagnum
                 case DeathStyle.Fling:         // golf: flies away (into the pool / sea), then pops
                     var rb = gameObject.AddComponent<Rigidbody>();
                     rb.mass = 30f;
+                    rb.interpolation = RigidbodyInterpolation.Interpolate;
                     rb.AddForce(flingDirection.normalized * (flingSpeed > 0f ? flingSpeed : 14f), ForceMode.VelocityChange);
                     rb.AddTorque(Random.onUnitSphere * 8f, ForceMode.VelocityChange);
                     yield return new WaitForSeconds(1.6f);
