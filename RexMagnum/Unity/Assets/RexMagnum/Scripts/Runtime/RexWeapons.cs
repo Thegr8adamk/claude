@@ -70,7 +70,7 @@ namespace RexMagnum
             if (wet != towelShownWet) { towelShownWet = wet; TintTowel(wet); }
             if (wet && !controller.HandsDown && Time.time > nextDrip && heldBody != null && heldBody.activeInHierarchy)
             {
-                nextDrip = Time.time + Random.Range(0.25f, 0.6f);
+                nextDrip = Time.time + Random.Range(0.6f, 1.2f);
                 SlimeFX.Splat(heldBody.transform.position + Vector3.down * 0.3f, Vector3.down, new Color(0.7f, 0.85f, 1f), 1);
             }
         }
@@ -83,9 +83,10 @@ namespace RexMagnum
                 if (held == null) continue;
                 foreach (var r in held.GetComponentsInChildren<Renderer>())
                 {
+                    if (!wet) { r.SetPropertyBlock(null); continue; }      // dry: the towel's own material again
                     r.GetPropertyBlock(wetBlock);
-                    wetBlock.SetColor("_BaseColor", wet ? new Color(0.55f, 0.55f, 0.6f) : Color.white);
-                    wetBlock.SetFloat("_Smoothness", wet ? 0.75f : 0.2f);
+                    wetBlock.SetColor("_BaseColor", new Color(0.55f, 0.55f, 0.6f));
+                    wetBlock.SetFloat("_Smoothness", 0.75f);
                     r.SetPropertyBlock(wetBlock);
                 }
             }
@@ -192,7 +193,7 @@ namespace RexMagnum
         {
             if (!controller.InputEnabled) return;
             if (wheel == null) wheel = GetComponent<WeaponWheel>();
-            if (wheel != null && wheel.IsOpen) return;            // choosing a weapon: no attacks
+            if (wheel != null && wheel.IsOpen) { Aiming = Scoped = false; return; }   // choosing a weapon: no attacks
             if (RMInput.NextWeapon) Cycle(1);
             if (RMInput.PrevWeapon) Cycle(-1);
             UpdateVisibility();

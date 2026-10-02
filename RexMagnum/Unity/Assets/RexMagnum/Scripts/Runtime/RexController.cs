@@ -48,6 +48,7 @@ namespace RexMagnum
         static readonly int SwimHash = Animator.StringToHash("Swim");
         float lockedUntil, lastInputTime;
         bool hasSwimParam, saidSlimeSwim;
+        float kickUntil;
 
         /// <summary>Comedy fall on slime. Rex cannot move for a moment.</summary>
         public void Slip()
@@ -113,8 +114,13 @@ namespace RexMagnum
             {
                 // float: hold the head above the surface; Jump = a kick up (climb out at the pool edge)
                 float want = (WaterDepth - swimDepth) * 3f;
-                velocity.y = Mathf.MoveTowards(velocity.y, Mathf.Clamp(want, -2f, 2f), 12f * dt);
-                if (InputEnabled && RMInput.Jump && Time.time >= lockedUntil) velocity.y = 4.5f;
+                if (Time.time > kickUntil) velocity.y = Mathf.MoveTowards(velocity.y, Mathf.Clamp(want, -2f, 2f), 12f * dt);
+                else velocity.y += gravity * 0.5f * dt;                 // the kick: up and over the pool edge
+                if (InputEnabled && RMInput.Jump && Time.time >= lockedUntil && Time.time > kickUntil)
+                {
+                    velocity.y = 5.5f;
+                    kickUntil = Time.time + 0.45f;
+                }
             }
             else
             {
@@ -170,6 +176,7 @@ namespace RexMagnum
             if (!IsSwimming && WaterDepth > swimDepth - 0.05f)
             {
                 IsSwimming = true;
+                velocity.y = Mathf.Max(velocity.y, -3f);                // a fall into deep water stops near the top
                 Progress.Add("swims");
                 if (slime && !saidSlimeSwim) { saidSlimeSwim = true; Slimed(); }
             }

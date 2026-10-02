@@ -68,7 +68,7 @@ namespace RexMagnum
                 // Blobs that see it get angry and answer with a rude tentacle
                 bool answered = false;
                 foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
-                    if (Vector3.Distance(b.transform.position, transform.position) < 30f) { b.OnTaunted(); answered = true; }
+                    if (Vector3.Distance(b.transform.position, transform.position) < 30f) { if (b.Disguised) b.Reveal(); else b.OnTaunted(); answered = true; }
                 if (answered && Random.value < 0.5f) StartCoroutine(SayLater("TauntAnswer", 2.8f));   // after the rude tentacle
             }
             if (RMInput.Photo && !busy)

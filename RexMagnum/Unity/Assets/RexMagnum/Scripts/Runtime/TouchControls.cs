@@ -27,8 +27,8 @@ namespace RexMagnum
             PlayerPrefs.DeleteKey("RexMagnum_TouchOpacity");
         }
         Texture2D circle;
-        int moveId = -1, lookId = -1;
-        Vector2 moveStart, movePos, lookLast;
+        int moveId = -1, lookId = -1, weaponId = -1;
+        Vector2 moveStart, movePos, lookLast, weaponLast;
         float actionStart;
         RexActions actions;
         readonly string[] top = { "Taunt", "Photo", "Hands", "Weapon", "Camera" };
@@ -111,7 +111,8 @@ namespace RexMagnum
             TouchState.AnyTap = false;
             if (!TouchState.Active) return;
             var held = new System.Collections.Generic.HashSet<string>();
-            Vector2 look = Vector2.zero;
+            Vector2 look = Vector2.zero, wheel = Vector2.zero;
+            bool weaponSeen = false;
             bool moveSeen = false, lookSeen = false;
             foreach (var t in ts.touches)
             {
@@ -123,10 +124,22 @@ namespace RexMagnum
                 if (ph == UnityEngine.InputSystem.TouchPhase.Began)
                 {
                     TouchState.AnyTap = true;
+                    if (HitButton(p) == "Weapon") { weaponId = id; weaponLast = p; }
                     if (HitButton(p) == null)
                     {
                         if (p.x < W * 0.45f && moveId < 0) { moveId = id; moveStart = movePos = p; }
                         else if (p.x >= W * 0.45f && lookId < 0) { lookId = id; lookLast = p; }
+                    }
+                }
+                // the finger that holds Weapon steers the open weapon wheel, and keeps it open off the button
+                if (id == weaponId)
+                {
+                    if (ended) weaponId = -1;
+                    else
+                    {
+                        weaponSeen = true;
+                        if (TouchState.WheelOpen) { held.Add("Weapon"); wheel += p - weaponLast; weaponLast = p; continue; }
+                        weaponLast = p;
                     }
                 }
                 if (id == moveId)
@@ -151,6 +164,8 @@ namespace RexMagnum
             float r = H * 0.12f;
             TouchState.Move = moveId >= 0 ? Vector2.ClampMagnitude((movePos - moveStart) / r, 1f) : Vector2.zero;
             TouchState.LookDelta = look;
+            TouchState.WheelDelta = wheel;
+            if (!weaponSeen) weaponId = -1;
             bool act = held.Contains("Action");
             if (act && !TouchState.Held("Action")) actionStart = Time.time;
             foreach (var n in new[] { "Action", "Jump", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera" })

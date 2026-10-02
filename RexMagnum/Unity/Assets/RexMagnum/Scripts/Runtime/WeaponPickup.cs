@@ -38,6 +38,7 @@ namespace RexMagnum
             {
                 var w = p.GetComponent<RexWeapons>();
                 if (w == null) return;
+                RMInput.ConsumeUse();
                 if (ammoOnly) w.AddAmmo(weapon, ammoAmount);
                 else w.Give(weapon);
                 if (Nearby == this) Nearby = null;

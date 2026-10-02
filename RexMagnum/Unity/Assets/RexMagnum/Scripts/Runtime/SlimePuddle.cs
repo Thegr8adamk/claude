@@ -42,6 +42,8 @@ namespace RexMagnum
             if (Time.time - born > lifetime) Destroy(gameObject);
         }
 
+        void OnDestroy() { if (mat != null) Destroy(mat); }     // its own fading material
+
         void OnTriggerEnter(Collider other)
         {
             var rex = other.GetComponent<RexController>();

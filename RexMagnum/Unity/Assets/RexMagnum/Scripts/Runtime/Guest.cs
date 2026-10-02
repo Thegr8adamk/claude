@@ -91,7 +91,7 @@ namespace RexMagnum
                 case State.Idle:
                 case State.Hiding:
                     if (!security && blobDist < panicRadius) Panic();
-                    else if (state == State.Hiding && blobDist > panicRadius * 1.5f && rexDist < 3f && RMInput.Use)
+                    else if (state == State.Hiding && blobDist > panicRadius * 1.5f && rexDist < 3f && WeaponPickup.Nearby == null && FoodPickup.Nearby == null && RMInput.Use)
                         Rescue();
                     break;
                 case State.Panic:
@@ -127,6 +127,7 @@ namespace RexMagnum
         void Rescue()
         {
             state = State.Rescued;
+            RMInput.ConsumeUse();
             agent.speed = 2.2f;
             Progress.Add("rescues");
             if (rex != null) RexVoice.Say(rex.gameObject, "Rescue", true);

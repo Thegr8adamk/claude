@@ -51,36 +51,49 @@ namespace RexMagnum
 
         // ---------------------------------------------------------------- clothes (lathe meshes)
 
+        static Material[] dressMats;
+        static Material hatMat;
+        static Mesh dressMesh, hatMesh;
+
         void Dressup()
         {
-            var jelly = blob.jellyRenderer;
-            Bounds b = jelly != null ? jelly.bounds : new Bounds(transform.position + Vector3.up * 0.6f, new Vector3(1f, 1.25f, 1f));
-            float h = b.size.y, r = Mathf.Max(b.extents.x, b.extents.z);
-            Vector3 local0 = transform.InverseTransformPoint(new Vector3(b.center.x, b.min.y, b.center.z));
+            // size from the body capsule (the jelly mesh bounds include the long tentacles)
+            var cap = GetComponent<CapsuleCollider>();
+            float h = cap != null ? cap.height : 1.25f, r = cap != null ? cap.radius : 0.5f;
+            Vector3 local0 = cap != null ? cap.center - Vector3.up * h * 0.5f : Vector3.zero;
             var lit = Shader.Find("Universal Render Pipeline/Lit");
-            var dress = new Material(lit) { name = "Disguise_Dress" };
-            dress.SetTexture("_BaseMap", Flowers());
-            dress.SetColor("_BaseColor", Dress[Random.Range(0, Dress.Length)]);
-            dress.SetFloat("_Smoothness", 0.25f);
-            dress.SetFloat("_Cull", 0f);                                  // two-sided
-            // sundress: from under the eyes down to just above the slime base, flaring out
-            float[] ys = { 0.62f, 0.55f, 0.42f, 0.28f, 0.16f };
-            float[] rs = { 0.86f, 0.98f, 1.05f, 1.14f, 1.22f };
-            Part("Dress", Lathe(ys, rs, h, r, local0), dress);
-            // sun hat: wide brim + crown on top
-            var hat = new Material(lit) { name = "Disguise_Hat" };
-            hat.SetColor("_BaseColor", new Color(0.93f, 0.85f, 0.62f));
-            hat.SetFloat("_Smoothness", 0.1f);
-            hat.SetFloat("_Cull", 0f);
-            float[] hy = { 1.16f, 1.1f, 1.03f, 1.0f, 0.99f, 1.0f };
-            float[] hr = { 0.0f, 0.32f, 0.38f, 0.42f, 0.95f, 1.0f };
-            Part("SunHat", Lathe(hy, hr, h, r * 0.75f, local0 + Vector3.up * -0.02f * h), hat);
+            if (dressMats == null)
+            {
+                dressMats = new Material[Dress.Length];
+                for (int i = 0; i < Dress.Length; i++)
+                {
+                    var m = new Material(lit) { name = "Disguise_Dress" };
+                    m.SetTexture("_BaseMap", Flowers());
+                    m.SetColor("_BaseColor", Dress[i]);
+                    m.SetFloat("_Smoothness", 0.25f);
+                    m.SetFloat("_Cull", 0f);                                  // two-sided
+                    dressMats[i] = m;
+                }
+                hatMat = new Material(lit) { name = "Disguise_Hat" };
+                hatMat.SetColor("_BaseColor", new Color(0.93f, 0.85f, 0.62f));
+                hatMat.SetFloat("_Smoothness", 0.1f);
+                hatMat.SetFloat("_Cull", 0f);
+                // unit-size meshes (height 1, radius 1), scaled per blob
+                // sundress: from under the eyes down to just above the slime base, flaring out
+                dressMesh = Lathe(new[] { 0.62f, 0.55f, 0.42f, 0.28f, 0.16f }, new[] { 0.86f, 0.98f, 1.05f, 1.14f, 1.22f }, 1f, 1f, Vector3.zero);
+                // sun hat: crown + wide brim on top
+                hatMesh = Lathe(new[] { 1.16f, 1.1f, 1.03f, 1.0f, 0.99f, 1.0f }, new[] { 0.0f, 0.32f, 0.38f, 0.42f, 0.95f, 1.0f }, 1f, 1f, Vector3.zero);
+            }
+            Part("Dress", dressMesh, dressMats[Random.Range(0, dressMats.Length)], local0, new Vector3(r, h, r));
+            Part("SunHat", hatMesh, hatMat, local0 - Vector3.up * 0.02f * h, new Vector3(r * 0.75f, h, r * 0.75f));
         }
 
-        void Part(string name, Mesh mesh, Material mat)
+        void Part(string name, Mesh mesh, Material mat, Vector3 at, Vector3 scale)
         {
             var go = new GameObject(name);
             go.transform.SetParent(transform, false);
+            go.transform.localPosition = at;
+            go.transform.localScale = scale;
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             go.AddComponent<MeshRenderer>().sharedMaterial = mat;
         }

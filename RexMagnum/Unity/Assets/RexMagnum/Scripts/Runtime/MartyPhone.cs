@@ -48,6 +48,7 @@ namespace RexMagnum
             t = RexVoice.SayLine(gameObject, "REX", RexVoice.VoiceMail[n], $"Voice/Rex/voicemail_{n + 1:00}");
             yield return new WaitForSeconds(t);
             PlayerPrefs.SetInt(Key, n + 1);
+            PlayerPrefs.Save();
             Progress.Add("voicemails");
             nextCall = playTime + callEvery;
             calling = false;

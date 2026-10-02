@@ -7,7 +7,6 @@ namespace RexMagnum
     /// Weapon wheel (brief section 7): hold Tab / hold Y / hold the touch Weapon button. Time slows down,
     /// the owned weapons sit in a ring; point with the mouse, right stick or a drag, release to equip.
     /// </summary>
-    [RequireComponent(typeof(RexWeapons))]
     public class WeaponWheel : MonoBehaviour
     {
         public float slowMotion = 0.25f;
@@ -32,7 +31,9 @@ namespace RexMagnum
             // opens only at normal speed (not in the pause menu, not during the kill cam slow motion)
             bool want = controller != null && controller.InputEnabled && RMInput.WheelHeld;
             if (want && !IsOpen && Mathf.Approximately(Time.timeScale, 1f)) Open();
+            else if (IsOpen && !Mathf.Approximately(Time.timeScale, slowMotion)) Close(false);   // kill cam / pause took over
             else if (!want && IsOpen) Close(true);
+            TouchState.WheelOpen = IsOpen;
             if (!IsOpen) return;
             Vector2 stick = RMInput.WheelStick;
             if (stick.magnitude > 0.5f) pointer = stick.normalized;

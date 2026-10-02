@@ -15,6 +15,8 @@ namespace RexMagnum
         public static bool AnyTap;
         public static Vector2 Move;
         public static Vector2 LookDelta;           // degrees this frame
+        public static bool WheelOpen;              // set by WeaponWheel
+        public static Vector2 WheelDelta;          // pixels moved this frame by the finger that holds Weapon
         static readonly System.Collections.Generic.Dictionary<string, (bool held, int down, int up, float t)> b =
             new System.Collections.Generic.Dictionary<string, (bool, int, int, float)>();
 
@@ -174,7 +176,11 @@ namespace RexMagnum
             ? (KDown("Hands") || (K != null && KeyFor("Hands") != Key.None && K[KeyFor("Hands")].wasReleasedThisFrame) ||
                (G != null && (G.dpad.down.wasPressedThisFrame || G.dpad.down.wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
             : (TouchState.Down("Hands") || KDown("Hands") || (G != null && G.dpad.down.wasPressedThisFrame));
-        public static bool Use => TouchState.Down("Use") || (KDown("Use")) || (G != null && G.buttonWest.wasPressedThisFrame);
+        public static bool Use => usedFrame != Time.frameCount &&
+                                  (TouchState.Down("Use") || (KDown("Use")) || (G != null && G.buttonWest.wasPressedThisFrame));
+        static int usedFrame = -1;
+        /// <summary>The Use press did something (pick up, eat, rescue...): nothing else reacts to it this frame.</summary>
+        public static void ConsumeUse() => usedFrame = Time.frameCount;
         public static bool Pause => TouchState.Down("Pause") || (KDown("Pause")) || (G != null && G.startButton.wasPressedThisFrame);
         /// <summary>Touch Weapon button: a short tap = next weapon, a hold opens the weapon wheel.</summary>
         public const float WheelHoldTime = 0.35f;
@@ -187,7 +193,7 @@ namespace RexMagnum
             {
                 Vector2 v = Vector2.zero;
                 if (M != null) v += M.delta.ReadValue() * 0.02f;
-                if (TouchState.Active) v += TouchState.LookDelta * 0.05f;
+                if (TouchState.Active) v += (TouchState.LookDelta * 0.05f) + TouchState.WheelDelta * 0.006f;
                 return v;
             }
         }

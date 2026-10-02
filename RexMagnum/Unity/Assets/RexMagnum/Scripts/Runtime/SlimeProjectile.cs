@@ -22,7 +22,7 @@ namespace RexMagnum
                 go.transform.localScale = Vector3.one * 0.22f;
                 go.transform.position = from;
                 var r = go.GetComponent<Renderer>();
-                r.material = SlimeFX.SlimeMaterial(color);
+                r.sharedMaterial = SlimeFX.SharedSlime(color);
             }
             go.name = "SlimeShot";
             var p = go.AddComponent<SlimeProjectile>();

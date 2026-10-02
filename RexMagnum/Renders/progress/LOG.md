@@ -28,3 +28,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 01:30 | Rex swim animations: tread water (in place) + doggy paddle (moving), extra file Rex_Swim.fbx; Unity "Swim" state switches in the water | 2026-10-02_0130_rex_swim.png |
 | 2026-10-02 01:45 | Food + drinks heal Rex (brief §8): cocktail with paper umbrella, pizza slice, fruit plate at the buffet, lounge stage and swim-up bar (back after 2 min); rescued guests sometimes drop food | (code only) |
 | 2026-10-02 02:00 | Blob factory eggs glow half as bright (log note from 2026-10-01). Weapon wheel fix (pause / kill cam) | (no picture) |
+| 2026-10-02 02:30 | Code review of this session: 19 problems fixed (ocean counted as water 5 m above the sea, roof check under water, one F press did several things, blobs rising onto the pool floor, climbing out of the pool, touch weapon wheel, leaking materials, dress size on disguised blobs, and more) | (code only) |

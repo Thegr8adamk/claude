@@ -77,11 +77,12 @@ namespace RexMagnum
         public static float SayLine(GameObject speaker, string who, string text, string clipPath)
         {
             Subtitle?.Invoke(who + ": " + text);
-            nextAllowed = Time.time + 2.5f;
             var clip = Resources.Load<AudioClip>(clipPath);
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
-            if (clip != null && src != null) { src.PlayOneShot(clip); return clip.length; }
-            return Mathf.Clamp(text.Length * 0.06f, 2f, 7f);     // reading time for the subtitle
+            float length = clip != null ? clip.length : Mathf.Clamp(text.Length * 0.06f, 2f, 7f);   // or reading time
+            if (clip != null && src != null) src.PlayOneShot(clip);
+            nextAllowed = Time.time + length;                    // no other line talks over it
+            return length;
         }
 
         public static void Say(GameObject speaker, string group, bool force = false)
