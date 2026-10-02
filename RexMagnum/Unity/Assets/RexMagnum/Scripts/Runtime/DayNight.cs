@@ -21,8 +21,7 @@ namespace RexMagnum
         float baseSun, baseAmbient, baseFog, baseExposure;
         Material sky;
         float nextLine;
-        BlobSpawner spawner;
-        int baseMax;
+        BlobSpawner[] spawners;
         AudioSource nightMusic;
 
         void Start()
@@ -34,8 +33,8 @@ namespace RexMagnum
             sky = RenderSettings.skybox != null ? new Material(RenderSettings.skybox) : null;   // do not edit the asset
             RenderSettings.skybox = sky;
             if (sky != null && sky.HasProperty("_Exposure")) baseExposure = sky.GetFloat("_Exposure");
-            spawner = FindFirstObjectByType<BlobSpawner>();
-            if (spawner != null) baseMax = spawner.maxAlive;
+            spawners = FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None);   // every zone, not only the first
+            foreach (var sp in spawners) if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;
             if (sunColor == null || sunColor.colorKeys.Length < 2)
             {
                 sunColor = new Gradient();
@@ -79,7 +78,9 @@ namespace RexMagnum
             if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(0.12f, baseExposure, day));
             foreach (var l in nightLights) if (l != null) l.enabled = Night > 0.3f;
             foreach (var b in Blob.All) if (b != null) b.SetNightGlow(Night);
-            if (spawner != null) spawner.maxAlive = Mathf.RoundToInt(baseMax * Mathf.Lerp(1f, 2.5f, Night));
+            if (spawners != null)
+                foreach (var sp in spawners)
+                    if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 2.5f, Night) * sp.factoryScale));
             if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f, Time.deltaTime * 0.1f);
             if (Night > 0.8f && Time.time > nextLine)
             {

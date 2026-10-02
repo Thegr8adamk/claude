@@ -120,10 +120,26 @@ namespace RexMagnum
 
             Quaternion rot = Quaternion.Euler(Pitch, Yaw, 0f);
 
-            // First-person position: Rex's eyes
+            // First-person position: Rex's eyes. Head bob setting (Pause > Settings): on = follow the head bone plus a
+            // small walk bob; off = steady eye height (the head bone's walk motion is filtered out).
             Vector3 eye = head != null
                 ? head.position + target.rotation * eyeOffset
                 : target.position + Vector3.up * 1.62f;
+            if (Time.unscaledTime > nextBobPref) { nextBobPref = Time.unscaledTime + 1f; headBob = PlayerPrefs.GetInt("RexMagnum_HeadBob", 1) == 1; }
+            if (rexBody == null) rexBody = target.GetComponent<RexController>();
+            float speed = rexBody != null && rexBody.Grounded ? new Vector2(rexBody.Velocity.x, rexBody.Velocity.z).magnitude : 0f;
+            if (headBob)
+            {
+                bobPhase += dt * Mathf.Lerp(0f, 11f, Mathf.Clamp01(speed / 6f)) + dt * Mathf.Clamp01(speed) * 2f;
+                float amp = Mathf.Clamp01(speed / 6f) * 0.035f;
+                eye += Vector3.up * (Mathf.Abs(Mathf.Sin(bobPhase)) * amp) + rot0(Yaw) * Vector3.right * (Mathf.Sin(bobPhase) * amp * 0.5f);
+            }
+            else
+            {
+                // low-pass the eye height: steps and slopes still follow, the walk bob (about 2 per second) does not
+                steadyY = float.IsNaN(steadyY) || Mathf.Abs(steadyY - eye.y) > 1f ? eye.y : Mathf.Lerp(steadyY, eye.y, dt * 3f);
+                eye.y = steadyY;
+            }
 
             // Third-person position: over the shoulder, no wall clipping
             Vector3 pivot = target.position + Vector3.up * pivotHeight;
@@ -146,6 +162,11 @@ namespace RexMagnum
                 fpArms.transform.localPosition = -armsHeadLocal + armsOffset;
             }
         }
+
+        static Quaternion rot0(float yaw) => Quaternion.Euler(0f, yaw, 0f);
+        bool headBob = true;
+        float nextBobPref, bobPhase, steadyY = float.NaN;
+        RexController rexBody;
 
         /// <summary>World point the player aims at (crosshair), for both modes.</summary>
         public Vector3 AimPoint(float range = 200f)

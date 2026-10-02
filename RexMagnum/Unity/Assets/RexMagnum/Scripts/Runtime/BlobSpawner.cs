@@ -8,6 +8,9 @@ namespace RexMagnum
     {
         public Blob[] prefabs;
         public int maxAlive = 4;
+        /// <summary>Set by FactoryCore when the blob factory is stopped (brief: fewer blobs after). DayNight multiplies by it.</summary>
+        [HideInInspector] public float factoryScale = 1f;
+        [HideInInspector] public int baseMax = -1;
         public float radius = 14f;
         public float interval = 6f;
         [Range(0f, 1f)] public float disguiseChance = 0.15f;   // tourist blobs in a dress + sun hat
