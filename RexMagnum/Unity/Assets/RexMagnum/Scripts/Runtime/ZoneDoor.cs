@@ -27,6 +27,9 @@ namespace RexMagnum
             if (!other.CompareTag("Player")) return;                         // only Rex's capsule (blobs, coconuts: no parent search each frame)
             var rex = other.GetComponentInParent<RexController>();
             if (rex == null || exit == null || Time.time < busyUntil || GolfCart.Driven != null) return;
+            if (GameFlow.Busy || KillCam.Active || EndingSequence.Playing) return;   // not during cut scenes / title
+            var rexHp = rex.GetComponent<Health>();
+            if (rexHp != null && rexHp.IsDead) return;                       // a body in the doorway stays put (the respawn moves him)
             if (NightSiege.Active)                                           // no running from the cave siege into the tunnels
             {
                 busyUntil = Time.time + 2f;                                  // one notice, not one per touch

@@ -117,6 +117,7 @@ namespace RexMagnum
         void Off() { weight = 0f; Push(0f); }
 
         /// <summary>One step of the fade toward planar on / off (unscaled: kill cam slow motion does not stall it).</summary>
+        int mirrorSkips;
         void Fade(bool use)
         {
             weight = Mathf.MoveTowards(weight, use ? 1f : 0f, Time.unscaledDeltaTime / FadeTime);
@@ -161,7 +162,13 @@ namespace RexMagnum
             if (!Wanted(cam)) { Fade(false); return; }       // the last texture shows while it fades (0.2 s)
             // never render in a frame a mirror rendered: the water keeps last frame's texture and weight (one frame
             // old, barely visible; dropping to the probe for that frame flickered)
-            if (PlanarMirror.RenderedFrame == Time.frameCount) return;
+            if (PlanarMirror.RenderedFrame == Time.frameCount)
+            {
+                // two mirror frames in a row (a mirror rendering every frame): the old texture would slide, so fade out
+                if (++mirrorSkips >= 2) Fade(false);
+                return;
+            }
+            mirrorSkips = 0;
             EnsureRT();                             // a new texture is handed to the water by Push
             Vector3 n = Vector3.up;
             Vector3 p = new Vector3(0f, planeY, 0f);

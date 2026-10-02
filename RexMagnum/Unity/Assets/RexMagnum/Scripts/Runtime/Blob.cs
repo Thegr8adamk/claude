@@ -971,7 +971,7 @@ namespace RexMagnum
                 if (circling) circling = false;
             }
             // a light hit on the shell: a low stony clack (a door knock pitched down), not the wet jelly hit
-            if (stoneHit) Sfx.Play("door_bang", point, 0.75f, 0.6f);
+            if (stoneHit) { if (Sfx.Get("hit_stone") != null) Sfx.Play("hit_stone", point, 0.8f, Random.Range(0.92f, 1.08f)); else Sfx.Play("door_bang", point, 0.75f, 0.6f); }
             else Sfx.Play("blob_hit", point);
         }
 

@@ -141,7 +141,7 @@ namespace RexMagnum
         }
 
         public const string SniperSide = "Side: the sniper rifle is on the hotel roof (stairs or elevator to the top).";
-        public const string BarSide = "Side: Blobs are heading for the lounge bar! (hotel, ground floor)";
+        public const string BarSide = "Side: Blobs are heading for the lounge bar! (hotel, ground floor: stand at the counter to defend it)";
 
         /// <summary>Defend the Bar can start: the pistol, not done yet (before or after the factory).</summary>
         static bool BarOpen(RexWeapons w) =>

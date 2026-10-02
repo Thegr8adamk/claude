@@ -26,6 +26,8 @@ namespace RexMagnum
         Health rexHealth;
         RexCameraRig rig;
         float speed, nextUse, nextLine;
+        /// <summary>Signed driving speed (m/s).</summary>
+        public float Speed => speed;
         bool lights;
         // driven metres, kept here and written to Progress at most once per second (Progress.Set saves)
         float cartMetres, nextProgress;

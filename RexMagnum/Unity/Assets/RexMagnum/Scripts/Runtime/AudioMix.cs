@@ -145,7 +145,7 @@ namespace RexMagnum
             if (Time.unscaledTime < nextListener) return;
             nextListener = Time.unscaledTime + 1f;
             foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
-                if (l.isActiveAndEnabled && l.GetComponent<AudioLimiter>() == null) l.gameObject.AddComponent<AudioLimiter>();
+                if (!Application.isMobilePlatform && l.isActiveAndEnabled && l.GetComponent<AudioLimiter>() == null) l.gameObject.AddComponent<AudioLimiter>();   // phones: no managed DSP on the audio thread
         }
     }
 

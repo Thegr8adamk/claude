@@ -756,6 +756,7 @@ namespace RexMagnum
             bool horn = practiceKey == "practice_carthorn";
             // the wrong mode (out of the cart for the horn, in it for the others): let another one fit
             if (horn != inCart) { practiceKey = null; return; }
+            if (horn && Mathf.Abs(GolfCart.Driven.Speed) > 3f) return;   // blobs in front of a fast cart get rammed before the honk
             if (!horn && (!controller.InputEnabled || controller.IsSwimming)) return;
             if (practiceKey == "practice_coconutpouch" && Ammo(WeaponId.Coconut) <= 0) { practiceKey = null; return; }   // nothing to throw
             if (KingGlorpBoss.Fighting || GameGuide.EventRunning || GameFlow.TutorialActive || GameFlow.Busy) return;
@@ -798,8 +799,10 @@ namespace RexMagnum
             }
             if (made == 0) return;                      // nowhere to stand here: try again in a second
             Progress.Set(practiceKey, 1);
+            string what = practiceKey == "practice_carthorn" ? "Honk the CART HORN at them!"
+                        : practiceKey == "practice_coconutpouch" ? "Try the COCONUT POUCH on them!" : "Try SUPER SNAP on them!";
             practiceKey = null;
-            RexTestHUD.Notice("Try it out!", 3f);
+            RexTestHUD.Notice(what, 3f);
         }
 
         /// <summary>A practice spot counts only when Rex can get there: a complete NavMesh path under 16 m, else (Rex
@@ -807,8 +810,9 @@ namespace RexMagnum
         bool PracticeReachable(Vector3 from, bool fromOnMesh, Vector3 spot)
         {
             if (fromOnMesh && practicePath == null) practicePath = new UnityEngine.AI.NavMeshPath();
-            if (fromOnMesh && UnityEngine.AI.NavMesh.CalculatePath(from, spot, UnityEngine.AI.NavMesh.AllAreas, practicePath))
+            if (fromOnMesh)
             {
+                if (!UnityEngine.AI.NavMesh.CalculatePath(from, spot, UnityEngine.AI.NavMesh.AllAreas, practicePath)) return false;
                 if (practicePath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) return false;
                 var corners = practicePath.corners;
                 float len = 0f;

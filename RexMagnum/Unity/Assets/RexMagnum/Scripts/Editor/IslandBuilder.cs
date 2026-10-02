@@ -2394,8 +2394,9 @@ namespace RexMagnum.EditorTools
                 {
                     // the dune side: lowered to the base inside the footprint, rising 1:2 over the 1.5 m margin (the only
                     // place the ground is lowered); the sea side is raised by the pad below
-                    for (int tr = Mathf.RoundToInt((pz0 + ti.size / 2) / tcell); tr <= Mathf.RoundToInt((pz1 + ti.size / 2) / tcell); tr++)
-                        for (int tc = Mathf.RoundToInt((px0 + ti.size / 2) / tcell); tc <= Mathf.RoundToInt((px1 + ti.size / 2) / tcell); tc++)
+                    // 4 m wider than the margin: the 1:2 cap meets the dune ~3 m out instead of leaving a bank behind the bar
+                    for (int tr = Mathf.RoundToInt((pz0 - 4f + ti.size / 2) / tcell); tr <= Mathf.RoundToInt((pz1 + 4f + ti.size / 2) / tcell); tr++)
+                        for (int tc = Mathf.RoundToInt((px0 - 4f + ti.size / 2) / tcell); tc <= Mathf.RoundToInt((px1 + 4f + ti.size / 2) / tcell); tc++)
                         {
                             if (tr < 0 || tc < 0 || tr >= ti.res || tc >= ti.res) continue;
                             float wx = tc * tcell - ti.size / 2, wz = tr * tcell - ti.size / 2;

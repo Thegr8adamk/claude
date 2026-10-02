@@ -329,6 +329,7 @@ namespace RexMagnum
             }
             if (bd > 3f) { DizzyBonus(taken, point, by); return; }
             health.Heal(taken * 0.8f);
+            Sfx.Play("hit_armor", point, 0.8f, Random.Range(0.92f, 1.08f));      // junk-metal clang: the armour took it
             var (t, hp) = armor[best];
             hp -= taken;
             if (hp <= 0f && t != null)
