@@ -39,6 +39,8 @@ namespace RexMagnum
         Vector3 checkpointPos;
         float checkpointYaw, nextCheckpointCheck;
         string checkpointKey;
+        string checkpointZone;     // zone of the checkpoint Rex wakes at (survives leaving the zone, unlike checkpointKey)
+        static RexLife instance;
 
         void UpdateCheckpoint()
         {
@@ -58,18 +60,75 @@ namespace RexMagnum
                 foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
                     if (sp.isActiveAndEnabled && (sp.transform.position - transform.position).sqrMagnitude < 225f) return;
             checkpointKey = key;
+            checkpointZone = key;
             hasCheckpoint = true;
             checkpointPos = transform.position;
             checkpointYaw = transform.eulerAngles.y;
             RexTestHUD.Notice("CHECKPOINT", 1.2f);
-            // kept across sessions: GameFlow wakes a returning player here ("x,y,z,yaw", invariant culture)
+            // kept across sessions (GameFlow wakes a returning player here), but never the boss one: a returning
+            // player must not wake beside King Glorp. Nor one whose goal is already done.
+            if (key != "boss" && !Stale(key)) WriteSaved(checkpointPos, checkpointYaw, key);
+        }
+
+        /// <summary>A checkpoint whose zone no longer matters: the ruins once the factory is stopped, the cave, ship
+        /// and boss arena once King Glorp is popped.</summary>
+        static bool Stale(string zone)
+        {
+            if (zone == "ruins") return FactoryCore.Stopped;
+            if (zone == "cave" || zone == "ship" || zone == "boss") return PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1;
+            return false;       // "spot" (where Rex was when the game quit): always fine
+        }
+
+        /// <summary>"x,y,z,yaw,zone" in the invariant culture.</summary>
+        static void WriteSaved(Vector3 p, float yaw, string zone)
+        {
             var ic = System.Globalization.CultureInfo.InvariantCulture;
-            PlayerPrefs.SetString(SavedCheckpointKey, string.Format(ic, "{0:0.###},{1:0.###},{2:0.###},{3:0.#}",
-                checkpointPos.x, checkpointPos.y, checkpointPos.z, checkpointYaw));
+            PlayerPrefs.SetString(SavedCheckpointKey, string.Format(ic, "{0:0.###},{1:0.###},{2:0.###},{3:0.#},{4}",
+                p.x, p.y, p.z, yaw, zone));
             PlayerPrefs.Save();
         }
 
-        /// <summary>PlayerPrefs key of the last far checkpoint (cave, ruins, ship, boss): "x,y,z,yaw".</summary>
+        /// <summary>A running blob spawner within r metres: waking up among fresh blobs is a death loop.</summary>
+        static bool NearActiveSpawner(Vector3 p, float r)
+        {
+            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+                if (sp.isActiveAndEnabled && (sp.transform.position - p).sqrMagnitude < r * r) return true;
+            return false;
+        }
+
+        /// <summary>Drop checkpoints made stale by a big goal (on Start and whenever a big goal is done): the saved
+        /// one is deleted, the one of this session forgotten.</summary>
+        void DropStaleCheckpoints()
+        {
+            if (hasCheckpoint && Stale(checkpointZone)) { hasCheckpoint = false; checkpointKey = null; }
+            if (ParseSaved(out Vector3 sp, out float sy, out string sz) && (sz == "boss" || Stale(sz))) ClearSavedCheckpoint();
+        }
+
+        /// <summary>QUIT TO TITLE / app quit: remember where Rex is, so a returning player wakes there. Only a calm
+        /// spot: playing (not at the title), alive, on the ground, not in water or the cart, not in the tutorial,
+        /// no boss fight and no living blob within 20 m. Otherwise the last saved checkpoint stays.</summary>
+        public static void SaveQuitSpot()
+        {
+            var r = instance;
+            if (r == null || r.ctrl == null || r.health == null || r.health.IsDead) return;
+            if (GameFlow.Busy || GameFlow.TutorialActive || KingGlorpBoss.Fighting || GolfCart.Driven != null) return;
+            if (!r.ctrl.Grounded || r.ctrl.IsSwimming || r.ctrl.WaterDepth > 0f || r.ctrl.Locked) return;
+            Vector3 p = r.transform.position;
+            if (Blob.LivingNear(p, 20f) > 0) return;
+            WriteSaved(p, r.transform.eulerAngles.y, "spot");
+        }
+
+        void OnApplicationQuit() => SaveQuitSpot();
+        void OnApplicationPause(bool paused) { if (paused) SaveQuitSpot(); }     // mobile: backgrounded apps get killed
+
+        /// <summary>Wake grace: Rex takes no damage for s seconds (a blob near a wake-up spot gets no free hit).</summary>
+        public static void WakeGrace(float s)
+        {
+            if (instance != null && instance.health != null) instance.health.Invulnerable(s);
+        }
+
+        /// <summary>PlayerPrefs key of the last saved checkpoint (cave, ruins, ship, or the quit spot):
+        /// "x,y,z,yaw,zone" (older saves: "x,y,z,yaw").</summary>
         public const string SavedCheckpointKey = "rm_cp";
         /// <summary>NEW GAME: forget the saved checkpoint.</summary>
         public static void ClearSavedCheckpoint()

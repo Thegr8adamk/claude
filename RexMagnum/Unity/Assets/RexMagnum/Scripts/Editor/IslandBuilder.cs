@@ -139,7 +139,7 @@ namespace RexMagnum.EditorTools
                     Guests(data.hotel, pool);
                 }
                 Beach(world);
-                LightProbeGrid(terrain);
+                LightProbeGrid(terrain, data.hotel != null ? data.hotel.elevatorFloors : null);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -1918,10 +1918,14 @@ namespace RexMagnum.EditorTools
 
         /// <summary>Coarse light probes (resort, ruins, cave mouth): after Bake Lighting the lower building LODs, Rex,
         /// blobs and props are lit from these instead of the one ambient probe (they were flat / too bright in shade).
-        /// A sparse grid over each area at 1, 4 and 10 m above the ground; points inside colliders are skipped.</summary>
-        static void LightProbeGrid(Terrain terrain)
+        /// A sparse grid over each area at 1, 4 and 10 m above the ground, plus a layer inside the hotel on every floor
+        /// (+1.5 m) and on the roof (floors 4 / 5 and the roof had none: the 10 m layer stops at floor 3). Points inside
+        /// colliders are skipped (also inside non-convex mesh colliders, see InsideSolid).</summary>
+        static void LightProbeGrid(Terrain terrain, float[] hotelFloors)
         {
             var areas = new List<Bounds>();
+            Bounds hotelBox = default;
+            bool hasHotel = false;
             foreach (var an in new[] { "Hotel", "PoolArea", "TikiBar", "DiveShop", "Ruins" })
             {
                 var go = GameObject.Find("Island/" + an);
@@ -1930,6 +1934,7 @@ namespace RexMagnum.EditorTools
                 if (rs.Length == 0) continue;
                 var bb = rs[0].bounds;
                 foreach (var rr in rs) bb.Encapsulate(rr.bounds);
+                if (an == "Hotel") { hotelBox = bb; hasHotel = true; }
                 bb.Expand(new Vector3(12f, 0f, 12f));                       // the paths and open ground around it
                 areas.Add(bb);
             }
@@ -1948,11 +1953,25 @@ namespace RexMagnum.EditorTools
                         foreach (float up in new[] { 1f, 4f, 10f })
                         {
                             var pp = new Vector3(x, gy + up, z);
-                            if (Physics.CheckSphere(pp, 0.3f, ~0, QueryTriggerInteraction.Ignore)) continue;   // inside a wall / rock
+                            if (Physics.CheckSphere(pp, 0.3f, ~0, QueryTriggerInteraction.Ignore) || InsideSolid(pp)) continue;   // inside a wall / rock
                             if (pts.Any(o => (o - pp).sqrMagnitude < 4f)) continue;                            // overlapping areas
                             pts.Add(pp);
                         }
                     }
+            }
+            // hotel interior: one layer per floor (elevatorFloors: the floors, the last value is the roof), ~6 m apart
+            if (hasHotel && hotelFloors != null)
+            {
+                float hs = 6f;
+                foreach (float fy in hotelFloors)
+                    for (float x = hotelBox.min.x + hs * 0.5f; x < hotelBox.max.x; x += hs)
+                        for (float z = hotelBox.min.z + hs * 0.5f; z < hotelBox.max.z; z += hs)
+                        {
+                            var hp = new Vector3(x, fy + 1.5f, z);
+                            if (Physics.CheckSphere(hp, 0.3f, ~0, QueryTriggerInteraction.Ignore) || InsideSolid(hp)) continue;
+                            if (pts.Any(o => (o - hp).sqrMagnitude < 4f)) continue;
+                            pts.Add(hp);
+                        }
             }
             if (pts.Count < 4) return;
             var lpg = new GameObject("LightProbes").AddComponent<LightProbeGroup>();   // at the origin: positions are world
@@ -1960,6 +1979,21 @@ namespace RexMagnum.EditorTools
             var probeProp = typeof(LightProbeGroup).GetProperty("probePositions");
             if (probeProp != null && probeProp.CanWrite) probeProp.SetValue(lpg, pts.ToArray());
             Debug.Log($"[Rex Magnum] {pts.Count} light probes (Bake Lighting fills them).");
+        }
+
+        /// <summary>A point inside a non-convex mesh collider (rock, hill, thick wall): CheckSphere does not see it (mesh
+        /// colliders are hollow). Upward ray with back faces on: hitting a face from behind within 50 m = inside; anything
+        /// right overhead (0.5 m) = in a slab / under a stair. Such probes baked black and darkened whatever used them.</summary>
+        static bool InsideSolid(Vector3 p)
+        {
+            bool old = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true;
+            try
+            {
+                if (!Physics.Raycast(p, Vector3.up, out RaycastHit hit, 50f, ~0, QueryTriggerInteraction.Ignore)) return false;
+                return hit.distance < 0.5f || Vector3.Dot(hit.normal, Vector3.up) > 0.01f;   // the face looks up: we hit its back
+            }
+            finally { Physics.queriesHitBackfaces = old; }
         }
 
         static void Lighting()
