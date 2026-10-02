@@ -30,3 +30,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 02:00 | Blob factory eggs glow half as bright (log note from 2026-10-01). Weapon wheel fix (pause / kill cam) | (no picture) |
 | 2026-10-02 02:30 | Code review of this session: 19 problems fixed (ocean counted as water 5 m above the sea, roof check under water, one F press did several things, blobs rising onto the pool floor, climbing out of the pool, touch weapon wheel, leaking materials, dress size on disguised blobs, and more) | (code only) |
 | 2026-10-02 02:50 | Beach: harpoon gun + harpoon ammo in the dive shop, coconut + cocktail at the tiki bar, coconuts on the sand (brief §5; the harpoon could not be found before). Ammo found before its weapon is kept | (code only) |
+| 2026-10-02 03:05 | Elevator is sometimes slime-filled (brief §6): slime puddles on the cab floor ride along, Rex can slip; ruins charge station for the golf cart | (code only) |

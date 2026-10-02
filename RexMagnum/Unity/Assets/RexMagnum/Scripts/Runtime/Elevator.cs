@@ -53,6 +53,22 @@ namespace RexMagnum
             return best;
         }
 
+        [Range(0f, 1f)] public float slimeChance = 0.2f;   // brief: the elevator is sometimes slime-filled
+
+        /// <summary>The cab stops: sometimes its floor is covered in slime (puddles ride along; Rex can slip).</summary>
+        void Arrived()
+        {
+            if (Random.value >= slimeChance) return;
+            var green = new Color(0.35f, 0.95f, 0.3f);
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 p = cab.position + cab.right * Random.Range(-0.9f, 0.9f) + cab.forward * Random.Range(-1f, 1f);
+                var puddle = SlimePuddle.Spawn(p, green, Random.Range(0.6f, 1.0f));
+                puddle.transform.SetParent(cab, true);
+            }
+            SlimeFX.Splat(cab.position + Vector3.up * 2.2f, Vector3.down, green, 6);   // dripping from the ceiling
+        }
+
         void Update()
         {
             bool moving = Mathf.Abs(cab.position.y - floorHeights[target]) > 0.01f;
@@ -72,7 +88,11 @@ namespace RexMagnum
                 cab.position = new Vector3(cab.position.x, y, cab.position.z);
                 if (ride) rex.Move(new Vector3(0f, dy, 0f));
             }
-            else current = target;
+            else
+            {
+                if (current != target) Arrived();
+                current = target;
+            }
             // landing doors: open only at the floor where the cab stands still
             for (int i = 0; i < landingDoors.Length; i++)
             {

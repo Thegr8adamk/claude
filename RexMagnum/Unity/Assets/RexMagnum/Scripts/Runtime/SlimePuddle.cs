@@ -11,7 +11,7 @@ namespace RexMagnum
         Material mat;
         Color c0;
 
-        public static void Spawn(Vector3 at, Color color, float size = 0.9f)
+        public static GameObject Spawn(Vector3 at, Color color, float size = 0.9f)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.name = "SlimePuddle";
@@ -26,6 +26,7 @@ namespace RexMagnum
             trig.isTrigger = true;
             trig.radius = 0.5f;
             go.AddComponent<SlimePuddle>();
+            return go;
         }
 
         void Start()

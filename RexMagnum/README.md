@@ -148,6 +148,7 @@ Claude can see your ElevenLabs flows, but it can't download the audio files. Dow
 | Fight v2 | `fight.mp3` |
 | King Glorp power ballad v1 | `glorp_ballad.mp3` |
 | Rex lounge act v1 | `lounge_act.mp3` |
+| Elevator music (optional, not in your flow yet: soft hotel elevator music) | `elevator.mp3` |
 
 **Sound effects** → `Unity/Assets/RexMagnum/Resources/Sfx/`
 
