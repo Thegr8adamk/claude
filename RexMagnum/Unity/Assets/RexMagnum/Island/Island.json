@@ -1592,16 +1592,6 @@
  ],
  "assets": [
   {
-   "name": "Room304",
-   "fbx": "Buildings/Room304.fbx",
-   "tris": 4808
-  },
-  {
-   "name": "GolfCart",
-   "fbx": "Buildings/GolfCart.fbx",
-   "tris": 3428
-  },
-  {
    "name": "JungleFalls",
    "fbx": "Buildings/JungleFalls.fbx",
    "tris": 12564
@@ -1615,11 +1605,6 @@
    "name": "Bridges",
    "fbx": "Buildings/Bridges.fbx",
    "tris": 4264
-  },
-  {
-   "name": "PoolArea",
-   "fbx": "Buildings/PoolArea.fbx",
-   "tris": 98230
   },
   {
    "name": "DiveShop",
@@ -1680,6 +1665,21 @@
    "name": "Hotel",
    "fbx": "Buildings/Hotel.fbx",
    "tris": 186856
+  },
+  {
+   "name": "PoolArea",
+   "fbx": "Buildings/PoolArea.fbx",
+   "tris": 98230
+  },
+  {
+   "name": "GolfCart",
+   "fbx": "Buildings/GolfCart.fbx",
+   "tris": 3428
+  },
+  {
+   "name": "Room304",
+   "fbx": "Buildings/Room304.fbx",
+   "tris": 4808
   }
  ],
  "vegetation": {
