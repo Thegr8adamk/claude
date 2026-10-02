@@ -1853,6 +1853,62 @@ namespace RexMagnum.EditorTools
             return px;
         }
 
+        /// <summary>Large-scale colour variation (the painted layers were one flat tone over hundreds of metres): a tinted
+        /// copy of the sand (sun-bleached / darker warm) and of the grass (dry, yellower), with shifted tiling, blended in by
+        /// low-frequency noise (patches of ~40 to 150 m). 8 layers = still two terrain passes. Runs after the grass details
+        /// were placed from the original weights, so grass density does not change.</summary>
+        static void MacroVariation(TerrainData td, List<TerrainLayer> layers, List<string> names, float[,,] src, float size)
+        {
+            var pairs = new List<(int baseIdx, TerrainLayer to, float amount, float seed)>();
+            void Variant(string baseName, string name, Color tint, float amount, float seed)
+            {
+                int bi = names.IndexOf(baseName);
+                if (bi < 0 || bi >= layers.Count || layers[bi] == null) return;
+                var bl = layers[bi];
+                string path = $"{Gen}/{name}.terrainlayer";
+                var vl = AssetDatabase.LoadAssetAtPath<TerrainLayer>(path);
+                if (vl == null) { vl = new TerrainLayer(); AssetDatabase.CreateAsset(vl, path); }
+                vl.diffuseTexture = bl.diffuseTexture;
+                vl.normalMapTexture = bl.normalMapTexture;
+                vl.maskMapTexture = bl.maskMapTexture;
+                vl.tileSize = bl.tileSize * 1.37f;                   // a different repeat: also breaks the visible tiling
+                vl.tileOffset = new Vector2(1.7f, 0.9f);
+                vl.normalScale = bl.normalScale;
+                vl.smoothness = bl.smoothness;
+                vl.diffuseRemapMin = Vector4.zero;
+                vl.diffuseRemapMax = new Vector4(tint.r, tint.g, tint.b, 1f);   // the URP terrain shader multiplies the albedo by this
+                EditorUtility.SetDirty(vl);
+                pairs.Add((bi, vl, amount, seed));
+            }
+            Variant("T_Sand", "T_SandWarm", new Color(0.9f, 0.82f, 0.7f), 0.7f, 11f);
+            Variant("T_Grass", "T_GrassDry", new Color(1f, 0.9f, 0.56f), 0.65f, 37f);
+            if (pairs.Count == 0) return;
+            int ar = src.GetLength(0), nl = src.GetLength(2), nn = nl + pairs.Count;
+            var all = new List<TerrainLayer>(layers);
+            foreach (var pa in pairs) all.Add(pa.to);
+            var dst = new float[ar, ar, nn];
+            float m = size / ar;                                     // metres per alphamap texel
+            for (int z = 0; z < ar; z++)
+                for (int x = 0; x < ar; x++)
+                {
+                    for (int k = 0; k < nl; k++) dst[z, x, k] = src[z, x, k];
+                    for (int q = 0; q < pairs.Count; q++)
+                    {
+                        var pa = pairs[q];
+                        float wx = x * m, wz = z * m;
+                        // two octaves (150 m and 45 m): broad patches with ragged edges
+                        float nv = Mathf.PerlinNoise(wx / 150f + pa.seed, wz / 150f + pa.seed) * 0.7f +
+                                   Mathf.PerlinNoise(wx / 45f + pa.seed * 2f, wz / 45f + pa.seed) * 0.3f;
+                        float f = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 0.68f, nv)) * pa.amount;
+                        float moved = dst[z, x, pa.baseIdx] * f;
+                        dst[z, x, pa.baseIdx] -= moved;
+                        dst[z, x, nl + q] = moved;
+                    }
+                }
+            td.terrainLayers = all.ToArray();
+            td.SetAlphamaps(0, 0, dst);
+        }
+
         static Terrain BuildTerrain(Data data, Transform parent)
         {
             var ti = data.terrain;
@@ -1979,6 +2035,7 @@ namespace RexMagnum.EditorTools
                     }
                 for (int i = 0; i < maps.Length; i++) td.SetDetailLayer(0, 0, i, maps[i]);
             }
+            MacroVariation(td, layers, ti.layers.Select(ln => ln.name).ToList(), alpha, ti.size);
 
             AssetDatabase.DeleteAsset($"{Gen}/IslandTerrain.asset");
             AssetDatabase.CreateAsset(td, $"{Gen}/IslandTerrain.asset");
@@ -2130,6 +2187,32 @@ namespace RexMagnum.EditorTools
             finally { Physics.queriesHitBackfaces = old; }
         }
 
+        /// <summary>Cloud layer over the Procedural sky (it had none: an empty blue dome all day). A sphere drawn around the
+        /// camera by RexMagnum/Clouds; DayNight drives the sunset glow / night / coverage. Scaled huge only so its bounds
+        /// always hold the camera (never culled); the shader places it at the camera's far plane.</summary>
+        static void CloudDome()
+        {
+            var sh = Shader.Find("RexMagnum/Clouds");
+            if (sh == null) { Debug.LogWarning("[Rex Magnum] RexMagnum/Clouds shader missing: no cloud layer."); return; }
+            var cm = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/Clouds.mat");
+            if (cm == null) { cm = new Material(sh); AssetDatabase.CreateAsset(cm, Mats + "/Clouds.mat"); }
+            cm.shader = sh;
+            cm.SetFloat("_Cover", 0.45f);
+            cm.SetFloat("_Opacity", 0.9f);
+            EditorUtility.SetDirty(cm);
+            var dome = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            UnityEngine.Object.DestroyImmediate(dome.GetComponent<Collider>());
+            dome.name = "CloudDome";
+            dome.transform.localScale = Vector3.one * 6000f;
+            var dr = dome.GetComponent<MeshRenderer>();
+            dr.sharedMaterial = cm;
+            dr.shadowCastingMode = ShadowCastingMode.Off;
+            dr.receiveShadows = false;
+            dr.lightProbeUsage = LightProbeUsage.Off;
+            dr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            dr.allowOcclusionWhenDynamic = false;          // a huge box: occlusion culling must never hide it
+        }
+
         static void Lighting()
         {
             var sun = UnityEngine.Object.FindAnyObjectByType<Light>();
@@ -2152,6 +2235,7 @@ namespace RexMagnum.EditorTools
             sky.SetColor("_GroundColor", new Color(0.3f, 0.36f, 0.4f));
             sky.SetFloat("_Exposure", 1.25f);
             RenderSettings.skybox = sky;
+            CloudDome();
             RenderSettings.ambientMode = AmbientMode.Skybox;
             RenderSettings.ambientIntensity = 1.1f;
             RenderSettings.defaultReflectionMode = DefaultReflectionMode.Skybox;

@@ -105,6 +105,8 @@ namespace RexMagnum
             if (rex != null && (rex.position - transform.position).sqrMagnitude > sleep * sleep) return;
             // "Defend the bar" runs its own waves: the spawners around the hotel hold off (no pile-up on top of them)
             if (BarDefense.Active && (transform.position - BarDefense.Center).sqrMagnitude < BarDefense.HoldRadius * BarDefense.HoldRadius) return;
+            // the cave siege too (its waves come out of the cave mouth)
+            if (NightSiege.Active && (transform.position - NightSiege.Center).sqrMagnitude < NightSiege.HoldRadius * NightSiege.HoldRadius) return;
             int near = 0;
             float r2 = (radius * 3f) * (radius * 3f);
             foreach (var b in Blob.All)
