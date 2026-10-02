@@ -79,8 +79,15 @@ namespace RexMagnum
             int i = active.ZoneAt(pos);
             if (i < 0) return;
             var s = active.st[i];
-            if (s.hidden) active.Show(s, true);
-            else if (s.pending >= 0) active.Finish(s);
+            if (s.hidden) active.Show(s, false);            // time-sliced: a whole resort in one frame hitched on phones
+        }
+
+        /// <summary>The zone at pos is fully shown (no time-sliced show still running). True when not streamed.</summary>
+        public static bool Ready(Vector3 pos)
+        {
+            if (active == null || active.st == null) return true;
+            int i = active.ZoneAt(pos);
+            return i < 0 || (!active.st[i].hidden && active.st[i].pending < 0);
         }
 
         public static void ReleaseShown(Vector3 pos) => pins.Remove(pos);

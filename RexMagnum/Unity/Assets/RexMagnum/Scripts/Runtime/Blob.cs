@@ -508,7 +508,9 @@ namespace RexMagnum
             {
                 agent.isStopped = false;
                 // a new path only when Rex has moved or every 0.25 s (path search for every blob every frame is costly)
-                if (Time.time > nextPath && ((rex.position - lastTarget).sqrMagnitude > 0.25f || Time.time > nextPath + 0.5f))
+                if (Time.time - lastChase > 0.3f) nextPath = 0f;           // a new chase (from wander, a stun...): path to Rex now
+                lastChase = Time.time;
+                if (Time.time > nextPath && ((rex.position - lastTarget).sqrMagnitude > 0.25f || Time.time > nextPath + 0.5f || nextPath == 0f))
                 {
                     agent.SetDestination(rex.position);
                     lastTarget = rex.position;
@@ -876,6 +878,7 @@ namespace RexMagnum
 
         float nextPath;
         Vector3 lastTarget;
+        float lastChase = -1f;
         /// <summary>Set by thrown / fired weapons just around their Damage call: the weapon that gets the kill.</summary>
         [System.NonSerialized] public WeaponId? creditWeapon;
 

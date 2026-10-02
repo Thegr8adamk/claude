@@ -55,6 +55,8 @@ namespace RexMagnum
                     // the probe's zone at full detail while it renders (a streamed-out zone sits at its lowest LOD)
                     pinned = p.transform.position;
                     ZoneStreamer.EnsureShown(pinned.Value);
+                    for (int f = 0; f < 60 && !ZoneStreamer.Ready(pinned.Value); f++) yield return null;   // sliced show
+                    if (p == null || !p.isActiveAndEnabled) { Unpin(); continue; }
                     int id = p.RenderProbe();
                     // wait for the slices (about 9 frames); cap it so a probe disabled mid-render cannot stall the pass
                     for (int f = 0; f < 30 && p != null && !p.IsFinishedRendering(id); f++) yield return null;
