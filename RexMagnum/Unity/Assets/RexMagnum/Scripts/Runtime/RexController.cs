@@ -62,8 +62,42 @@ namespace RexMagnum
             RexVoice.Say(gameObject, "Slip");
         }
 
-        /// <summary>Hit by slime (a line, and later a slime look on the shirt).</summary>
-        public void Slimed() => RexVoice.Say(gameObject, "Slime");
+        /// <summary>Hit by slime: a line, and the shirt gets a wet green slime look (brief section 7a) that dries off
+        /// slowly and washes off in clean water.</summary>
+        public void Slimed()
+        {
+            RexVoice.Say(gameObject, "Slime");
+            SlimeAmount = Mathf.Min(1f, SlimeAmount + 0.45f);
+        }
+
+        /// <summary>0 = clean shirt, 1 = covered in slime.</summary>
+        public float SlimeAmount { get; private set; }
+        Renderer[] shirt;
+        MaterialPropertyBlock slimeBlock;
+        float shownSlime = -1f;
+        bool inSlimeWater;
+
+        void UpdateSlimeLook()
+        {
+            float wash = IsSwimming ? (inSlimeWater ? -0.2f : 0.35f) : 0.012f;   // slime water adds, clean water washes
+            SlimeAmount = Mathf.Clamp01(SlimeAmount - wash * Time.deltaTime);
+            if (Mathf.Abs(SlimeAmount - shownSlime) < 0.01f) return;
+            shownSlime = SlimeAmount;
+            if (shirt == null)
+            {
+                shirt = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.name.Contains("Shirt"));
+                slimeBlock = new MaterialPropertyBlock();
+            }
+            var tint = Color.Lerp(Color.white, new Color(0.55f, 1f, 0.4f), SlimeAmount * 0.8f);
+            foreach (var r in shirt)
+            {
+                if (r == null) continue;
+                r.GetPropertyBlock(slimeBlock);
+                slimeBlock.SetColor("_BaseColor", tint);
+                slimeBlock.SetFloat("_Smoothness", Mathf.Lerp(0.3f, 0.85f, SlimeAmount));   // wet shine
+                r.SetPropertyBlock(slimeBlock);
+            }
+        }
 
         public void Hurt() => SetTrigger(HitHash);
 
@@ -92,6 +126,7 @@ namespace RexMagnum
 
         void Update()
         {
+            UpdateSlimeLook();
             if (!cc.enabled) return;              // driving the golf cart
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
@@ -172,6 +207,7 @@ namespace RexMagnum
         void UpdateWater()
         {
             bool inWater = WaterVolume.Surface(transform.position, out float surface, out bool slime);
+            inSlimeWater = inWater && slime;
             WaterDepth = inWater ? surface - transform.position.y : 0f;
             if (!IsSwimming && WaterDepth > swimDepth - 0.05f)
             {
