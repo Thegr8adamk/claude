@@ -2196,6 +2196,188 @@ def jungle_falls(m, ha, river, picks=(10, 14, 18)):
     return k.c, out
 
 
+def river_profile(ha, river, step=1):
+    """Water surface along the slime river: one row per path point (x, y, z, dir, slope, dist). The surface never
+    runs uphill (z only falls from the waterfall pool to the sea), so the water lies level across and steps down."""
+    rx, ry = river
+    pts = [(float(rx[i]), float(ry[i])) for i in range(0, len(rx), step)]
+    zs, dist, out = [], [0.0], []
+    for i, (x, y) in enumerate(pts):
+        z = max(ha(x, y) + 0.25, 0.2)
+        zs.append(min(z, zs[-1]) if zs else z)
+        if i:
+            dist.append(dist[-1] + math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]))
+    n = len(pts)
+    for i, (x, y) in enumerate(pts):
+        a, b = pts[max(i - 1, 0)], pts[min(i + 1, n - 1)]
+        d = Vector((b[0] - a[0], b[1] - a[1], 0)).normalized()
+        j0, j1 = max(i - 3, 0), min(i + 3, n - 1)
+        slope = (zs[j0] - zs[j1]) / max(dist[j1] - dist[j0], 0.1)
+        out.append((x, y, zs[i], d, slope, dist[i]))
+    return out
+
+
+def river_material():
+    """Slime river (preview look; the game uses the RexMagnum/Water shader in river mode): murky green water with
+    streaks stretched along the flow (UV v = metres downstream) and white-green foam where the vertex colour R says
+    rapids."""
+    m, nt = _mat("A_RiverWater")
+    if nt is None:
+        return m
+    nt.nodes.clear()
+    L = nt.links.new
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    p = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    p.inputs["IOR"].default_value = 1.333
+    uvn = nt.nodes.new("ShaderNodeUVMap")
+    uvn.uv_map = "UVMap"
+    sc = nt.nodes.new("ShaderNodeMapping")
+    sc.inputs["Scale"].default_value = (0.9, 0.18, 1.0)        # streaks: long along the flow
+    L(uvn.outputs["UV"], sc.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 1.6
+    nz.inputs["Detail"].default_value = 8.0
+    nz.inputs["Roughness"].default_value = 0.65
+    L(sc.outputs[0], nz.inputs["Vector"])
+    fine = nt.nodes.new("ShaderNodeTexNoise")
+    fine.inputs["Scale"].default_value = 9.0
+    fine.inputs["Detail"].default_value = 4.0
+    L(sc.outputs[0], fine.inputs["Vector"])
+    ca = nt.nodes.new("ShaderNodeVertexColor")
+    ca.layer_name = "Col"
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    L(ca.outputs["Color"], sep.inputs["Color"])
+    # foam mask = rapids amount (R) pushed through the streak noise, so foam breaks into lines and patches
+    add = nt.nodes.new("ShaderNodeMath")
+    add.operation = "ADD"
+    L(sep.outputs[0], add.inputs[0])
+    sub = nt.nodes.new("ShaderNodeMath")
+    sub.operation = "SUBTRACT"
+    L(fine.outputs["Fac"], sub.inputs[0])
+    sub.inputs[1].default_value = 0.62
+    L(sub.outputs[0], add.inputs[1])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.35
+    ramp.color_ramp.elements[1].position = 0.6
+    L(add.outputs[0], ramp.inputs["Fac"])
+    water_col = nt.nodes.new("ShaderNodeMix")
+    water_col.data_type = "RGBA"
+    water_col.inputs[6].default_value = (0.05, 0.16, 0.03, 1)
+    water_col.inputs[7].default_value = (0.16, 0.38, 0.06, 1)
+    L(nz.outputs["Fac"], water_col.inputs[0])
+    col = nt.nodes.new("ShaderNodeMix")
+    col.data_type = "RGBA"
+    L(ramp.outputs["Color"], col.inputs[0])
+    L(water_col.outputs[2], col.inputs[6])
+    col.inputs[7].default_value = (0.72, 0.9, 0.6, 1)
+    L(col.outputs[2], p.inputs["Base Color"])
+    rough = nt.nodes.new("ShaderNodeMapRange")
+    L(ramp.outputs["Color"], rough.inputs[0])
+    rough.inputs[3].default_value = 0.04
+    rough.inputs[4].default_value = 0.7
+    L(rough.outputs[0], p.inputs["Roughness"])
+    tr = nt.nodes.new("ShaderNodeMapRange")
+    L(ramp.outputs["Color"], tr.inputs[0])
+    tr.inputs[3].default_value = 0.55
+    tr.inputs[4].default_value = 0.0
+    L(tr.outputs[0], p.inputs["Transmission Weight"])
+    p.inputs["Emission Color"].default_value = (0.2, 0.8, 0.12, 1)
+    p.inputs["Emission Strength"].default_value = 0.08
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.35
+    b.inputs["Distance"].default_value = 0.05
+    hsum = nt.nodes.new("ShaderNodeMath")
+    hsum.operation = "ADD"
+    L(nz.outputs["Fac"], hsum.inputs[0])
+    L(ramp.outputs["Color"], hsum.inputs[1])
+    L(hsum.outputs[0], b.inputs["Height"])
+    L(b.outputs[0], p.inputs["Normal"])
+    L(p.outputs[0], out.inputs["Surface"])
+    v = nt.nodes.new("ShaderNodeVolumeAbsorption")
+    v.inputs["Color"].default_value = (0.35, 0.8, 0.2, 1)
+    v.inputs["Density"].default_value = 1.2
+    L(v.outputs[0], out.inputs["Volume"])
+    return m
+
+
+RIVER_HALF = 8.0
+
+
+def river_surface(ha, river, name="SlimeRiver"):
+    """River water mesh: 7 vertices across, level across the river. UV u = metres across, v = metres downstream
+    (the game shader scrolls the ripples along v). Vertex colour R = foam (rapids + a thin line at the banks),
+    G = flow speed."""
+    prof = river_profile(ha, river)
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    cl = bm.loops.layers.color.new("Col")
+    across = (-1.0, -0.7, -0.35, 0.0, 0.35, 0.7, 1.0)
+    rows = []
+    for (x, y, z, d, slope, dist) in prof:
+        side = Vector((-d.y, d.x, 0))
+        w = RIVER_HALF * (1.0 - min(slope * 2.0, 0.25))     # rapids squeeze the river a little
+        rows.append([(bm.verts.new((x + side.x * a * w, y + side.y * a * w, z)), a * w, dist,
+                      min(max((slope - 0.03) / 0.09, 0.0), 1.0), min(slope / 0.12, 1.0), abs(a)) for a in across])
+    for r in range(len(rows) - 1):
+        for q in range(len(across) - 1):
+            cs = (rows[r][q], rows[r][q + 1], rows[r + 1][q + 1], rows[r + 1][q])
+            f = bm.faces.new([c[0] for c in cs])
+            for lp, (_, u, v, foam, speed, edge) in zip(f.loops, cs):
+                lp[uv].uv = (u, v)
+                rim = max(edge - 0.8, 0.0) / 0.2 * 0.35
+                lp[cl] = (min(foam + rim, 1.0), speed, 0.0, 1.0)
+    me = bpy.data.meshes.new(name)
+    bm.normal_update()
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    me.materials.append(river_material())
+    return ob, prof
+
+
+def river_rocks(m, ha, river, skip=(), seed=31):
+    """Rocks that make the river read as a jungle river, not a ribbon: mossy boulders on both banks, and in steep
+    stretches (rapids) wet boulders in the stream with foam caps on their downstream side."""
+    k = Kit("Asset_RiverRocks")
+    rng = random.Random(seed)
+    prof = river_profile(ha, river)
+    keep = [c for c in skip]
+    last_rapid = -99.0
+    for i in range(0, len(prof), 3):
+        x, y, z, d, slope, dist = prof[i]
+        if z < 0.6:        # river mouth: open beach, no rocks
+            continue
+        if any(math.hypot(x - c[0], y - c[1]) < 9 for c in keep):
+            continue
+        side = Vector((-d.y, d.x, 0))
+        c = Vector((x, y, 0))
+        w = RIVER_HALF * (1.0 - min(slope * 2.0, 0.25))
+        # banks: a boulder on each side about every 8-14 m, half buried, partly in the water
+        for s in (-1, 1):
+            if rng.random() < 0.3:
+                o = s * (w + rng.uniform(-0.6, 1.4))
+                p = c + side * o + d * rng.uniform(-1.5, 1.5)
+                hgt = rng.uniform(0.7, 1.6)
+                k.rock((p.x, p.y, max(ha(p.x, p.y), z - 0.6) - hgt * 0.3),
+                       (rng.uniform(1.0, 2.2), rng.uniform(0.9, 1.6), hgt),
+                       m["wetrock"] if abs(o) < w + 0.3 else m["rock"], seed=rng.randrange(1 << 20),
+                       base="BankRock", detail=2)
+        # rapids: a few stream boulders + foam behind them
+        if slope > 0.05 and dist - last_rapid > 4.0:
+            last_rapid = dist
+            for _ in range(rng.randint(1, 3)):
+                o = rng.uniform(-w * 0.75, w * 0.75)
+                p = c + side * o
+                hgt = rng.uniform(0.5, 1.0)
+                k.rock((p.x, p.y, z - hgt * 0.45), (rng.uniform(0.7, 1.4), rng.uniform(0.6, 1.1), hgt),
+                       m["wetrock"], seed=rng.randrange(1 << 20), base="StreamRock", detail=2)
+                q = p + d * rng.uniform(0.9, 1.6)
+                k.rock((q.x, q.y, z + 0.02), (rng.uniform(0.5, 1.0), rng.uniform(0.4, 0.8), 0.08),
+                       m["foam"], seed=rng.randrange(1 << 20), base="WhiteWater", detail=1)
+    return k.c
+
+
 def build_all():
     m = M()
     weather_all(m)

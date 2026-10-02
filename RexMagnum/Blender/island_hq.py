@@ -738,22 +738,9 @@ def waterfall_ruins_ship(height_at, river, structures=True):
     slime = simple("SlimeWater", (0.3, 0.9, 0.2), 0.05, **{"Transmission Weight": 0.6,
                                                          "Emission Color": (0.3, 1, 0.2, 1), "Emission Strength": 0.4})
     box("PlungePool", (70, 34, 0.5), (40, 232, bot + 0.2), slime)
-    # slime river ribbon
-    rx, ry = river
-    bm = bmesh.new()
-    prev = None
-    for k in range(0, len(rx) - 1):
-        x, y = rx[k], ry[k]
-        dx, dy = rx[k + 1] - x, ry[k + 1] - y
-        L = math.hypot(dx, dy) or 1
-        nx, ny = -dy / L * 8, dx / L * 8
-        z = max(height_at(x, y) + 0.25, 0.2)
-        a = bm.verts.new((x - nx, y - ny, z))
-        b = bm.verts.new((x + nx, y + ny, z))
-        if prev:
-            bm.faces.new((prev[0], prev[1], b, a))
-        prev = (a, b)
-    mesh_ob("SlimeRiver", bm, slime, smooth=False)
+    # slime river: level water that steps down the slope, foam on the rapids (see island_assets.river_surface)
+    import island_assets as IA
+    IA.river_surface(height_at, river)
     if not structures:
         return
     # ruins: stone blocks + moss on top faces + vines
