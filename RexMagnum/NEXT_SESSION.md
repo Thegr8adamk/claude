@@ -8,7 +8,7 @@ Brief: `RexMagnum/CLAUDE.md`. Status: `RexMagnum/README.md`. Progress log + pict
 ## What to do first
 0. Fast check any time (no license, ~1 min): `bash RexMagnum/Tools/compile_check.sh`. Last run 2026-10-02: 0 errors
    (editor + player pass). It finds C# errors only, not builder exceptions or looks. Run it before every push.
-1. Check the environment has `UNITY_LICENSE` (the owner's Unity_lic.ulf text) and network access to the Unity hosts
+1. Check the environment has `UNITY_LICENSE_B64` (the owner's Unity_lic.ulf as one base64 line; `UNITY_LICENSE` raw text also works) and network access to the Unity hosts
    listed in `Tools/unity_cloud_test.sh`. Never print the license.
 2. Run `bash RexMagnum/Tools/unity_cloud_test.sh` (long: editor download ~3 GB, first import 20-40 min). Run it in the
    background and watch `/tmp/unity/*.log`.
