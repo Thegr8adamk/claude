@@ -395,9 +395,10 @@ namespace RexMagnum.EditorTools
             var rs = model.GetComponentsInChildren<MeshRenderer>();
             var lod0 = rs.Where(r => r.name.EndsWith("_LOD0")).ToArray();       // extras (_Door, _Bottle, _Core) stay outside the LODs
             var lod1 = rs.Where(r => r.name.EndsWith("_LOD1")).ToArray();
+            var lod2 = rs.Where(r => r.name.EndsWith("_LOD2")).ToArray();      // heavy buildings: middle level for phones
             var lg = root.AddComponent<LODGroup>();
-            lg.SetLODs(lod1.Length > 0
-                ? new[] { new LOD(0.18f, lod0), new LOD(0.006f, lod1) }
+            lg.SetLODs(lod2.Length > 0 ? new[] { new LOD(0.3f, lod0), new LOD(0.1f, lod1), new LOD(0.006f, lod2) }
+                : lod1.Length > 0 ? new[] { new LOD(0.18f, lod0), new LOD(0.006f, lod1) }
                 : new[] { new LOD(0.006f, lod0) });
             lg.RecalculateBounds();
             foreach (var r in rs)
@@ -975,7 +976,7 @@ namespace RexMagnum.EditorTools
             var model = (GameObject)PrefabUtility.InstantiatePrefab(fbx, root.transform);
             ApplyFix(model.transform);
             foreach (var r in model.GetComponentsInChildren<MeshRenderer>())
-                if (r.name.EndsWith("_LOD1")) r.gameObject.SetActive(false);
+                if (r.name.EndsWith("_LOD1") || r.name.EndsWith("_LOD2")) r.gameObject.SetActive(false);
             var box = root.AddComponent<BoxCollider>();
             box.center = new Vector3(0, 0.95f, 0.02f);
             box.size = new Vector3(1.3f, 1.4f, 2.45f);

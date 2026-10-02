@@ -496,12 +496,22 @@ def export_assets(mats_used, names=None):
         tmp.objects.link(lod0)
         tmp.objects.link(lod1)
         decimate(lod1, 15000)
+        lods = [lod0, lod1]
+        tris0 = sum(len(p.vertices) - 2 for p in lod0.data.polygons)
+        if tris0 > 60000:
+            # heavy buildings (phones): a middle level at ~35 % between full detail and the 15k far version
+            lod1.name = lod1.data.name = f"{name}_LOD2"
+            mid = bpy.data.objects.new(f"{name}_LOD1", lod0.data.copy())
+            mid.data.name = f"{name}_LOD1"
+            tmp.objects.link(mid)
+            decimate(mid, int(tris0 * 0.35))
+            lods = [lod0, mid, lod1]
         extra = []
         for g, gobjs in groups.items():
             eo = bpy.data.objects.new(f"{name}_{g}", joined_mesh(gobjs, f"{name}_{g}", mats_used))
             tmp.objects.link(eo)
             extra.append(eo)
-        export_fbx([lod0, lod1] + extra, os.path.join(BLD, f"{name}.fbx"))
+        export_fbx(lods + extra, os.path.join(BLD, f"{name}.fbx"))
         for eo in extra:
             me = eo.data
             bpy.data.objects.remove(eo)
@@ -509,7 +519,7 @@ def export_assets(mats_used, names=None):
         tris = sum(len(p.vertices) - 2 for p in lod0.data.polygons)
         rows.append(dict(name=name, fbx=f"Buildings/{name}.fbx", tris=tris))
         print(f"[Export] {name}: {tris} tris", flush=True)
-        for o in (lod0, lod1):
+        for o in lods:
             me = o.data
             bpy.data.objects.remove(o)
             bpy.data.meshes.remove(me)
