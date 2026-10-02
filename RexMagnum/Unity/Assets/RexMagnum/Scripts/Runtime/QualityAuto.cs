@@ -199,6 +199,24 @@ namespace RexMagnum
             return null;
         }
 
+        /// <summary>Name of the lightweight renderer (no SSAO / renderer features) that ProjectSetup adds to every URP asset.</summary>
+        public const string AuxRendererName = "RexMagnum_AuxRenderer";
+
+        /// <summary>Mirror / pool reflection cameras: render with the lightweight renderer (no SSAO pass and depth-normals
+        /// prepass for a small reflection). Stays on the default renderer when the asset has none.</summary>
+        public static void UseAuxRenderer(UniversalAdditionalCameraData cd)
+        {
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            if (cd == null || urp == null) return;
+            var f = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            var list = f != null ? f.GetValue(urp) as ScriptableRendererData[] : null;
+            if (list == null) return;
+            // 0 is the default renderer; SetRenderer by reflection (not in the check build's older URP)
+            for (int k = 1; k < list.Length; k++)
+                if (list[k] != null && list[k].name == AuxRendererName) { cd.GetType().GetMethod("SetRenderer", new[] { typeof(int) })?.Invoke(cd, new object[] { k }); return; }
+        }
+
         static readonly System.Collections.Generic.Dictionary<ReflectionProbe, int> probeRes =
             new System.Collections.Generic.Dictionary<ReflectionProbe, int>();
 

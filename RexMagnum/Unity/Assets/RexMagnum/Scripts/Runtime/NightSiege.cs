@@ -15,10 +15,11 @@ namespace RexMagnum
     /// Rex dies, goes more than AbortRadius away (or 15 m up/down: the tunnels) or the night ends: the event stops
     /// cleanly and can start again later (after a death the wave blobs go too). The fight is MouthOut m out in front of
     /// the door, and the cave doors do not take Rex while it runs (ZoneDoor). A win sets LastSummary.
-    /// Score: best time "siege_best_s" and no hit in LastSummary. Done: Use at the cave mouth at night starts a replay
-    /// (no reward, score only). Never starts while Rex drives the golf cart.
+    /// Score: best time "siege_best_s" and no hit in LastSummary. Done: Use within ReplayRadius of the fight's centre at
+    /// night starts a replay (no reward, score only; never with a guest / cart / elevator near: BarDefense.OtherUseNear).
+    /// Never starts while Rex drives the golf cart.
     /// No builder step: it attaches itself to Rex when a scene loads (like BarDefense).
-    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayAvailable, ReplayPrompt.
+    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayHere, ReplayPrompt.
     /// </summary>
     public class NightSiege : MonoBehaviour
     {
@@ -35,6 +36,7 @@ namespace RexMagnum
         const float StuckAfter = 20f, StuckRexDistance = 15f;
         const float MouthOut = 9f, DoorClear = 4f, AbortHeight = 15f;
         const int MaxAlive = 4;
+        const float ReplayRadius = 6f;                                       // replay: a small spot at the fight's centre
         static readonly int[] WaveSize = { 5, 7 };
 
         /// <summary>True while the waves run.</summary>
@@ -73,8 +75,13 @@ namespace RexMagnum
         public static bool Replaying { get; private set; }
         /// <summary>Done before, night, Rex at the cave mouth, nothing else going on: Use starts a replay.</summary>
         public static bool ReplayAvailable { get; private set; }
-        /// <summary>HUD prompt while ReplayAvailable, else null (the HUD puts the Use button's name in front).</summary>
-        public static string ReplayPrompt => ReplayAvailable
+        /// <summary>True only when Use right now would start a replay: ReplayAvailable, Rex at the spot, no pickup / food,
+        /// no guest, cart or elevator near (HUD: show the replay prompt only then).</summary>
+        public static bool ReplayHere => ReplayAvailable && !Active && inst != null && !PauseMenu.Open
+            && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && inst.AtReplaySpot(inst.transform.position)
+            && !BarDefense.OtherUseNear(inst.transform.position);
+        /// <summary>HUD prompt while ReplayHere, else null (the HUD puts the Use button's name in front).</summary>
+        public static string ReplayPrompt => ReplayHere
             ? $"Fight the cave siege again (score only{(BestSeconds > 0 ? ", best " + Clock(BestSeconds) : "")})" : null;
         static string Clock(int secs) => $"{secs / 60}:{secs % 60:00}";
 
@@ -200,8 +207,8 @@ namespace RexMagnum
             lastPos = pos;
             hasLastPos = true;
             if (DayNight.Night < EndNight && (failsTonight > 0 || SkippedTonight)) { failsTonight = 0; SkippedTonight = false; }   // a new day
-            // replay: Use at the cave mouth (other Use targets near him go first: food, a pickup)
-            if (!Active && ReplayAvailable && RMInput.Use && !PauseMenu.Open && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && FindPrefabs())
+            // replay: Use at the spot (other Use targets near him go first: food, a pickup, a guest, a cart, an elevator)
+            if (RMInput.Use && ReplayHere && FindPrefabs())
             {
                 RMInput.ConsumeUse();
                 Replaying = true;
@@ -236,11 +243,17 @@ namespace RexMagnum
         {
             if (!Done || Time.time < retryAt || DayNight.Night < StartNight || GolfCart.Driven != null) return false;
             if (KingGlorpBoss.Fighting || BarDefense.Active || GameFlow.Busy || (rexHealth != null && rexHealth.IsDead)) return false;
+            return AtReplaySpot(rexAt);
+        }
+
+        /// <summary>Rex within ReplayRadius of the fight's centre (not in the tunnels under it).</summary>
+        bool AtReplaySpot(Vector3 rexAt)
+        {
             FindMouth();
             Vector3 fromCenter = rexAt - Center;
             if (Mathf.Abs(fromCenter.y) > 15f) return false;               // not from the tunnels
             fromCenter.y = 0f;
-            return fromCenter.sqrMagnitude < StartRadius * StartRadius;
+            return fromCenter.sqrMagnitude < ReplayRadius * ReplayRadius;
         }
 
         /// <summary>Blob prefabs copied from the island's spawners (no own prefab references: no builder change).</summary>

@@ -34,8 +34,13 @@ namespace RexMagnum
         /// <summary>Time of the last damage taken (health regen waits after a hit).</summary>
         public float LastDamageTime { get; private set; } = -999f;
 
+        /// <summary>Every hit is multiplied by this before it is taken (the temple guardian's stone shell: 0.25 until cracked).
+        /// Damaged gets the scaled amount; DamageSilent is not scaled.</summary>
+        [System.NonSerialized] public float damageScale = 1f;
+
         public void Damage(float amount, Vector3 point, GameObject attacker = null)
         {
+            amount *= damageScale;
             if (IsDead || amount <= 0f || Time.time < invulnerableUntil) return;
             LastDamageTime = Time.time;
             Current = Mathf.Max(0f, Current - amount);

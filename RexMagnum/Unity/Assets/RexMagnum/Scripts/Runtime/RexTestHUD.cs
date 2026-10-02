@@ -748,13 +748,14 @@ namespace RexMagnum
                     foreach (var door in e.landingDoors)
                         if (door != null && Vector3.Distance(door.position, p) < 3f) return 9;
             }
-            // a set piece done before, Rex at its spot: Use plays it again for the score (the events say when)
-            if (BarDefense.ReplayAvailable) return 13;
-            if (NightSiege.ReplayAvailable) return 14;
             subj = near;
             if (near != null && nearD < 2.5f)
                 return actions.controller != null && actions.controller.HandsDown ? 10 : 11;
             subj = null;
+            // a set piece done before, Rex at its small spot: Use plays it again for the score.
+            // Last on purpose: guests, carts and elevators near the bar / cave keep their Use (the events say when)
+            if (BarDefense.ReplayHere) return 13;
+            if (NightSiege.ReplayHere) return 14;
             return 0;
         }
     }

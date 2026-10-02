@@ -296,14 +296,16 @@ namespace RexMagnum
         float swingStart, swingEnd;
 
         /// <summary>RexController calls this when a dodge starts. Late in a swing (60%+): the swing is over now (Rex may
-        /// attack again right after the dodge, a hit still pending never lands). Earlier: the swing goes on as before.</summary>
-        public void DodgeCancel()
+        /// attack again right after the dodge, a hit still pending never lands). Earlier: the swing goes on as before.
+        /// True when a swing was cancelled (RexController plays the cancel cue).</summary>
+        public bool DodgeCancel()
         {
-            if (Time.time >= swingEnd || Time.time < swingStart + (swingEnd - swingStart) * CancelAt) return;
+            if (Time.time >= swingEnd || Time.time < swingStart + (swingEnd - swingStart) * CancelAt) return false;
             swingId++;                                    // the pending MeleeHit sees a newer id and does nothing
             swingEnd = 0f;
             busyUntil = Time.time;
             controller.ReleaseFaceAim();                  // the dodge turns Rex, not the swing's aim
+            return true;
         }
 
         void Melee(WeaponDef d, bool heavy)
@@ -508,9 +510,11 @@ namespace RexMagnum
         }
 
         /// <summary>SUPER SNAP (factory stopped): the heavy towel snap cracks like a whip around Rex: every living blob
-        /// within 3 m (same floor, not King Glorp: Stun refuses him) is stunned 2 s. A crack and a ring of slime.</summary>
+        /// within 3 m (same floor, not King Glorp: Stun refuses him) is stunned 2 s. A crack and a ring of slime.
+        /// 6 s cooldown (chained heavies must not stun-lock a crowd; the swing's own front-arc stun stays).</summary>
         void SnapStun()
         {
+            if (Time.time < nextSnapStun) return;
             Vector3 at = transform.position;
             int stunned = 0;
             foreach (var b in Blob.All)
@@ -521,14 +525,18 @@ namespace RexMagnum
                 b.Stun(2f);
                 stunned++;
             }
+            if (stunned == 0) return;                                       // a miss: no crack, no ring, no cooldown
+            nextSnapStun = Time.time + SnapStunCooldown;
             Sfx.Play("towel_crack", at + Vector3.up, 1f, 0.75f);           // a lower, bigger crack than the swing's
             for (int i = 0; i < 10; i++)                                    // the ring: slime flicked out at 3 m
             {
                 float a = i * Mathf.PI * 2f / 10f;
                 SlimeFX.Splat(at + new Vector3(Mathf.Cos(a) * 3f, 0.2f, Mathf.Sin(a) * 3f), Vector3.up, new Color(0.7f, 0.85f, 1f), 2);
             }
-            if (stunned > 0) RexTestHUD.Notice("SUPER SNAP", 0.8f);        // (the accomplishment counts the swing's own stuns)
+            RexTestHUD.Notice("SUPER SNAP", 0.8f);                          // (the accomplishment counts the swing's own stuns)
         }
+        const float SnapStunCooldown = 6f;
+        float nextSnapStun;
 
         // ---------------------------------------------------------------- guns
 
@@ -623,6 +631,31 @@ namespace RexMagnum
         void LateUpdate()
         {
             if (muzzleLight != null && muzzleLight.enabled && Time.unscaledTime >= muzzleOffAt) muzzleLight.enabled = false;
+            UpdateAbilityHints();
+        }
+
+        // ---- first-unlock hints: once per ability (saved flag "hint_..."), how to use it. Shown 4 s after the ability
+        // turns on, so the big goal's own message plays first; one at a time (the next waits another 4 s).
+        float nextHintCheck, hintSince = -1f;
+
+        void UpdateAbilityHints()
+        {
+            if (Time.unscaledTime < nextHintCheck) return;
+            nextHintCheck = Time.unscaledTime + 1f;
+            if (PauseMenu.Open || KillCam.Active) return;
+            string hintKey = null, hintText = null;
+            if (SuperSnap && Progress.Value("hint_supersnap") == 0)
+            { hintKey = "hint_supersnap"; hintText = "SUPER SNAP: hold attack with the towel to stun every blob around you"; }
+            else if (GolfCart.HornUnlocked && Progress.Value("hint_carthorn") == 0)
+            { hintKey = "hint_carthorn"; hintText = "CART HORN: press Taunt while driving to honk"; }
+            else if (CoconutPouch && Progress.Value("hint_coconutpouch") == 0)
+            { hintKey = "hint_coconutpouch"; hintText = "COCONUT POUCH: carry 3 more coconuts, shorter fuse"; }
+            if (hintKey == null) { hintSince = -1f; return; }
+            if (hintSince < 0f) { hintSince = Time.unscaledTime; return; }
+            if (Time.unscaledTime - hintSince < 4f) return;
+            Progress.Set(hintKey, 1);
+            RexTestHUD.Notice(hintText, 6f);
+            hintSince = -1f;
         }
 
         void OnDestroy() { if (muzzleLight != null) Destroy(muzzleLight.gameObject); }

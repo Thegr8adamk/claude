@@ -137,8 +137,8 @@ namespace RexMagnum
             if (rex == null) return;
             float rexDist = Vector3.Distance(rex.position, transform.position);
 
-            // Rex's taunt near a guest: laugh or a drink in the face
-            if (!lockedIn && RMInput.Taunt && rexDist < 6f && Time.time > nextTalk)
+            // Rex's taunt near a guest: laugh or a drink in the face (not the cart horn: Taunt while driving honks)
+            if (!lockedIn && RMInput.Taunt && GolfCart.Driven == null && rexDist < 6f && Time.time > nextTalk)
             {
                 nextTalk = Time.time + 3f;
                 if (Random.value < 0.5f) Say("(laughs)");

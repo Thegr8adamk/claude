@@ -45,6 +45,9 @@ namespace RexMagnum
         public bool Grounded => cc.isGrounded;
         public bool IsSwimming { get; private set; }
         public float WaterDepth { get; private set; }
+        /// <summary>Feet height above the ground below Rex, metres (0 standing; 50 = nothing below within 50 m).
+        /// Raycast down each frame; the boss sweep's jump check reads it.</summary>
+        public float HeightAboveGround { get; private set; }
 
         static readonly int SpeedHash = Animator.StringToHash("Speed");
         static readonly int GroundedHash = Animator.StringToHash("Grounded");
@@ -181,6 +184,7 @@ namespace RexMagnum
         {
             UpdateSlimeLook();
             DrawGhosts();
+            UpdateHeightAboveGround();
             if (!cc.enabled) return;              // driving the golf cart
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
@@ -297,7 +301,14 @@ namespace RexMagnum
             Sfx.Play("swing", transform.position + Vector3.up, 0.5f, 0.7f);    // low whoosh
             if (cameraRig != null) cameraRig.DodgeKick(5f);                    // the view widens for a moment (not in VR)
             if (weapons == null) weapons = GetComponent<RexWeapons>();
-            if (weapons != null) weapons.DodgeCancel();                        // late in a swing: the dodge ends its recovery
+            // late in a swing: the dodge ends its recovery. Cue so players learn it: white afterimages (Medium+, third
+            // person), a bigger widen of the view and a soft high whoosh on top of the dodge's low one
+            dodgeCancelled = weapons != null && weapons.DodgeCancel();
+            if (dodgeCancelled)
+            {
+                if (cameraRig != null) cameraRig.DodgeKick(9f);
+                Sfx.Play("swing", transform.position + Vector3.up, 0.3f, 1.5f);
+            }
             if (GhostsAllowed) { ghostsLeft = Ghosts; nextGhost = Time.time; }
         }
 
@@ -311,6 +322,8 @@ namespace RexMagnum
         Matrix4x4[,] ghostAt;
         bool[,] ghostOn;
         readonly float[] ghostBorn = { -10f, -10f, -10f };
+        readonly bool[] ghostWhite = new bool[Ghosts];      // a dodge-cancel's afterimages: a white flash
+        bool dodgeCancelled;
         int ghostsLeft, ghostNext;
         float nextGhost;
         static Material ghostMat;
@@ -352,6 +365,7 @@ namespace RexMagnum
                 ghostAt[g, i] = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
             }
             ghostBorn[g] = Time.time;
+            ghostWhite[g] = dodgeCancelled;
         }
 
         void DrawGhosts()
@@ -376,7 +390,8 @@ namespace RexMagnum
             {
                 float age = Time.time - ghostBorn[g];
                 if (age < 0f || age >= GhostLife) continue;
-                ghostBlock.SetColor(BaseColorId, new Color(0.65f, 0.85f, 1f, 0.35f * (1f - age / GhostLife)));
+                ghostBlock.SetColor(BaseColorId, ghostWhite[g] ? new Color(1f, 1f, 1f, 0.6f * (1f - age / GhostLife))
+                                                               : new Color(0.65f, 0.85f, 1f, 0.35f * (1f - age / GhostLife)));
                 for (int i = 0; i < ghostSkins.Length; i++)
                 {
                     if (!ghostOn[g, i] || ghostSkins[i] == null) continue;
@@ -386,6 +401,20 @@ namespace RexMagnum
                 }
             }
         }
+
+        void UpdateHeightAboveGround()
+        {
+            if (cc.enabled && cc.isGrounded) { HeightAboveGround = 0f; return; }
+            // from just above the feet (inside Rex's capsule: the ray does not hit it); triggers (water, zones) ignored
+            // the nearest hit that is not Rex himself (a held weapon's collider)
+            Vector3 from = transform.position + Vector3.up * 0.3f;
+            int n = Physics.RaycastNonAlloc(from, Vector3.down, groundHits, 50.3f, ~0, QueryTriggerInteraction.Ignore);
+            float best = 50.3f;
+            for (int i = 0; i < n; i++)
+                if (groundHits[i].distance < best && !groundHits[i].transform.IsChildOf(transform)) best = groundHits[i].distance;
+            HeightAboveGround = Mathf.Max(0f, best - 0.3f);
+        }
+        readonly RaycastHit[] groundHits = new RaycastHit[8];
 
         /// <summary>Start swimming when the water reaches Rex's chest; stop when he can stand (hysteresis).</summary>
         void UpdateWater()

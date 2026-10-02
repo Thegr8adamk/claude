@@ -65,21 +65,18 @@ namespace RexMagnum
             return false;
         }
 
-        /// <summary>Glow spitters: in the tunnels under the island (any time, it is dark down there), or within
-        /// SpitterCaveRadius of the cave at night.</summary>
-        bool SpitterZone()
+        /// <summary>Glow spitters: in the tunnels under the island (any time, it is dark down there). The cave at night
+        /// gets its spitters from NightSiege's second wave (no surface spawner stands near the cave).</summary>
+        bool SpitterZone() => gameObject.name == "TunnelBlobs" || transform.position.y < -20f;
+
+        /// <summary>At most this many of this spawner's glow spitters alive at once (a tunnel full of them is unfair).</summary>
+        const int MaxSpitters = 2;
+        readonly System.Collections.Generic.List<Blob> spitters = new System.Collections.Generic.List<Blob>();
+        bool SpitterRoom()
         {
-            if (gameObject.name == "TunnelBlobs" || transform.position.y < -20f) return true;
-            if (DayNight.Night < 0.5f) return false;
-            foreach (var z in GameGuide.Zones)
-                if (z.id == "cave")
-                {
-                    Vector3 off = transform.position - z.at; off.y = 0f;
-                    return off.sqrMagnitude < SpitterCaveRadius * SpitterCaveRadius;
-                }
-            return false;
+            spitters.RemoveAll(x => x == null || x.IsDead);
+            return spitters.Count < MaxSpitters;
         }
-        const float SpitterCaveRadius = 70f;
 
         static float Weight(Blob p, float night)
         {
@@ -168,13 +165,17 @@ namespace RexMagnum
             if (found)
             {
                 Blob pick = firstFight ? TouristPrefab() : null;
-                if (pick == null && SpitterZone() && Random.value < 0.4f) pick = KindPrefab(Blob.Kind.Lifeguard);
+                bool spitterOk = SpitterZone() && SpitterRoom();
+                if (pick == null && spitterOk && Random.value < 0.4f) pick = KindPrefab(Blob.Kind.Lifeguard);
                 var b = Instantiate(pick != null ? pick : PickPrefab(), hit.position, Quaternion.identity);
                 // zone variants (no new art): ruins tourists are often stone temple guardians, cave lifeguards spit
                 if (!firstFight && !b.isHalf && b.kind == Blob.Kind.Tourist && InZone("ruins") && Random.value < 0.4f)
                     b.SetVariant(Blob.Variant.TempleGuardian);
-                else if (!b.isHalf && b.kind == Blob.Kind.Lifeguard && SpitterZone())
+                else if (!b.isHalf && b.kind == Blob.Kind.Lifeguard && spitterOk)
+                {
                     b.SetVariant(Blob.Variant.GlowSpitter);
+                    spitters.Add(b);
+                }
                 else if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
                 if (fromWater) StartCoroutine(Rise(b, water));
             }

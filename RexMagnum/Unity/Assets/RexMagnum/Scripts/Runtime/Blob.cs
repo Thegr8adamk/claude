@@ -24,7 +24,8 @@ namespace RexMagnum
 
         /// <summary>Zone variants on the normal prefabs (no new art), set by BlobSpawner / NightSiege right after Instantiate:
         ///  TempleGuardian (ruins, a tourist): grey stone shell, +60% health, light hits do 25% until a heavy hit cracks it
-        ///  GlowSpitter (cave at night, tunnels; a lifeguard): keeps 8-12 m off and spits slime every 3 s, low health</summary>
+        ///  GlowSpitter (tunnels; the cave siege's 2nd wave; a lifeguard): keeps 8-12 m off and spits slime every 3 s,
+        ///  low health; cornered (Rex within CorneredRange) it swipes instead</summary>
         public enum Variant { None, TempleGuardian, GlowSpitter }
         public Variant variant { get; private set; }
         bool shellIntact;
@@ -39,6 +40,8 @@ namespace RexMagnum
             {
                 health.ResetHealth(Mathf.Round(health.maxHealth * 1.6f));
                 shellIntact = true;
+                health.damageScale = ShellScale;                           // light hits chip it (no heal-back: they add up)
+                gameObject.AddComponent<GuardianCue>().owner = this;
                 baseColor = new Color(0.56f, 0.55f, 0.52f, baseColor.a);   // stone grey
             }
             else if (v == Variant.GlowSpitter)
@@ -61,9 +64,15 @@ namespace RexMagnum
             return !d.isGun && amount >= d.tapDamage * 1.75f;              // 1.75: a wet towel's tap (x1.5) is still light
         }
 
+        const float ShellScale = 0.25f;
+        /// <summary>The stone shell is still on (GuardianCue's "HEAVY!" tag).</summary>
+        public bool ShellIntact => shellIntact;
+        public float TopHeight => HeightOf();
+
         void CrackShell(Vector3 point)
         {
             shellIntact = false;
+            health.damageScale = 1f;
             SlimeFX.Splat(point, Vector3.up, baseColor, 14);               // stone chips
             baseColor = normalColor;
             lastCol = new Color(-1f, -1f, -1f, -1f);                       // rewrite the colour block
@@ -521,19 +530,42 @@ namespace RexMagnum
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(look), 5f * Time.deltaTime);
             if (dist <= attackRange + 2f && Time.time >= nextAttack)
             {
-                if (TryToken()) StartCoroutine(SpitterShot());
+                // cornered (Rex closer than it could back off): a quick swipe instead of the long-range shot
+                if (TryToken()) StartCoroutine(dist < CorneredRange ? SpitterSwipe() : SpitterShot());
                 else nextAttack = Time.time + 0.5f;                        // two blobs already attack: try again soon
             }
+        }
+
+        const float CorneredRange = 4f;
+
+        /// <summary>Cornered spitter: one short warning glow, then a tentacle swipe (~3 m reach).</summary>
+        IEnumerator SpitterSwipe()
+        {
+            nextAttack = Time.time + 1.8f;
+            busyUntil = Time.time + TelegraphTime + 0.6f;
+            Telegraph();
+            Sfx.Play("blob_angry", transform.position, 0.7f, 1.4f);
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned || rex == null) { ReleaseToken(); yield break; }
+            Play("Whip");
+            Sfx.Play("blob_whip", transform.position, 0.8f, 1.2f);
+            yield return new WaitForSeconds(0.3f);
+            if (!health.IsDead && rex != null && rexHealth != null && Vector3.Distance(transform.position, rex.position) < 3.2f)
+                rexHealth.Damage(damage, rex.position + Vector3.up, gameObject);
+            ReleaseToken();
         }
 
         IEnumerator SpitterShot()
         {
             nextAttack = Time.time + attackInterval;
             busyUntil = Time.time + TelegraphTime * 2f + 0.5f;
-            // two warning pulses (a long glow): the shot comes from far, so it reads before it flies
+            // two warning pulses (a long glow): the shot comes from far, so it reads before it flies;
+            // with a rising gurgle (its idle sound pitched up, higher on the second pulse) so it reads by ear too
             Telegraph();
+            Sfx.Play("blob_idle", transform.position, 0.8f, 1.3f);
             yield return new WaitForSeconds(TelegraphTime);
             Telegraph();
+            Sfx.Play("blob_idle", transform.position, 0.9f, 1.75f);
             yield return new WaitForSeconds(TelegraphTime);
             if (health.IsDead || IsStunned || rex == null) { ReleaseToken(); yield break; }
             Play("Throw");                                                 // the lifeguard's body has no spit clip
@@ -895,11 +927,14 @@ namespace RexMagnum
 
         void OnDamaged(float amount, Vector3 point, GameObject attacker)
         {
-            // temple guardian: the stone shell gives back 75% of a light hit; a heavy hit cracks it (full damage from then)
+            // temple guardian: Health took 25% of the hit (damageScale); a heavy hit cracks the shell and takes the
+            // other 75% too (full damage from then on)
+            bool stoneHit = false;
             if (variant == Variant.TempleGuardian && shellIntact && !health.IsDead)
             {
-                if (HeavyHit(amount, attacker)) CrackShell(point);
-                else health.Heal(amount * 0.75f);
+                float raw = amount / ShellScale;
+                if (HeavyHit(raw, attacker)) { CrackShell(point); health.DamageSilent(raw - amount, attacker); }
+                else stoneHit = true;
             }
             // hit from far away (sniper): it comes for Rex instead of sitting still outside its sight range
             if (attacker != null && attacker.CompareTag("Player")) alertUntil = Mathf.Max(alertUntil, Time.time + 10f);
@@ -918,7 +953,9 @@ namespace RexMagnum
                 ReleaseToken();
                 if (circling) circling = false;
             }
-            Sfx.Play("blob_hit", point);
+            // a light hit on the shell: a low stony clack (a door knock pitched down), not the wet jelly hit
+            if (stoneHit) Sfx.Play("door_bang", point, 0.75f, 0.6f);
+            else Sfx.Play("blob_hit", point);
         }
 
         GameObject lastKiller;
@@ -1051,5 +1088,57 @@ namespace RexMagnum
 
         /// <summary>The glow spitter glows in the dark tunnels by day too.</summary>
         Color NightGlow(float amount) => baseColor * (variant == Variant.GlowSpitter ? Mathf.Max(amount, 0.8f) : amount) * 1.5f;
+    }
+
+    /// <summary>On a temple guardian only (added by SetVariant): the first meeting says how to beat the shell (once,
+    /// saved), and a small "HEAVY!" tag floats over it while the shell is on and Rex is within CueRange.
+    /// Drawn on screen like BaldGlint (no world text object).</summary>
+    public class GuardianCue : MonoBehaviour
+    {
+        public Blob owner;
+        const float CueRange = 6f, MeetRange = 14f;
+        const string MetKey = "met_guardian";
+        static Transform rex;
+        static GUIStyle style;
+        Vector3 screen;
+        bool show;
+        float nextCheck;
+
+        void LateUpdate()
+        {
+            show = false;
+            if (owner == null || owner.IsDead || !owner.ShellIntact || GameFlow.Busy) return;
+            if (rex == null) { var p = GameObject.FindGameObjectWithTag("Player"); if (p == null) return; rex = p.transform; }
+            float d2 = (rex.position - transform.position).sqrMagnitude;
+            if (Time.time > nextCheck && d2 < MeetRange * MeetRange)
+            {
+                nextCheck = Time.time + 1f;
+                if (Progress.Value(MetKey) == 0)
+                {
+                    Progress.Set(MetKey, 1);
+                    RexTestHUD.Notice("Stone shell! Heavy hits crack it.", 4f);
+                }
+            }
+            if (d2 > CueRange * CueRange) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            screen = cam.WorldToScreenPoint(transform.position + Vector3.up * (owner.TopHeight + 0.45f));
+            show = screen.z > 0f;
+        }
+
+        void OnGUI()
+        {
+            if (!show) return;
+            float s = Screen.height / 1080f;
+            if (style == null) style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            style.fontSize = Mathf.RoundToInt(22 * s);
+            float pulse = 0.75f + 0.25f * Mathf.Sin(Time.time * 6f);
+            var r = new Rect(screen.x - 60 * s, Screen.height - screen.y - 14 * s, 120 * s, 28 * s);
+            GUI.color = new Color(0f, 0f, 0f, 0.6f * pulse);
+            GUI.Label(new Rect(r.x + 2 * s, r.y + 2 * s, r.width, r.height), "HEAVY!", style);
+            GUI.color = new Color(1f, 0.85f, 0.3f, pulse);
+            GUI.Label(r, "HEAVY!", style);
+            GUI.color = Color.white;
+        }
     }
 }

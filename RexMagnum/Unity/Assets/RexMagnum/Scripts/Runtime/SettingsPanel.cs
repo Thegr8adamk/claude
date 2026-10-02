@@ -10,7 +10,7 @@ namespace RexMagnum
     /// The settings screen, shared by the title screen and the pause menu. Five pages:
     /// GRAPHICS (quality, render scale, frame limit, V-sync, full screen, field of view),
     /// CAMERA &amp; VR (first / third person, head bob, look speeds, invert, kill cam, VR mode, VR turning),
-    /// SOUND (master, music, voices, effects, subtitles),
+    /// SOUND (master, music, voices, effects, UI sounds, subtitles),
     /// CONTROLS (keyboard keys, controller buttons, controller and touch options),
     /// HELP (the controls of the device used last, from GameGuide.Controls).
     /// Mouse: click. Keyboard / controller: Up/Down choose a line, Left/Right change it, Enter / A press it,
@@ -58,6 +58,7 @@ namespace RexMagnum
             RMInput.LookScaleY = PlayerPrefs.GetFloat("RexMagnum_LookY", 1f);
             RMInput.InvertY = PlayerPrefs.GetInt("RexMagnum_InvertY", 0) == 1;
             RexCameraRig.FovSetting = PlayerPrefs.GetFloat("RexMagnum_FOV", 65f);
+            RexCameraRig.HitTiltEnabled = PlayerPrefs.GetInt(RexCameraRig.HitTiltKey, 1) == 1;
             AudioMix.Load();
         }
 
@@ -119,6 +120,7 @@ namespace RexMagnum
                     Slider("Look speed left/right", "RexMagnum_LookX", 1f, 0.3f, 2f, v => v.ToString("0.0") + "x");
                     Slider("Look speed up/down", "RexMagnum_LookY", 1f, 0.3f, 2f, v => v.ToString("0.0") + "x");
                     Toggle("Invert up/down", "RexMagnum_InvertY", 0);
+                    Toggle("Camera tilt when hit", RexCameraRig.HitTiltKey, 1);      // ApplyAll sets HitTiltEnabled
                     Choice("Kill cam", new[] { "OFF", "LESS OFTEN", "ALWAYS" }, () => PlayerPrefs.GetInt("RexMagnum_KillCam", 1),
                         v => PlayerPrefs.SetInt("RexMagnum_KillCam", v));
                     Header("VR");
@@ -137,6 +139,7 @@ namespace RexMagnum
                     Slider("Music", "RexMagnum_MusicVol", 1f, 0f, 1f, Pct);
                     Slider("Voices", "RexMagnum_VoiceVol", 1f, 0f, 1f, Pct);
                     Slider("Sound effects", "RexMagnum_SfxVol", 1f, 0f, 1f, Pct);
+                    Slider("UI sounds", "RexMagnum_UIVol", 1f, 0f, 1f, Pct);
                     Toggle("Subtitles", "RexMagnum_Subtitles", 1);
                     break;
 
@@ -189,6 +192,12 @@ namespace RexMagnum
                     Header(dev == RMInput.DeviceKind.Touch ? "HELP: TOUCH" : dev == RMInput.DeviceKind.Gamepad ? "HELP: CONTROLLER" : "HELP: KEYBOARD + MOUSE");
                     Note("These follow the device you used last, and your own keys (CONTROLS page).");
                     foreach (var c in GameGuide.Controls()) Info(c.what, c.how);
+                    Header("ABILITIES");
+                    foreach (var ab in GameGuide.Abilities())
+                    {
+                        Info(ab.name, ab.on ? "UNLOCKED" : "LOCKED");      // the long lines as notes: they wrap
+                        Note((ab.on ? "" : "To earn it: " + ab.earn + ".  ") + ab.use + ".");
+                    }
                     Header("HOW TO PLAY");
                     Note("The whole island is open. The NEXT line and the compass at the top of the screen show a goal. " +
                          "Pause > MAP shows where you are, the zones you visited and the clues from rescued guests.");

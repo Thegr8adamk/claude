@@ -70,8 +70,8 @@ namespace RexMagnum
             Side = w != null && w.Has(WeaponId.Pistol) && !w.Has(WeaponId.Sniper) && InZone(Zones[0], rex)
                    && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1
                 ? SniperSide : null;
-            // Defend the Bar is easy to miss (it starts only when Rex walks into the lounge bar): after the pistol and
-            // while the factory runs, a side line says so. It wins over the sniper note (it goes away with the factory);
+            // Defend the Bar is easy to miss (it starts only when Rex walks into the lounge bar): any time after the
+            // pistol (also after the factory: BarDefense is open then too), a side line says so. It wins over the sniper note;
             // at the hotel the marker leads to the bar (the main goal leads again once Rex is out of the hotel)
             if (BarOpen(w) && !BarDefense.Active)
             {
@@ -143,9 +143,9 @@ namespace RexMagnum
         public const string SniperSide = "Side: the sniper rifle is on the hotel roof (stairs or elevator to the top).";
         public const string BarSide = "Side: Blobs are heading for the lounge bar! (hotel, ground floor)";
 
-        /// <summary>Defend the Bar can start: the pistol, the factory still running, not done yet.</summary>
+        /// <summary>Defend the Bar can start: the pistol, not done yet (before or after the factory).</summary>
         static bool BarOpen(RexWeapons w) =>
-            w != null && w.Has(WeaponId.Pistol) && !FactoryCore.Stopped && !BarDefense.Done && !KingGlorpBoss.Fighting;
+            w != null && w.Has(WeaponId.Pistol) && !BarDefense.Done && !KingGlorpBoss.Fighting;
 
         /// <summary>The living wave blob nearest Rex while the bar is defended (BarDefense.NearestBlob), if any.</summary>
         static bool NearestBarBlob(Vector3 rex, out Vector3 at)
@@ -436,6 +436,21 @@ namespace RexMagnum
             if (RMInput.LastDevice != RMInput.DeviceKind.Touch) l.Add(("Swap shoulder", B("Shoulder")));
             l.Add(("Pause (map, help)", RMInput.LastDevice == RMInput.DeviceKind.Touch ? "II button (top corner)" : B("Pause")));
             return l;
+        }
+
+        /// <summary>The 3 big-goal abilities for the MAP and HELP pages: name, unlocked, how to earn it, how to use it
+        /// (the same gates as RexWeapons.SuperSnap, GolfCart.HornUnlocked, RexWeapons.CoconutPouch).</summary>
+        public static List<(string name, bool on, string earn, string use)> Abilities()
+        {
+            return new List<(string, bool, string, string)>
+            {
+                ("SUPER SNAP", RexWeapons.SuperSnap, "Stop the factory (ruins)",
+                    $"Towel: hold {Glyph.B("Action")} for a heavy snap; it also stuns every blob within 3 m"),
+                ("CART HORN", GolfCart.HornUnlocked, "Defend the bar (night event at the bar, after the pistol)",
+                    $"Driving the golf cart: {Glyph.B("Taunt")} honks; blobs in front are pushed back and stunned"),
+                ("COCONUT POUCH", RexWeapons.CoconutPouch, "Win the cave siege (night event at the cave)",
+                    "Always on: 3 more coconuts to carry and a shorter fuse"),
+            };
         }
     }
 }

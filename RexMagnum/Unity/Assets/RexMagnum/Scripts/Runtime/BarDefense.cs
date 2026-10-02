@@ -7,16 +7,18 @@ namespace RexMagnum
 {
     /// <summary>
     /// "Defend the bar" (mid-game set piece, one time). Starts when Rex walks into the lounge bar on the hotel's
-    /// ground floor (within ~7 m of the counter) with the pistol, while the blob factory still runs. Three short waves of
+    /// ground floor (within ~7 m of the counter) with the pistol, any time after that (before or after the blob factory,
+    /// never in the boss fight or the cave siege: it can not be missed; it unlocks the cart horn). Three short waves of
     /// blobs come in from the pool doors, or the buffet-terrace doors when Rex stands at the pool doors (at most MaxAlive
     /// at once); bouncer halves count to their wave; a wave blob that makes no progress for StuckAfter s is moved next
     /// to the bar. The spawners around the hotel hold off meanwhile (BlobSpawner).
     /// Reward: all owned guns full + Progress "bar_defended" (saved: never again). Rex dies, goes more than
     /// AbortRadius away or stays upstairs over UpstairsAbort s: the event stops cleanly and can start again later
     /// (after a death the wave blobs go too). A win sets LastSummary (time, best time "bar_best_s", no hit).
-    /// Done: Use at the counter starts a replay (no reward, score only).
+    /// Done: Use at the counter (within ReplayRadius) starts a replay (no reward, score only), never while a guest,
+    /// a golf cart or an elevator is within OtherUseRadius (they keep Use: OtherUseNear).
     /// No builder step: it attaches itself to Rex when a scene loads (like Ambience).
-    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayAvailable, ReplayPrompt.
+    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayHere, ReplayPrompt.
     /// </summary>
     public class BarDefense : MonoBehaviour
     {
@@ -33,6 +35,8 @@ namespace RexMagnum
         const int MaxAlive = 4;
         const float StuckAfter = 20f, StuckRexDistance = 15f;
         const float UpstairsAbort = 20f;                                  // this long above the ground floor: he left the bar
+        // replay: a small fixed spot at the counter, and no other Use target close by
+        const float ReplayRadius = 2.5f, OtherUseRadius = 3f;
         static readonly int[] WaveSize = { 4, 6, 7 };
 
         /// <summary>True while the waves run.</summary>
@@ -59,8 +63,12 @@ namespace RexMagnum
         public static bool Replaying { get; private set; }
         /// <summary>Done before, Rex at the bar counter, nothing else going on: Use starts a replay.</summary>
         public static bool ReplayAvailable { get; private set; }
-        /// <summary>HUD prompt while ReplayAvailable, else null (the HUD puts the Use button's name in front).</summary>
-        public static string ReplayPrompt => ReplayAvailable
+        /// <summary>True only when Use right now would start a replay: ReplayAvailable, Rex at the counter spot, no
+        /// pickup / food, no guest, cart or elevator near (HUD: show the replay prompt only then).</summary>
+        public static bool ReplayHere => ReplayAvailable && !Active && inst != null && !PauseMenu.Open
+            && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && inst.AtReplaySpot() && !OtherUseNear(inst.transform.position);
+        /// <summary>HUD prompt while ReplayHere, else null (the HUD puts the Use button's name in front).</summary>
+        public static string ReplayPrompt => ReplayHere
             ? $"Defend the bar again (score only{(BestSeconds > 0 ? ", best " + Clock(BestSeconds) : "")})" : null;
         static string Clock(int secs) => $"{secs / 60}:{secs % 60:00}";
 
@@ -85,7 +93,49 @@ namespace RexMagnum
         public static Vector3 Target { get { var b = NearestBlob(); return b != null ? b.transform.position : Center; } }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; Wave = 0; Left = 0; LastSummary = null; Replaying = false; ReplayAvailable = false; }   // editor with Domain Reload off
+        static void ResetStatics()
+        {
+            Active = false; Wave = 0; Left = 0; LastSummary = null; Replaying = false; ReplayAvailable = false;
+            carts = null; elevators = null; nextFind = 0f;
+        }   // editor with Domain Reload off
+
+        static GolfCart[] carts;
+        static Elevator[] elevators;
+        static float nextFind;
+        /// <summary>A guest not yet rescued, a golf cart or an elevator (cab or a landing door) within OtherUseRadius of p:
+        /// Use belongs to them, never to a replay (NightSiege asks too). Carts / elevators are found again every 10 s.</summary>
+        public static bool OtherUseNear(Vector3 p)
+        {
+            const float r2 = OtherUseRadius * OtherUseRadius;
+            foreach (var g in Guest.All)
+                if (g != null && !g.Rescued && (g.transform.position - p).sqrMagnitude < r2) return true;
+            if (carts == null || Time.unscaledTime > nextFind)
+            {
+                nextFind = Time.unscaledTime + 10f;
+                carts = FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
+                elevators = FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+            }
+            foreach (var c in carts)
+                if (c != null && (c.transform.position - p).sqrMagnitude < r2) return true;
+            foreach (var e in elevators)
+            {
+                if (e == null) continue;
+                if (e.cab != null && (e.cab.position - p).sqrMagnitude < r2) return true;
+                if (e.landingDoors != null)
+                    foreach (var door in e.landingDoors)
+                        if (door != null && (door.position - p).sqrMagnitude < r2) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Rex on the ground floor within ReplayRadius of the counter.</summary>
+        bool AtReplaySpot()
+        {
+            Vector3 at = transform.position;
+            if (at.y > StartTop) return false;
+            Vector3 flat = at - Center; flat.y = 0f;
+            return flat.sqrMagnitude < ReplayRadius * ReplayRadius;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -138,8 +188,8 @@ namespace RexMagnum
 
         void Update()
         {
-            // replay: Use at the counter (other Use targets near it go first: a drink, a pickup)
-            if (!Active && ReplayAvailable && RMInput.Use && !PauseMenu.Open && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && FindPrefabs())
+            // replay: Use at the counter spot (other Use targets near it go first: a drink, a pickup, a guest, a cart)
+            if (RMInput.Use && ReplayHere && FindPrefabs())
             {
                 RMInput.ConsumeUse();
                 Replaying = true;
@@ -149,7 +199,8 @@ namespace RexMagnum
             if (Active || Time.time < nextCheck) return;
             nextCheck = Time.time + 0.5f;
             ReplayAvailable = CanReplay();
-            if (Time.time < retryAt || Done || FactoryCore.Stopped || KingGlorpBoss.Fighting || GameFlow.Busy) return;
+            // any time after the pistol (also after the factory): the event must not be missable (it unlocks the cart horn)
+            if (Time.time < retryAt || Done || KingGlorpBoss.Fighting || NightSiege.Active || GameFlow.Busy) return;
             if (weapons == null || !weapons.Has(WeaponId.Pistol) || (rexHealth != null && rexHealth.IsDead)) return;
             Vector3 p = transform.position;
             if (p.y > StartTop) return;                                       // the ground floor only
@@ -159,15 +210,13 @@ namespace RexMagnum
             StartCoroutine(Run());
         }
 
-        /// <summary>A replay can start: done before, Rex alive on the ground floor at the counter, no other event / boss.</summary>
+        /// <summary>A replay can start: done before, Rex alive at the counter spot, no other event / boss
+        /// (checked every 0.5 s; ReplayHere adds the live spot / other-Use checks).</summary>
         bool CanReplay()
         {
             if (!Done || Time.time < retryAt || KingGlorpBoss.Fighting || NightSiege.Active || GameFlow.Busy || GolfCart.Driven != null) return false;
             if (rexHealth != null && rexHealth.IsDead) return false;
-            Vector3 at = transform.position;
-            if (at.y > StartTop) return false;
-            Vector3 flat = at - Center; flat.y = 0f;
-            return flat.sqrMagnitude < StartRadius * StartRadius;
+            return AtReplaySpot();
         }
 
         /// <summary>Blob prefabs copied from the island's spawners (no own prefab references: no builder change).</summary>

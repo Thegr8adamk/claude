@@ -30,6 +30,8 @@ namespace RexMagnum
         RenderTexture rt;
         Renderer rend;
         static bool rendering;
+        /// <summary>Frame a mirror last rendered (PoolReflection skips its own render that frame: one extra scene render at most).</summary>
+        public static int RenderedFrame { get; private set; } = -1;
         static readonly System.Collections.Generic.List<Renderer> shown = new System.Collections.Generic.List<Renderer>(), armsOff = new System.Collections.Generic.List<Renderer>();
         Transform player;
         float nextLine;
@@ -75,6 +77,7 @@ namespace RexMagnum
                 if (pi != null && pi.CanWrite && pi.PropertyType == typeof(bool)) pi.SetValue(cd, false);
             }
             cd.antialiasing = AntialiasingMode.None;
+            QualityAuto.UseAuxRenderer(cd);                // the renderer without SSAO, when ProjectSetup made it
             mirrorMat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
             rend.material = mirrorMat;
             EnsureRT();
@@ -175,6 +178,7 @@ namespace RexMagnum
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(mirrorCam, req)) return;
             rendering = true;
+            RenderedFrame = Time.frameCount;
             // first person hides Rex's body (shadows only) and floats the arms at the eye: the mirror shows the body
             shown.Clear(); armsOff.Clear();
             if (player != null)

@@ -559,8 +559,9 @@ namespace RexMagnum
                 var rc = rex.GetComponent<RexController>();
                 var rh = rex.GetComponent<Health>();
                 bool high = Mathf.Abs(off.y) > 2f;
-                // it passes under him only with real jump height (not the step off a kerb); a dodge is untouchable anyway
-                bool jumped = rc != null && !rc.Grounded && Mathf.Abs(off.y) > 0.6f;
+                // it passes under him only with real jump height (not the step off a kerb); a dodge is untouchable anyway.
+                // Measured from Rex's own ground (not the boss's pivot: on a slope that was off by the slope)
+                bool jumped = rc != null && rc.HeightAboveGround > 0.5f;
                 off.y = 0f;
                 bool inFan = off.sqrMagnitude < SweepRange * SweepRange && Vector3.Angle(fwd, off) < SweepHalfAngle;
                 if (inFan && !high && !jumped && rc != null && rh != null && !rh.IsDead)

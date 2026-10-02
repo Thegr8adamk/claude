@@ -74,6 +74,7 @@ namespace RexMagnum.EditorTools
                 RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
                 // dithered LOD cross-fade (tree impostors fade in instead of popping); URP 14+ only, skipped before
                 RexMagnum.QualityAuto.SetUrp(urp, "enableLODCrossFade", "m_EnableLODCrossFade", true);
+                AddAuxRenderer(urp);
                 EditorUtility.SetDirty(urp);
             }
             // 2. Linear colour space
@@ -102,6 +103,41 @@ namespace RexMagnum.EditorTools
             if (always || notes.Length > 0) EditorUtility.DisplayDialog("Rex Magnum setup", msg, "OK");
             if (restart && EditorUtility.DisplayDialog("Rex Magnum setup", "Restart Unity now?", "Restart", "Later"))
                 EditorApplication.OpenProject(System.IO.Directory.GetCurrentDirectory());
+        }
+
+        /// <summary>A second, lightweight renderer in the asset's renderer list: a copy of the default one without renderer
+        /// features (no SSAO pass / depth-normals prepass). The mirror and pool reflection cameras pick it by name
+        /// (QualityAuto.UseAuxRenderer). Made once in Assets/Settings, shared by every URP asset.</summary>
+        static void AddAuxRenderer(UniversalRenderPipelineAsset urp)
+        {
+            var so = new SerializedObject(urp);
+            var list = so.FindProperty("m_RendererDataList");
+            if (list == null || list.arraySize == 0) return;
+            for (int i = 0; i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue is ScriptableRendererData d && d.name == RexMagnum.QualityAuto.AuxRendererName) return;
+            string path = "Assets/Settings/" + RexMagnum.QualityAuto.AuxRendererName + ".asset";
+            var aux = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
+            if (aux == null)
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/Settings")) AssetDatabase.CreateFolder("Assets", "Settings");
+                aux = ScriptableObject.CreateInstance<UniversalRendererData>();
+                // same rendering path / depth settings as the default renderer (one set of shader variants), no features
+                if (list.GetArrayElementAtIndex(0).objectReferenceValue is UniversalRendererData main)
+                {
+                    EditorUtility.CopySerialized(main, aux);
+                    var aso = new SerializedObject(aux);
+                    var feats = aso.FindProperty("m_RendererFeatures");
+                    if (feats != null) feats.arraySize = 0;
+                    var map = aso.FindProperty("m_RendererFeatureMap");
+                    if (map != null) map.arraySize = 0;
+                    aso.ApplyModifiedPropertiesWithoutUndo();
+                }
+                aux.name = RexMagnum.QualityAuto.AuxRendererName;
+                AssetDatabase.CreateAsset(aux, path);
+            }
+            list.arraySize++;
+            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = aux;
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
     }
 }

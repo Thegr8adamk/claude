@@ -468,14 +468,14 @@ namespace RexMagnum.EditorTools
             }
             // see-through sub-meshes in an occluder hide what is behind the windows / pools / falls after the
             // occlusion bake: move them to a child renderer that is only an occludee (same LOD level as its parent)
-            var seeThrough = new Dictionary<MeshRenderer, MeshRenderer>();
+            var seeThrough = new Dictionary<MeshRenderer, MeshRenderer[]>();
             foreach (var r in rs.Where(x => x.name.Contains("_LOD")))      // extras (door, bottles) move: left whole
             {
                 var st = SplitSeeThrough(r, a.name);
-                if (st != null) seeThrough[r] = st;
+                if (st.Length > 0) seeThrough[r] = st;
             }
             MeshRenderer[] Level(string suffix) => rs.Where(r => r.name.EndsWith(suffix))
-                .SelectMany(r => seeThrough.TryGetValue(r, out var st) ? new[] { r, st } : new[] { r }).ToArray();
+                .SelectMany(r => seeThrough.TryGetValue(r, out var st) ? new[] { r }.Concat(st) : new[] { r }).ToArray();
             var lod0 = Level("_LOD0");       // extras (_Door, _Bottle, _Core) stay outside the LODs
             var lod1 = Level("_LOD1");
             var lod2 = Level("_LOD2");      // heavy buildings: middle level for phones
@@ -508,23 +508,30 @@ namespace RexMagnum.EditorTools
 
         /// <summary>Moves the see-through sub-meshes (glass, water, falls, foliage) of r into a child renderer that is
         /// OccludeeStatic only; r keeps the solid ones and stays the occluder. A renderer that is all see-through just
-        /// loses OccluderStatic. Returns the new child renderer, or null.</summary>
-        static MeshRenderer SplitSeeThrough(MeshRenderer r, string building)
+        /// loses OccluderStatic. The pool water (A_PoolWater) gets a child of its own on the "Water" layer: the pool
+        /// reflection camera culls only that layer (the glass rails / leaves stay in the reflection). Returns the new
+        /// child renderers (none when nothing was split).</summary>
+        static MeshRenderer[] SplitSeeThrough(MeshRenderer r, string building)
         {
+            var none = new MeshRenderer[0];
             var mf = r.GetComponent<MeshFilter>();
-            if (mf == null || mf.sharedMesh == null) return null;
+            if (mf == null || mf.sharedMesh == null) return none;
             var src = mf.sharedMesh;
             var mats = r.sharedMaterials;
             var solid = new List<int>();
             var clear = new List<int>();
+            var pool = new List<int>();
             // a sub-mesh without a material was never drawn: it goes to neither part (mats[s] would be out of range)
             for (int s = 0; s < src.subMeshCount && s < mats.Length; s++)
-                (mats[s] != null && SeeThrough.Contains(mats[s].name) ? clear : solid).Add(s);
-            if (clear.Count == 0) return null;
-            if (solid.Count == 0)
+                (mats[s] == null || !SeeThrough.Contains(mats[s].name) ? solid
+                    : mats[s].name.StartsWith("A_PoolWater") ? pool : clear).Add(s);
+            if (clear.Count == 0 && pool.Count == 0) return none;
+            // all see-through: no occluder; all pool water: the whole renderer on the Water layer, nothing to split
+            if (solid.Count == 0) GameObjectUtility.SetStaticEditorFlags(r.gameObject, StaticEditorFlags.OccludeeStatic);
+            if (solid.Count == 0 && (clear.Count == 0 || pool.Count == 0))
             {
-                GameObjectUtility.SetStaticEditorFlags(r.gameObject, StaticEditorFlags.OccludeeStatic);
-                return null;
+                if (clear.Count == 0) r.gameObject.layer = PoolReflection.WaterLayer;
+                return none;
             }
             Mesh Part(List<int> subs, string tag)
             {
@@ -578,16 +585,30 @@ namespace RexMagnum.EditorTools
                 if (rp != null) { rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); }
                 return m;
             }
-            var child = new GameObject(r.name.Replace("_LOD", "_SeeThroughLOD"));     // no "_LOD0" suffix: not a lightmap / collision part
-            child.transform.SetParent(r.transform, false);
-            child.AddComponent<MeshFilter>().sharedMesh = Part(clear, "SeeThrough");
-            var cr = child.AddComponent<MeshRenderer>();
-            cr.sharedMaterials = clear.Select(i => mats[i]).ToArray();
-            cr.shadowCastingMode = r.shadowCastingMode;
-            GameObjectUtility.SetStaticEditorFlags(child, StaticEditorFlags.OccludeeStatic);
-            mf.sharedMesh = Part(solid, "Solid");
-            r.sharedMaterials = solid.Select(i => mats[i]).ToArray();
-            return cr;
+            MeshRenderer Child(List<int> subs, string tag)
+            {
+                var child = new GameObject(r.name.Replace("_LOD", $"_{tag}LOD"));     // no "_LOD0" suffix: not a lightmap / collision part
+                child.transform.SetParent(r.transform, false);
+                child.AddComponent<MeshFilter>().sharedMesh = Part(subs, tag);
+                var cr = child.AddComponent<MeshRenderer>();
+                cr.sharedMaterials = subs.Select(i => mats[i]).ToArray();
+                cr.shadowCastingMode = r.shadowCastingMode;
+                GameObjectUtility.SetStaticEditorFlags(child, StaticEditorFlags.OccludeeStatic);
+                return cr;
+            }
+            var made = new List<MeshRenderer>();
+            // r keeps the solid sub-meshes, or the other see-through ones when it has no solid part
+            var keep = solid.Count > 0 ? solid : clear;
+            if (solid.Count > 0 && clear.Count > 0) made.Add(Child(clear, "SeeThrough"));
+            if (pool.Count > 0)
+            {
+                var wr = Child(pool, "Water");
+                wr.gameObject.layer = PoolReflection.WaterLayer;
+                made.Add(wr);
+            }
+            mf.sharedMesh = Part(keep, solid.Count > 0 ? "Solid" : "SeeThrough");
+            r.sharedMaterials = keep.Select(i => mats[i]).ToArray();
+            return made.ToArray();
         }
 
         static Mesh CollisionMesh(Mesh src, Material[] mats, string name)

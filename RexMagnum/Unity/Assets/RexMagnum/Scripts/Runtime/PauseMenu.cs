@@ -375,6 +375,7 @@ namespace RexMagnum
             GUILayout.Label($"{(FactoryCore.Stopped ? "[x]" : "[ ]")}  Stop the blob factory (ruins)", label);
             GUILayout.Label($"{(PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1 ? "[x]" : "[ ]")}  Pop King Glorp (ship)", label);
             GUILayout.Label($"Blobs popped: {Progress.Value("kills")}    Guests rescued: {Progress.Value("rescues")}    Photos: {Progress.Value("photos")}", small);
+            AbilitiesSection();
             Section("CLUES");
             var clues = Progress.Clues;
             // the way to the boss is not overland (too steep): always said here once the factory is down
@@ -382,6 +383,17 @@ namespace RexMagnum
                 GUILayout.Label("- The cave tunnels go up to the ship: take the ship branch at the fork.", small);
             if (clues.Count == 0) GUILayout.Label("Rescue hiding guests: each one tells you a clue.", small);
             for (int i = clues.Count - 1; i >= 0; i--) GUILayout.Label("- " + clues[i], small);
+        }
+
+        /// <summary>MAP + HELP: the 3 abilities, unlocked or how to earn them, and how to use them.</summary>
+        void AbilitiesSection()
+        {
+            Section("ABILITIES");
+            foreach (var ab in GameGuide.Abilities())
+            {
+                GUILayout.Label(ab.on ? $"[x]  {ab.name}" : $"[ ]  {ab.name}  (locked: {ab.earn})", ab.on ? label : small);
+                GUILayout.Label("      " + ab.use, small);
+            }
         }
 
         /// <summary>A list section: space, a left-aligned gold header and a thin gold rule (the centred big title
@@ -412,6 +424,7 @@ namespace RexMagnum
                 GUILayout.Label(c.how, label);
                 GUILayout.EndHorizontal();
             }
+            AbilitiesSection();
             GUILayout.Space(16);
             GUILayout.Label("Keys and buttons: Settings > CONTROLS.  The NEXT line and the compass show a goal; the MAP tab shows where you are.", small);
         }

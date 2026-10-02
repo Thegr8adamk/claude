@@ -118,6 +118,7 @@ namespace RexMagnum
                     uiSrc[i] = go.AddComponent<AudioSource>();
                     uiSrc[i].playOnAwake = false;
                     uiSrc[i].spatialBlend = 0f;
+                    uiSrc[i].ignoreListenerPause = true;     // the pause menu sets AudioListener.pause: its cues still play
                 }
                 var u = uiSrc[i];
                 if (u.isPlaying && Mathf.Approximately(u.pitch, pitch)) { pick = i; break; }

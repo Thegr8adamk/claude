@@ -8,14 +8,19 @@ namespace RexMagnum
     /// Planar reflection for the main pool (the PlanarMirror approach on a horizontal plane): one camera renders the
     /// view mirrored at the water surface into a half-res texture (quarter on Medium phones), and RexMagnum/Water
     /// blends it in by Fresnel (_PlanarRefl + _UsePlanar, set per renderer). Only when Rex is within ~40 m of the
-    /// pool, the camera is above the water and the pool is on screen; off on Low and in VR (the reflection probe
-    /// alone then, as before). Added by IslandBuilder to "Game"; finds the pool water (A_PoolWater) under
-    /// Island/PoolArea by itself.
+    /// pool, the camera is above the water and the pool is on screen; off on Low, on phones, in VR and while another
+    /// camera shows the scene (kill cam, ending, selfie: they would sample a texture made for the game camera's view;
+    /// the reflection probe alone then, as before). Every 2nd frame on Medium, never in a frame a mirror rendered.
+    /// Added by IslandBuilder to "Game"; finds the pool water (A_PoolWater) under Island/PoolArea by itself.
     /// </summary>
+    [DefaultExecutionOrder(100)]                   // LateUpdate after the mirrors: their frame stamp is set by then
     public class PoolReflection : MonoBehaviour
     {
+        /// <summary>Unity's built-in "Water" layer: IslandBuilder puts the pool water renderer on it, so the reflection
+        /// camera culls just the water (the glass rails / leaves of the same model stay in the reflection).</summary>
+        public const int WaterLayer = 4;
         public float activeDistance = 40f;
-        public float farClip = 150f;               // hotel, palms, slide tower: farther things are the skybox
+        public float farClip = 80f;                // hotel front, palms, slide tower: farther things are sky / skipped
         Renderer[] water;                          // PoolArea renderers holding the pool water sub-mesh
         Bounds pool;
         float planeY;
@@ -71,13 +76,13 @@ namespace RexMagnum
                 if (pi != null && pi.CanWrite && pi.PropertyType == typeof(bool)) pi.SetValue(cd, false);
             }
             cd.antialiasing = AntialiasingMode.None;
+            QualityAuto.UseAuxRenderer(cd);                // the renderer without SSAO, when ProjectSetup made it
         }
 
-        /// <summary>RT at half the screen size, a quarter on Medium phones; remade when the tier or the window changes.</summary>
+        /// <summary>RT at half the screen size; remade when the window changes.</summary>
         void EnsureRT()
         {
-            int div = Application.isMobilePlatform && quality != null && quality.Tier <= QualityTier.Medium ? 4 : 2;
-            int w = Mathf.Max(256, Screen.width / div), h = Mathf.Max(256, Screen.height / div);
+            int w = Mathf.Max(256, Screen.width / 2), h = Mathf.Max(256, Screen.height / 2);
             if (rt != null && rt.width == w && rt.height == h) return;
             if (rt != null) { rt.Release(); Destroy(rt); }
             var fmt = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR) ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
@@ -87,7 +92,7 @@ namespace RexMagnum
 
         void SetUse(bool use)
         {
-            if (use == on) return;
+            if (use == on || water == null) return;
             on = use;
             foreach (var r in water)
             {
@@ -101,7 +106,8 @@ namespace RexMagnum
 
         bool Wanted(Camera cam)
         {
-            if (reflCam == null || VRMode.Active) return false;
+            if (reflCam == null || VRMode.Active || Application.isMobilePlatform) return false;   // phones: a whole-hub render
+            if (KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing) return false;
             if (quality != null && quality.Tier == QualityTier.Low) return false;
             if (player == null || pool.SqrDistance(player.position) > activeDistance * activeDistance) return false;
             if (cam.transform.position.y < planeY + 0.05f) return false;     // under water / at the surface
@@ -112,8 +118,11 @@ namespace RexMagnum
             return GeometryUtility.TestPlanesAABB(frustum, pool);
         }
 
+        void OnDisable() => SetUse(false);
+
         void OnDestroy()
         {
+            SetUse(false);
             if (rt != null) { rt.Release(); Destroy(rt); }
             if (reflCam != null) Destroy(reflCam.gameObject);
         }
@@ -123,6 +132,11 @@ namespace RexMagnum
             var cam = Camera.main;
             if (cam == null || water == null) return;
             if (!Wanted(cam)) { SetUse(false); return; }
+            // Medium: every 2nd frame (the water keeps last frame's texture); never in a frame a mirror rendered
+            bool skip = PlanarMirror.RenderedFrame == Time.frameCount ||
+                        (quality != null && quality.Tier == QualityTier.Medium && (Time.frameCount & 1) == 1);
+            if (skip && on) return;
+            if (skip) { SetUse(false); return; }
             var oldRt = rt;
             EnsureRT();
             if (rt != oldRt) on = false;            // a new texture: hand it to the water again
@@ -135,8 +149,11 @@ namespace RexMagnum
             reflCam.CopyFrom(cam);
             reflCam.targetTexture = rt;
             reflCam.useOcclusionCulling = false;    // the game camera's occlusion data is for its own view
-            // no cloud dome: it sits at 90% of the far plane, and the oblique near plane bends the far plane
-            reflCam.cullingMask = cam.cullingMask & ~(1 << DayNight.SkyLayer);
+            // the water itself stays out (it would read the texture it is drawn into); the cloud dome stays in (at 90% of
+            // the 80 m far plane, behind the hub's buildings: the reflection had a cloudless sky)
+            bool waterLayered = true;
+            foreach (var r in water) if (r != null && r.gameObject.layer != WaterLayer) waterLayered = false;
+            reflCam.cullingMask = cam.cullingMask & ~(1 << WaterLayer);
             reflCam.worldToCameraMatrix = cam.worldToCameraMatrix * refl;
             reflCam.farClipPlane = Mathf.Min(cam.farClipPlane, farClip);
             reflCam.aspect = cam.aspect;
@@ -147,9 +164,9 @@ namespace RexMagnum
             reflCam.projectionMatrix = reflCam.CalculateObliqueMatrix(new Vector4(cn.x, cn.y, cn.z, -Vector3.Dot(cp, cn)));
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(reflCam, req)) { SetUse(false); return; }
-            // the water itself stays out (it would read the texture it is drawn into); first person: the body is
-            // shadow-only and the arms float at the eye, so the reflection shows the body (as in PlanarMirror)
-            foreach (var r in water) if (r != null) r.enabled = false;
+            // an island built before the Water layer: the water renderers off instead (their glass / leaves with them).
+            // First person: the body is shadow-only and the arms float at the eye, so the reflection shows the body
+            if (!waterLayered) foreach (var r in water) if (r != null) r.enabled = false;
             shown.Clear(); armsOff.Clear();
             if (player != null)
                 foreach (var r in player.GetComponentsInChildren<Renderer>())
@@ -163,7 +180,7 @@ namespace RexMagnum
             GL.invertCulling = false;
             foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             foreach (var r in armsOff) r.enabled = true;
-            foreach (var r in water) if (r != null) r.enabled = true;
+            if (!waterLayered) foreach (var r in water) if (r != null) r.enabled = true;
             SetUse(true);
         }
     }

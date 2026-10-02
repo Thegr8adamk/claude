@@ -58,6 +58,9 @@ namespace RexMagnum
         public float MoveYaw => Yaw + (VRControlled ? HeadYaw : 0f);
         /// <summary>Field of view from Settings (third person; first person is 10 more).</summary>
         public static float FovSetting = 65f;
+        /// <summary>Hit tilt (the view rolls away from a hit) on/off; SettingsPanel saves it as PlayerPrefs "rm_hittilt".</summary>
+        public static bool HitTiltEnabled = true;
+        public const string HitTiltKey = "rm_hittilt";
 
         float side = 1f, currentDist, blend, aimT, wallDist = -1f, shake;
 
@@ -83,6 +86,8 @@ namespace RexMagnum
         readonly List<(Renderer r, ShadowCastingMode m)> saved = new List<(Renderer, ShadowCastingMode)>();
 
         const string PrefKey = "RexMagnum_CameraMode";
+
+        void Awake() => HitTiltEnabled = PlayerPrefs.GetInt(HitTiltKey, 1) == 1;
 
         void Start()
         {
@@ -116,7 +121,7 @@ namespace RexMagnum
                 else { Shake(0.06f); RMInput.Rumble(0.3f, 0.5f, 0.1f); }
                 // directional reaction: the view tilts away from the side the hit came from (the attacker; Rex's own
                 // coconut: the blast point). Light 3, heavy 6 degrees, eased back over 0.25 s. Not in VR.
-                if (by == null || VRControlled) return;
+                if (by == null || VRControlled || !HitTiltEnabled) return;
                 Vector3 src = by.transform.IsChildOf(target) ? p : by.transform.position;
                 float sideDot = Vector3.Dot(transform.right, Vector3.ProjectOnPlane(src - target.position, Vector3.up));
                 if (Mathf.Abs(sideDot) < 0.2f) return;            // straight ahead / behind: the shake alone
@@ -163,7 +168,9 @@ namespace RexMagnum
                 if (weapons != null && weapons.Scoped) look *= 12f / Mathf.Max(1f, FovSetting);   // scope (12°): same feel as unzoomed
                 // aim assist slow-down (controller stick, not scoped): the look slows to 55% while the crosshair is
                 // within ~3 degrees of a living blob's centre, so the stick does not sail past it (the AimPoint pull stays)
+                // (guns only: with a melee weapon the slow-down just dragged the turn while fighting a crowd)
                 else if (!VRControlled && RMInput.AimAssist && RMInput.LookIsStick && !TouchState.Active
+                         && (weapons == null || weapons.Current.isGun || weapons.Aiming)
                          && look.sqrMagnitude > 0f && CrosshairOnBlob(3f * cam.fieldOfView / 65f))
                     look *= 0.55f;
                 if (VRControlled)
@@ -268,7 +275,7 @@ namespace RexMagnum
             if (hitRoll != 0f)
             {
                 float rt = (Time.unscaledTime - hitRollAt) / HitRollTime;
-                if (rt >= 1f || VRControlled) hitRoll = 0f;
+                if (rt >= 1f || VRControlled || !HitTiltEnabled) hitRoll = 0f;
                 else transform.rotation *= Quaternion.Euler(0f, 0f, hitRoll * (1f - rt * rt * (3f - 2f * rt)));   // eased back
             }
             if (kick > 0.01f)
