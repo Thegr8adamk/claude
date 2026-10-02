@@ -253,6 +253,20 @@ namespace RexMagnum
         }
 
         GameObject lastKiller;
+        /// <summary>Ammo pickups blobs can drop (set from the guests' reward list).</summary>
+        public static GameObject[] Loot;
+
+        void DropLoot()
+        {
+            // brief section 8: taunted (angry) blobs drop more loot
+            float chance = IsAngry ? 0.6f : 0.15f;
+            if (kind == Kind.KingGlorp || Random.value > chance) return;
+            Vector3 p = transform.position + Vector3.up * 0.4f;
+            if (Loot != null && Loot.Length > 0 && Random.value < 0.6f)
+                Instantiate(Loot[Random.Range(0, Loot.Length)], p - Vector3.up * 0.3f, Quaternion.identity);
+            else
+                FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), p, 0f);
+        }
 
         void OnDied(GameObject killer)
         {
@@ -268,6 +282,7 @@ namespace RexMagnum
             foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
             Play("Pop", 0.02f);
             Sfx.Play("blob_pop", transform.position);
+            if (killer != null && killer.GetComponent<RexController>() != null) DropLoot();
             StartCoroutine(PopRoutine());
         }
 

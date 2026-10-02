@@ -37,6 +37,7 @@ namespace RexMagnum
         {
             agent = GetComponent<NavMeshAgent>();
             anim = GetComponentInChildren<Animator>();
+            if (Blob.Loot == null && rewardPrefabs != null && rewardPrefabs.Length > 0) Blob.Loot = rewardPrefabs;   // ammo pickups for blob drops
             if (!TryGetComponent(out voice)) voice = gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 1f;
             var rc = FindFirstObjectByType<RexController>();
@@ -124,6 +125,21 @@ namespace RexMagnum
             Say(GuestLines.Scream());
         }
 
+        /// <summary>Rescue clues (brief section 3): where weapons and big goals are.</summary>
+        static readonly string[] Clues =
+        {
+            "There's a shiny gun in the casino lounge. Downstairs.",
+            "The dive shop on the beach has a harpoon gun!",
+            "I saw a rifle up on the hotel roof.",
+            "The buffet freezer has a fish the size of a man. Just saying.",
+            "The steak knives are at the buffet. Don't ask why I know.",
+            "Golf clubs are in the pro shop. West side.",
+            "The slime comes from the old temple ruins. Something glows in there.",
+            "There's a ship on top of the big waterfall. A big gold one lives in it.",
+            "The cave behind the waterfall goes all the way to the ruins.",
+            "Coconuts at the tiki bar. They go boom.",
+        };
+
         void Rescue()
         {
             state = State.Rescued;
@@ -132,7 +148,10 @@ namespace RexMagnum
             Progress.Add("rescues");
             if (rex != null) RexVoice.Say(rex.gameObject, "Rescue", true);
             Vector3 drop = transform.position + transform.forward * 0.8f + Vector3.up * 0.3f;
-            if (Random.value < 0.4f || rewardPrefabs == null || rewardPrefabs.Length == 0)   // brief: ammo / health / clue
+            float roll = Random.value;
+            if (roll < 0.3f)                                              // brief: ammo / health / clue
+                RexVoice.Subtitle?.Invoke(guestName.ToUpper() + ": " + Clues[Random.Range(0, Clues.Length)]);
+            else if (roll < 0.6f || rewardPrefabs == null || rewardPrefabs.Length == 0)
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
             else
                 Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], drop - Vector3.up * 0.3f, Quaternion.identity);
