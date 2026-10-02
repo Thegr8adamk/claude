@@ -66,27 +66,43 @@ namespace RexMagnum
             float rexDist = Vector3.Distance(rex.position, transform.position);
 
             // Rex's taunt near a guest: laugh or a drink in the face
-            if (RMInput.Taunt && rexDist < 6f && Time.time > nextTalk)
+            if (!lockedIn && RMInput.Taunt && rexDist < 6f && Time.time > nextTalk)
             {
                 nextTalk = Time.time + 3f;
                 if (Random.value < 0.5f) Say("(laughs)");
                 else { Say("(throws a drink)"); SlimeFX.Splat(rex.position + Vector3.up * 1.6f, Vector3.up, new Color(0.8f, 0.6f, 0.2f), 6); }
             }
             // Talk: only when Rex's hands are down
-            if (rexCtrl != null && rexCtrl.HandsDown && RMInput.ActionDown && rexDist < 2.5f && Time.time > nextTalk)
+            if (!lockedIn && rexCtrl != null && rexCtrl.HandsDown && RMInput.ActionDown && rexDist < 2.5f && Time.time > nextTalk)
             {
                 nextTalk = Time.time + 5f;
                 StartCoroutine(Flirt());
             }
+            if (lockedIn)
+            {
+                // knocking: checked every frame (a button press lasts one frame)
+                if (rexDist < 3f && (RMInput.Use || RMInput.ActionDown) && Time.time > nextTalk)
+                {
+                    nextTalk = Time.time + 4f;
+                    RexVoice.Subtitle?.Invoke(guestName.ToUpper() + " (behind a locked door): " + LockedLines[Random.Range(0, LockedLines.Length)]);
+                }
+            }
             if (Time.time < nextThink || !agent.isOnNavMesh) return;
             nextThink = Time.time + 0.4f;
             NearestBlob(out float blobDist);
-            // brief: at night guests lock themselves in (they walk back to their spot and stay out of sight)
+            // brief: at night guests lock themselves in their rooms. They walk back to their spot, then go inside
+            // (hidden); knocking (Use / Action near the spot) gets a muffled answer through the door. At dawn they
+            // come out again.
             if (!security && DayNight.Night > 0.6f && state != State.Rescued && state != State.Panic)
             {
-                if (Vector3.Distance(transform.position, home) > 1f) agent.SetDestination(home);
+                if (!lockedIn)
+                {
+                    if (Vector3.Distance(transform.position, home) > 1.2f) agent.SetDestination(home);
+                    else SetLockedIn(true);
+                }
                 return;
             }
+            if (lockedIn) SetLockedIn(false);
             switch (state)
             {
                 case State.Idle:
@@ -102,6 +118,21 @@ namespace RexMagnum
                     if (!agent.pathPending && agent.remainingDistance < 0.8f) gameObject.SetActive(false);   // safe inside
                     break;
             }
+        }
+
+        bool lockedIn;
+        static readonly string[] LockedLines =
+        {
+            "We are NOT opening this door!", "Go away! Come back when it's light!", "Is that Rex? Definitely not opening.",
+            "There's a chair under the handle. Two chairs.", "Room service? ...No. Nice try, slime.",
+        };
+
+        void SetLockedIn(bool on)
+        {
+            lockedIn = on;
+            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = !on;
+            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = !on;
+            if (agent.isOnNavMesh) agent.isStopped = on;
         }
 
         void Panic()
