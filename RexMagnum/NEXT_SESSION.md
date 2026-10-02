@@ -37,3 +37,4 @@ Old routine "Rex Magnum hourly build" stays off. New routine "Rex Magnum hourly 
 | Rex swim clips | `python swim_export.py [--render out.png]` (no re-bake of Rex) |
 Blender previews of Rex in extreme poses can show a shirt spike from the Smooth/Solidify modifiers; the game mesh does not.
 Session 1 (Blender island work) also runs its routine "Rex Magnum hourly build" at :01. Both sessions push to this branch: always fetch + rebase before push.
+- 2026-10-02: owner said skip the Unity test for now; keep building.

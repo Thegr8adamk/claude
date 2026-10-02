@@ -533,6 +533,38 @@ def _river_dist(x, y):
     return _RIVER_KD[0].find((x, y, 0.0))[2]
 
 
+def river_banks(height_at, ferns, rocks, rng, tree_scale=1.0):
+    """Thick ferns and a few mossy boulders on both river banks (the channel sides were bare ground), from just
+    outside the water to the top of the bank."""
+    _, _, _, (rx, ry) = I.heightmap()
+    placed = 0
+    for i in range(0, len(rx) - 1, 1):
+        x, y = float(rx[i]), float(ry[i])
+        dx, dy = float(rx[i + 1]) - x, float(ry[i + 1]) - y
+        L = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / L, dx / L
+        for _ in range(int(3 * tree_scale)):
+            side = rng.choice((-1, 1))
+            o = side * rng.uniform(9.5, 15.0)
+            px, py = x + nx * o + rng.uniform(-0.6, 0.6), y + ny * o + rng.uniform(-0.6, 0.6)
+            if _river_dist(px, py) < 9.5:
+                continue
+            z = height_at(px, py)
+            if z < 1.5:                      # river mouth / beach
+                continue
+            boulder = rng.random() < 0.06
+            inst = bpy.data.objects.new("Boulder" if boulder else "Fern", None)
+            inst.instance_type = "COLLECTION"
+            inst.instance_collection = rng.choice(rocks if boulder else ferns)
+            inst.location = (px, py, z - (0.4 if boulder else 0.05))
+            sc = rng.uniform(0.5, 1.4) if boulder else rng.uniform(1.0, 2.0)
+            inst.scale = (sc, sc, sc)
+            inst.rotation_euler = (rng.uniform(-0.08, 0.08), rng.uniform(-0.08, 0.08), rng.uniform(0, math.tau))
+            link(inst, "Vegetation")
+            placed += 1
+    return placed
+
+
 VIEWS_CLEAR = [((75, -420), (40, -268)), ((15, 110), (40, 250)), ((215, -40), (300, 70))]
 
 
@@ -874,6 +906,7 @@ def build(tree_scale=1.0, v2=False):
     n2 = scatter(ha, jungle, int(3200 * tree_scale), rng, 6, 150, clear, "Jungle", (0.7, 1.3), 0.5)
     n3 = scatter(ha, ferns, int(14000 * tree_scale), rng, 2.5, 150, clear[:5], "Fern", (0.8, 1.8), 0.05, False)
     n4 = scatter(ha, rocks, int(500 * tree_scale), rng, -2, 4, clear[:3], "Boulder", (0.6, 2.5), 0.4, False)
+    n5 = river_banks(ha, ferns, rocks, rng, tree_scale)
     # palms around the hotel and pool (resort landscaping)
     for k in range(26):
         x = -20 + (k % 13) * 10
@@ -887,7 +920,7 @@ def build(tree_scale=1.0, v2=False):
     if not v2:
         hotel_and_pool(ha)
     waterfall_ruins_ship(ha, river, structures=not v2)
-    print(f"[IslandHQ] palms {n1}, jungle trees {n2}, ferns {n3}, boulders {n4}")
+    print(f"[IslandHQ] palms {n1}, jungle trees {n2}, ferns {n3}, boulders {n4}, river bank plants {n5}")
     return ha
 
 
