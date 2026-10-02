@@ -437,7 +437,7 @@ namespace RexMagnum.EditorTools
             ApplyFix(model.transform);
             var rs = model.GetComponentsInChildren<MeshRenderer>();
             // collision: LOD0 without water, falls, curtains, straw... (from the full mesh, before the glass split)
-            foreach (var r in rs.Where(r => r.name.EndsWith("_LOD0")))
+            foreach (var r in rs.Where(x => x.name.EndsWith("_LOD0")))
             {
                 var mf = r.GetComponent<MeshFilter>();
                 if (mf == null || mf.sharedMesh == null) continue;
@@ -456,7 +456,7 @@ namespace RexMagnum.EditorTools
             // see-through sub-meshes in an occluder hide what is behind the windows / pools / falls after the
             // occlusion bake: move them to a child renderer that is only an occludee (same LOD level as its parent)
             var seeThrough = new Dictionary<MeshRenderer, MeshRenderer>();
-            foreach (var r in rs.Where(r => r.name.Contains("_LOD")))      // extras (door, bottles) move: left whole
+            foreach (var r in rs.Where(x => x.name.Contains("_LOD")))      // extras (door, bottles) move: left whole
             {
                 var st = SplitSeeThrough(r, a.name);
                 if (st != null) seeThrough[r] = st;
@@ -517,7 +517,7 @@ namespace RexMagnum.EditorTools
                 var m = UnityEngine.Object.Instantiate(src);         // same vertices / UVs / normals, fewer sub-meshes
                 m.name = $"{building}_{r.name}_{tag}";
                 m.subMeshCount = subs.Count;
-                for (int i = 0; i < subs.Count; i++) m.SetTriangles(src.GetTriangles(subs[i]), i, false);
+                for (int i = 0; i < subs.Count; i++) m.SetTriangles(src.GetTriangles(subs[i]), i);    // with sub-mesh bounds (WaterVolume reads them)
                 m.RecalculateBounds();
                 string p = $"{Gen}/{m.name}.asset";
                 AssetDatabase.DeleteAsset(p);
@@ -1856,16 +1856,28 @@ namespace RexMagnum.EditorTools
 
         // ---------------------------------------------------------------- optional bakes (menus)
 
-        /// <summary>Optional: lightmaps for the buildings (sky light only - the sun and the lamps stay realtime because
-        /// DayNight moves them), so rooms and corridors get real occlusion instead of the flat sky ambient. Slow (GPU
-        /// lightmapper, minutes); the game works without it. Buildings get lightmap UVs (FBX reimport) first.</summary>
+        /// <summary>Optional: lightmaps for the buildings, so rooms and corridors get real occlusion instead of the flat
+        /// sky ambient. Night-safe: every light is set to Realtime (DayNight moves the sun, switches the lamps) and the
+        /// bake uses a dim flat ambient instead of the noon sky, so the lightmaps hold soft AO-darkened fill light only
+        /// (a lightmapped wall ignores DayNight's ambient: a day-sky bake glowed all night). The scene's sky ambient
+        /// comes back when the bake ends. Slow (GPU lightmapper, minutes); the game works without it. Buildings get
+        /// lightmap UVs (FBX reimport) first.</summary>
         [MenuItem("Rex Magnum/Bake Lighting (slow, optional)", priority = 30)]
         public static void BakeLighting()
         {
             var island = GameObject.Find("Island");
             if (island == null) { EditorUtility.DisplayDialog("Rex Magnum", "Open Scenes/Island.unity first (Build Island makes it).", "OK"); return; }
-            if (!EditorUtility.DisplayDialog("Rex Magnum", "Bake building lightmaps? This reimports the building models " +
-                    "with lightmap UVs and can take several minutes.", "Bake", "Cancel")) return;
+            if (Lightmapping.isRunning) { EditorUtility.DisplayDialog("Rex Magnum", "A lighting bake is already running.", "OK"); return; }
+            if (!EditorUtility.DisplayDialog("Rex Magnum", "Bake building lightmaps?\n\n" +
+                    "Time: the model reimport takes 1 to 3 minutes (Unity is busy), then the bake runs in the background, " +
+                    "about 5 to 30 minutes (progress bar at the bottom right of the Unity window). To stop the bake: click " +
+                    "the X next to that progress bar, or Window > Rendering > Lighting > Cancel.\n\n" +
+                    "What it does: soft shadows in corners and rooms (ambient occlusion with a dim fill light). It is " +
+                    "night-safe: the sun and all lamps stay realtime, so nights stay dark. Shaded building sides look a " +
+                    "little darker by day.\n\nSave the scene when the bake is done.", "Bake", "Cancel")) return;
+            // night-safe: no light may be baked into the lightmaps (DayNight turns the sun and switches the lamps)
+            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                { SetProp(l, "lightmapBakeType", "Realtime"); EditorUtility.SetDirty(l); }
             // lightmap UVs for every building FBX (not vegetation / characters)
             var fbx = new HashSet<string>();
             foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
@@ -1894,7 +1906,16 @@ namespace RexMagnum.EditorTools
                 if ((flags & StaticEditorFlags.OccluderStatic) == 0) continue;
                 GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.ContributeGI);
                 SetProp(r, "receiveGI", r.name.EndsWith("_LOD0") ? "Lightmaps" : "LightProbes");
+                // the glass split (SplitSeeThrough) made copies in Generated/: they missed the FBX's lightmap UVs
+                var mf = r.GetComponent<MeshFilter>();
+                if (r.name.EndsWith("_LOD0") && mf != null && mf.sharedMesh != null && AssetDatabase.GetAssetPath(mf.sharedMesh).StartsWith(Gen))
+                {
+                    var uv2 = new List<Vector2>();
+                    mf.sharedMesh.GetUVs(1, uv2);
+                    if (uv2.Count == 0) { Unwrapping.GenerateSecondaryUVSet(mf.sharedMesh); EditorUtility.SetDirty(mf.sharedMesh); }
+                }
             }
+            AssetDatabase.SaveAssets();
             var ls = AssetDatabase.LoadAssetAtPath<LightingSettings>(Gen + "/IslandLighting.lighting");
             if (ls == null) { ls = new LightingSettings(); AssetDatabase.CreateAsset(ls, Gen + "/IslandLighting.lighting"); }
             ls.bakedGI = true;
@@ -1907,8 +1928,37 @@ namespace RexMagnum.EditorTools
             EditorUtility.SetDirty(ls);
             Lightmapping.lightingSettings = ls;
             EditorSceneManager.MarkSceneDirty(island.scene);
-            if (!Lightmapping.BakeAsync()) Debug.LogWarning("[Rex Magnum] Lightmap bake did not start (another bake running?).");
-            else Debug.Log("[Rex Magnum] Lightmap bake started (progress bottom-right). Save the scene when it is done.");
+            // dim flat ambient for the bake (about the night level, not the noon sky); the sky comes back after
+            bakeAmbientMode = RenderSettings.ambientMode;
+            bakeAmbientLight = RenderSettings.ambientLight;
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.3f, 0.31f, 0.34f);
+            if (!Lightmapping.BakeAsync())
+            {
+                RestoreBakeAmbient();
+                Debug.LogWarning("[Rex Magnum] Lightmap bake did not start (another bake running?).");
+                return;
+            }
+            EditorApplication.update += WaitBake;
+            Debug.Log("[Rex Magnum] Lightmap bake started (progress bottom-right, X there cancels). Save the scene when it is done.");
+        }
+
+        static AmbientMode bakeAmbientMode;
+        static Color bakeAmbientLight;
+
+        static void WaitBake()
+        {
+            if (Lightmapping.isRunning) return;
+            EditorApplication.update -= WaitBake;
+            RestoreBakeAmbient();
+            Debug.Log("[Rex Magnum] Lighting bake ended; sky ambient restored. Save the scene (File > Save).");
+        }
+
+        static void RestoreBakeAmbient()
+        {
+            RenderSettings.ambientMode = bakeAmbientMode;
+            RenderSettings.ambientLight = bakeAmbientLight;
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
         }
 
         /// <summary>Sets a property by name (enum values by name). Lighting / GI members are set this way so the

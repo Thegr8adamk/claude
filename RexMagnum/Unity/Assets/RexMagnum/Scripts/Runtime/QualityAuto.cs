@@ -35,10 +35,15 @@ namespace RexMagnum
 
         // ---- Editor: tier changes must not be saved into the project's URP asset / renderer data.
         // Play mode runs on a copy of the URP asset; the original asset and the SSAO switch are put back on exit.
+        // The renderer data (SSAO on/off and its settings) is shared with the original asset: also put back on exit,
+        // on editor quit and around every save made during play (a save would write the DontSave copy, or the
+        // tier's SSAO state, into the project settings).
 #if UNITY_EDITOR
-        static RenderPipelineAsset origDefault, origQuality;
+        static RenderPipelineAsset origDefault, origQuality, playCopy;
         static bool swapped;
         static readonly System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool> featureState =
+            new System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool>();
+        static readonly System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool> featureNow =
             new System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool>();
 #endif
 
@@ -52,25 +57,99 @@ namespace RexMagnum
             var copy = Instantiate(urp);
             copy.name = urp.name + " (play copy)";
             copy.hideFlags = HideFlags.DontSave;
-            if (origQuality != null) QualitySettings.renderPipeline = copy;   // the quality level's asset wins if set
-            else GraphicsSettings.defaultRenderPipeline = copy;
+            playCopy = copy;
+            SetPipeline(copy);
             UnityEditor.EditorApplication.playModeStateChanged += RestoreAfterPlay;
+            UnityEditor.EditorApplication.quitting += RestoreOnQuit;
 #endif
         }
 
 #if UNITY_EDITOR
+        static void SetPipeline(RenderPipelineAsset a)
+        {
+            if (origQuality != null) QualitySettings.renderPipeline = a;   // the quality level's asset wins if set
+            else GraphicsSettings.defaultRenderPipeline = a;
+        }
+
+        /// <summary>Original asset, SSAO switch and SSAO settings back in place (what the project should save).</summary>
+        static void PutBackOriginals()
+        {
+            SetPipeline(origQuality != null ? origQuality : origDefault);
+            foreach (var kv in featureState) if (kv.Key != null) FeatureSet(kv.Key, kv.Value);
+            foreach (var kv in ssaoOrig) kv.Key.f.SetValue(kv.Key.o, kv.Value);
+        }
+
         static void RestoreAfterPlay(UnityEditor.PlayModeStateChange s)
         {
             if (s != UnityEditor.PlayModeStateChange.ExitingPlayMode && s != UnityEditor.PlayModeStateChange.EnteredEditMode) return;
             UnityEditor.EditorApplication.playModeStateChanged -= RestoreAfterPlay;
+            UnityEditor.EditorApplication.quitting -= RestoreOnQuit;
             if (!swapped) return;
             swapped = false;
-            if (origQuality != null) QualitySettings.renderPipeline = origQuality;
-            else GraphicsSettings.defaultRenderPipeline = origDefault;
-            foreach (var kv in featureState) if (kv.Key != null) FeatureSet(kv.Key, kv.Value);
+            PutBackOriginals();
             featureState.Clear();
+            featureNow.Clear();
+            ssaoOrig.Clear();
+            playCopy = null;
+        }
+
+        static void RestoreOnQuit() => RestoreAfterPlay(UnityEditor.PlayModeStateChange.ExitingPlayMode);
+
+        /// <summary>A save during play (Ctrl+S, File > Save Project): originals in for the save, the play state after.</summary>
+        class SaveGuard : UnityEditor.AssetModificationProcessor
+        {
+            static string[] OnWillSaveAssets(string[] paths)
+            {
+                if (!swapped) return paths;
+                PutBackOriginals();
+                UnityEditor.EditorApplication.delayCall += () =>
+                {
+                    if (!swapped || !Application.isPlaying) return;
+                    SetPipeline(playCopy);
+                    foreach (var kv in featureNow) if (kv.Key != null) FeatureSet(kv.Key, kv.Value);
+                    foreach (var kv in ssaoNow) kv.Key.f.SetValue(kv.Key.o, kv.Value);
+                };
+                return paths;
+            }
         }
 #endif
+
+        // SSAO settings (m_Settings of the feature, by reflection: not public in URP): first value seen per field, and
+        // the tier's value, so High / Ultra get the original back and the editor can undo it
+        static readonly System.Collections.Generic.Dictionary<(object o, System.Reflection.FieldInfo f), object> ssaoOrig =
+            new System.Collections.Generic.Dictionary<(object o, System.Reflection.FieldInfo f), object>();
+        static readonly System.Collections.Generic.Dictionary<(object o, System.Reflection.FieldInfo f), object> ssaoNow =
+            new System.Collections.Generic.Dictionary<(object o, System.Reflection.FieldInfo f), object>();
+
+        /// <summary>Medium: SSAO at half resolution with the low sample count (about a quarter of the cost);
+        /// High / Ultra: the asset's own settings. Skips quietly when this URP version has other field names.</summary>
+        static void SsaoCost(ScriptableRendererFeature ssao, bool cheap)
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Instance |
+                                                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+            try
+            {
+                var settings = ssao.GetType().GetField("m_Settings", F)?.GetValue(ssao);
+                if (settings == null) return;
+                var st = settings.GetType();
+                void Set(string name, System.Func<System.Type, object> cheapValue)
+                {
+                    var f = st.GetField(name, F);
+                    if (f == null) return;
+                    var key = (settings, f);
+                    if (!ssaoOrig.ContainsKey(key)) ssaoOrig[key] = f.GetValue(settings);
+                    object v = cheap ? cheapValue(f.FieldType) : ssaoOrig[key];
+                    if (v == null) return;
+                    f.SetValue(settings, v);
+                    ssaoNow[key] = v;
+                }
+                Set("Downsample", t => t == typeof(bool) ? (object)true : null);
+                // URP 14+: enum AOSampleOption (High / Medium / Low); older: int SampleCount
+                Set("Samples", t => t.IsEnum && System.Enum.IsDefined(t, "Low") ? System.Enum.Parse(t, "Low") : null);
+                if (st.GetField("Samples", F) == null) Set("SampleCount", t => t == typeof(int) ? (object)4 : null);
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[Rex Magnum] SSAO settings: {e.Message}"); }
+        }
 
         // renderer feature on/off by reflection (isActive / SetActive), like SetUrp
         static bool FeatureActive(object f) => f.GetType().GetProperty("isActive")?.GetValue(f) is bool b ? b : true;
@@ -151,8 +230,10 @@ namespace RexMagnum
                 {
 #if UNITY_EDITOR
                     if (!featureState.ContainsKey(ssao)) featureState[ssao] = FeatureActive(ssao);
+                    featureNow[ssao] = t >= QualityTier.Medium;
 #endif
                     FeatureSet(ssao, t >= QualityTier.Medium);
+                    SsaoCost(ssao, t == QualityTier.Medium);
                 }
             }
             foreach (var cam in FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))

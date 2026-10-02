@@ -7,7 +7,7 @@ namespace RexMagnum.EditorTools
     /// Import settings for the game audio (Resources/Voice, Sfx, Music), so sounds play on the frame they are
     /// asked for and subtitles stay in sync:
     ///  - voice and sound effects: decompressed on load and preloaded (no decode delay on PlayOneShot);
-    ///  - music: streamed (small memory, no long load).
+    ///  - music and the long ambience loops (Sfx/amb_*): streamed, stereo (they play all around the listener).
     /// </summary>
     public class AudioImport : AssetPostprocessor
     {
@@ -16,7 +16,8 @@ namespace RexMagnum.EditorTools
         {
             if (!assetPath.Contains("/RexMagnum/Resources/")) return;
             var ai = (AudioImporter)assetImporter;
-            bool music = assetPath.Contains("/Resources/Music/");
+            // amb_* loops are long 2D beds: like music (stereo kept, streamed), not like 3D one-shots
+            bool music = assetPath.Contains("/Resources/Music/") || System.IO.Path.GetFileName(assetPath).StartsWith("amb_");
             var s = ai.defaultSampleSettings;
             s.loadType = music ? AudioClipLoadType.Streaming : AudioClipLoadType.DecompressOnLoad;
             s.compressionFormat = AudioCompressionFormat.Vorbis;

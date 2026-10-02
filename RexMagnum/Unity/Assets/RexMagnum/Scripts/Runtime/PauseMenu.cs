@@ -91,6 +91,7 @@ namespace RexMagnum
         {
             tab = (t + Tabs.Length) % Tabs.Length;
             scroll = Vector2.zero;
+            tabSince = Time.unscaledTime;
             MenuNav.Click();
         }
 
@@ -99,6 +100,7 @@ namespace RexMagnum
             panel.CancelWait();
             Open = o;
             confirmQuit = false;
+            if (o) { openSince = Time.unscaledTime; tabSince = openSince; }
             MenuNav.Click();
             if (!o) FreeThumbs();        // album pictures only live while the menu is open (phone memory)
             else { rexCached = null; nextObjective = 0f; }
@@ -119,6 +121,7 @@ namespace RexMagnum
 
         bool confirmQuit;
         int quitSel = 1;
+        float openSince, tabSince;      // menu / tab transitions (unscaled: the game is paused)
 
         /// <summary>QUIT TO TITLE (after YES): save, then load the scene again; GameFlow starts on the title screen.</summary>
         void QuitToTitle()
@@ -167,11 +170,15 @@ namespace RexMagnum
             GUI.depth = -100;            // on top of every other OnGUI (ending bars, door fade, boss bar, toasts)
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             Styles(s);
-            GUI.color = new Color(0, 0, 0, 0.72f);
+            // opening: the dim fades in and the menu rises 24 px into place (0.22 s); a new tab slides in from the right
+            float oa = MenuSkin.Appear(openSince), ta = MenuSkin.Appear(tabSince);
+            GUI.color = new Color(0, 0, 0, 0.72f * oa);
             GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            GUI.color = new Color(1f, 1f, 1f, oa);
+            var lift = Matrix4x4.TRS(new Vector3(0f, (1f - oa) * 24 * s, 0f), Quaternion.identity, Vector3.one);
+            GUI.matrix = lift;
             GUI.Label(new Rect(0, 20 * s, w, 50 * s), "PAUSED", title);
-            if (confirmQuit) { DrawQuitConfirm(w, h, s); return; }
+            if (confirmQuit) { DrawQuitConfirm(w, h, s); GUI.matrix = Matrix4x4.identity; GUI.color = Color.white; return; }
             // ultrawide: the panel stops at ~1.9 x the screen height and stays centred (lists do not stretch apart)
             float pw = Mathf.Min(w * 0.84f, SettingsPanel.MaxWidth), px = (w - pw) * 0.5f;
             float tw = pw / Tabs.Length;
@@ -179,10 +186,16 @@ namespace RexMagnum
                 if (GUI.Toggle(new Rect(px + i * tw + 6, 80 * s, tw - 12, 50 * s), tab == i, Tabs[i], tabStyle) && tab != i) pendingTab = i;
             var area = new Rect(px, 150 * s, pw, h - 260 * s);
             MenuSkin.DrawPanel(new Rect(area.x - 16 * s, area.y - 12 * s, area.width + 32 * s, area.height + 24 * s));
+            BottomButtons(w, h, s);
+            if (!Open) { GUI.matrix = Matrix4x4.identity; GUI.color = Color.white; return; }    // RESUME clicked (thumbs freed)
+            // the tab's content: fade + 30 px slide (the panel and the buttons stay put)
+            GUI.color = new Color(1f, 1f, 1f, oa * ta);
+            GUI.matrix = lift * Matrix4x4.TRS(new Vector3((1f - ta) * 30 * s, 0f, 0f), Quaternion.identity, Vector3.one);
             if (tab == 3)
             {
                 panel.Draw(area, s);
-                BottomButtons(w, h, s);
+                GUI.matrix = Matrix4x4.identity;
+                GUI.color = Color.white;
                 return;
             }
             if (tab == 0)
@@ -190,6 +203,7 @@ namespace RexMagnum
                 // the island picture on the left, the lists beside it
                 float m = Mathf.Min(area.height, area.width * 0.52f);
                 DrawMap(new Rect(area.x, area.y, m, m), s);
+                GUI.color = new Color(1f, 1f, 1f, oa * ta);       // DrawMap ends on white
                 area = new Rect(area.x + m + 24 * s, area.y, area.width - m - 24 * s, area.height);
             }
             GUILayout.BeginArea(area);
@@ -203,7 +217,8 @@ namespace RexMagnum
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
-            BottomButtons(w, h, s);
+            GUI.matrix = Matrix4x4.identity;
+            GUI.color = Color.white;
         }
 
         /// <summary>RESUME and QUIT TO TITLE under the panel (QUIT asks first). The keys / buttons show beside them.</summary>

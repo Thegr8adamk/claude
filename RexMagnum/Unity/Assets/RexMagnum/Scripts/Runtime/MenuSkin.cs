@@ -13,7 +13,7 @@ namespace RexMagnum
         public static readonly Color Pale = new Color(1f, 0.92f, 0.8f);
 
         public static GUIStyle Title, Header, Label, LabelRow, Value, Small, Button, Option, Tab, Panel, RowSel,
-                               Logo, LogoShadow, Subtitle, MenuItem, MenuItemOn, Hint, Notes, Question, Toast;
+                               Logo, LogoShadow, LogoEdge, LogoShine, Subtitle, MenuItem, MenuItemOn, Hint, Notes, Question, Toast;
         static float scale = -1f;
         static Texture2D panelTex, btnTex, btnHoverTex, btnOnTex, btnOnHoverTex, rowSelTex;
 
@@ -42,7 +42,11 @@ namespace RexMagnum
             Small = Text(F(17), FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.82f, 0.86f, 0.9f), true);
             Logo = Text(F(96), FontStyle.Bold, TextAnchor.MiddleLeft, Gold, false);
             LogoShadow = new GUIStyle(Logo);
-            LogoShadow.normal.textColor = new Color(0f, 0f, 0f, 0.7f);
+            LogoShadow.normal.textColor = new Color(0f, 0f, 0f, 0.55f);
+            LogoEdge = new GUIStyle(Logo);                                     // dark brown outline around the letters
+            LogoEdge.normal.textColor = new Color(0.16f, 0.07f, 0.01f, 1f);
+            LogoShine = new GUIStyle(Logo);                                    // pale top half: a chrome / 80s poster look
+            LogoShine.normal.textColor = new Color(1f, 0.97f, 0.78f, 1f);
             Subtitle = Text(F(40), FontStyle.Bold, TextAnchor.MiddleLeft, Pale, false);
             MenuItem = Text(F(40), FontStyle.Bold, TextAnchor.MiddleLeft, new Color(1f, 1f, 1f, 0.85f), false);
             MenuItemOn = new GUIStyle(MenuItem);
@@ -94,6 +98,45 @@ namespace RexMagnum
                 t.SetPixel(x, y, x == 0 || y == 0 || x == n - 1 || y == n - 1 ? edge : fill);
             t.Apply();
             return t;
+        }
+
+        /// <summary>
+        /// The title logo: soft drop shadow, a dark outline (8 offsets), gold letters with a pale upper half (clipped
+        /// copy) and a thin gold rule under it. a = alpha (menu transitions).
+        /// </summary>
+        public static void DrawLogo(Rect r, string text, float s, float a = 1f)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            var old = GUI.color;
+            // shadow: two offsets, a soft edge without a blur shader
+            GUI.color = new Color(1f, 1f, 1f, a * 0.6f);
+            GUI.Label(new Rect(r.x + 7 * s, r.y + 8 * s, r.width, r.height), text, LogoShadow);
+            GUI.Label(new Rect(r.x + 4 * s, r.y + 5 * s, r.width, r.height), text, LogoShadow);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            float o = Mathf.Max(1f, 3f * s);
+            for (int i = 0; i < 8; i++)
+            {
+                float ang = i * Mathf.PI / 4f;
+                GUI.Label(new Rect(r.x + Mathf.Cos(ang) * o, r.y + Mathf.Sin(ang) * o, r.width, r.height), text, LogoEdge);
+            }
+            GUI.Label(r, text, Logo);
+            // the upper ~45% of the letters in pale gold (a group clips the copy)
+            GUI.BeginGroup(new Rect(r.x, r.y, r.width, r.height * 0.47f));
+            GUI.Label(new Rect(0f, 0f, r.width, r.height), text, LogoShine);
+            GUI.EndGroup();
+            // gold rule under the logo, as wide as the text
+            float tw = Logo.CalcSize(new GUIContent(text)).x;
+            GUI.color = new Color(Gold.r, Gold.g, Gold.b, a * 0.9f);
+            GUI.DrawTexture(new Rect(r.x + 4 * s, r.y + r.height * 0.88f, tw * Mathf.Clamp01(a * 1.2f), 4 * s), Texture2D.whiteTexture);
+            GUI.color = old;
+        }
+
+        /// <summary>0 -> 1 over `seconds` after `since` (unscaled time: works in the pause menu), ease-out. For short
+        /// fade + slide transitions when a menu or a tab opens.</summary>
+        public static float Appear(float since, float seconds = 0.22f)
+        {
+            float t = Mathf.Clamp01((Time.unscaledTime - since) / seconds);
+            return 1f - (1f - t) * (1f - t) * (1f - t);
         }
 
         /// <summary>A dark translucent panel with a thin gold edge.</summary>

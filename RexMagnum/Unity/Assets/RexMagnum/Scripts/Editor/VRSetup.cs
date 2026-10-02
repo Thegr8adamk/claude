@@ -13,7 +13,7 @@ namespace RexMagnum.EditorTools
     {
         static AddRequest req;
 
-        [MenuItem("Rex Magnum/Add VR Support", priority = 30)]
+        [MenuItem("Rex Magnum/Add VR Support", priority = 40)]      // own group: Bake Lighting is 30
         public static void Add()
         {
             if (req != null && !req.IsCompleted) return;

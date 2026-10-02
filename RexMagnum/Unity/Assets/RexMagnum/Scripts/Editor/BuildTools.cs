@@ -22,7 +22,8 @@ namespace RexMagnum.EditorTools
             return s;
         }
 
-        static void Common()
+        /// <summary>Shared player settings. False when the owner stopped the build (occlusion dialog).</summary>
+        static bool Common()
         {
             PlayerSettings.companyName = "Rex Magnum";
             PlayerSettings.productName = Product;
@@ -33,7 +34,8 @@ namespace RexMagnum.EditorTools
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.colorSpace = ColorSpace.Linear;
             IncludeShader("Universal Render Pipeline/Unlit");
-            IslandBuilder.EnsureOcclusion();      // bake occlusion culling once if the island scene has none (slow once)
+            // occlusion culling: if the island scene has none, a dialog gives the time and lets the owner skip or stop
+            return IslandBuilder.EnsureOcclusion();
         }
 
         /// <summary>Shaders the game only finds by name (Shader.Find: aim line, harpoon rope) are left out of a build
@@ -64,7 +66,7 @@ namespace RexMagnum.EditorTools
         [MenuItem("Rex Magnum/Make Windows Game (.exe)", priority = 20)]
         public static void Windows()
         {
-            Common();
+            if (!Common()) return;
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
             string path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Windows", "RexMagnum.exe");
             var r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -77,7 +79,7 @@ namespace RexMagnum.EditorTools
         [MenuItem("Rex Magnum/Make Android Game (.apk)", priority = 21)]
         public static void Android()
         {
-            Common();
+            if (!Common()) return;
             PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.rexmagnum.vacationviolence");
             PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;

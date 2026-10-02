@@ -39,12 +39,15 @@ namespace RexMagnum
             var hidden = new System.Collections.Generic.List<Renderer>();
             var arms = new System.Collections.Generic.List<Renderer>();
             var rig = Object.FindAnyObjectByType<RexCameraRig>();
+            // VR: a selfie camera would take over the headset view (sickness): the photo is what the head camera sees,
+            // the subject is pulled in front of Rex instead of beside him
+            bool vr = VRMode.Active;
             if (rex != null)
             {
                 // pull the subject to Rex's side (a stunned blob or a guest comes along; NavMesh agents warp)
                 if (target != null)
                 {
-                    Vector3 spot = rex.position + rex.right * 0.95f + rex.forward * 0.1f;
+                    Vector3 spot = vr ? rex.position + rex.forward * 1.8f : rex.position + rex.right * 0.95f + rex.forward * 0.1f;
                     var ag = target.GetComponent<UnityEngine.AI.NavMeshAgent>();
                     Vector3 from = target.position;
                     for (float t = 0; t < 1f; t += Time.deltaTime / 0.3f)
@@ -56,6 +59,10 @@ namespace RexMagnum
                     }
                     if (target != null) target.rotation = Quaternion.LookRotation(-rex.forward, Vector3.up);
                 }
+            }
+            if (rex != null && vr) yield return new WaitForSeconds(0.8f);     // the pose, seen from the head camera
+            else if (rex != null)
+            {
                 // first person hides Rex's body from the camera (shadows only): show it for the selfie
                 foreach (var r in rex.GetComponentsInChildren<Renderer>())
                     if (r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly)
@@ -145,9 +152,15 @@ namespace RexMagnum
         static void SaveThumb(Texture src, string file)
         {
             var t = Downscale(src);
-            WriteLater(ThumbPath(file), t.EncodeToJPG(80));
+            var bytes = t.EncodeToJPG(80);
+            // the newest thumbnail stays in memory: the ALBUM tab may open before the worker thread finished the file
+            newestFile = file; newestThumb = bytes;
+            WriteLater(ThumbPath(file), bytes);
             Object.Destroy(t);
         }
+
+        static string newestFile;
+        static byte[] newestThumb;
 
         /// <summary>
         /// The album picture for the ALBUM tab: thumb_&lt;file&gt;. Older photos without one: the full JPG is loaded once,
@@ -158,6 +171,13 @@ namespace RexMagnum
             string tp = ThumbPath(file);
             try
             {
+                if (file == newestFile && newestThumb != null)
+                {
+                    // never read a file the worker thread may still be writing
+                    var n = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    n.LoadImage(newestThumb, true);
+                    return n;
+                }
                 if (File.Exists(tp))
                 {
                     var t = new Texture2D(2, 2, TextureFormat.RGB24, false);
@@ -177,12 +197,21 @@ namespace RexMagnum
             catch (System.Exception e) { Debug.LogWarning(e); return null; }
         }
 
-        /// <summary>GPU shrink to 384x216 in halving steps (one big bilinear step would shimmer). Readable result.</summary>
-        static Texture2D Downscale(Texture src) => Shrink(src, ThumbW, ThumbH);
-
-        /// <summary>GPU shrink to tw x th in halving steps. Readable result (the caller destroys it).</summary>
-        static Texture2D Shrink(Texture src, int tw, int th)
+        /// <summary>GPU shrink into 384x216 in halving steps (one big bilinear step would shimmer). The picture keeps its
+        /// shape: a 4:3 or ultrawide screen gets black bars (letterbox). Readable result.</summary>
+        static Texture2D Downscale(Texture src)
         {
+            float k = Mathf.Min(ThumbW / (float)src.width, ThumbH / (float)src.height);
+            int w = Mathf.Clamp(Mathf.RoundToInt(src.width * k), 1, ThumbW), h = Mathf.Clamp(Mathf.RoundToInt(src.height * k), 1, ThumbH);
+            return Shrink(src, w, h, ThumbW, ThumbH);
+        }
+
+        /// <summary>GPU shrink to tw x th in halving steps. Readable result (the caller destroys it). With outW / outH
+        /// bigger than tw / th: the picture sits in the middle of a black outW x outH texture.</summary>
+        static Texture2D Shrink(Texture src, int tw, int th, int outW = 0, int outH = 0)
+        {
+            if (outW < tw) outW = tw;
+            if (outH < th) outH = th;
             int w = src.width, h = src.height;
             RenderTexture cur = null;
             while (w / 2 >= tw && h / 2 >= th)
@@ -198,8 +227,9 @@ namespace RexMagnum
             if (cur != null) RenderTexture.ReleaseTemporary(cur);
             var prev = RenderTexture.active;
             RenderTexture.active = dst;
-            var t = new Texture2D(tw, th, TextureFormat.RGB24, false);
-            t.ReadPixels(new Rect(0, 0, tw, th), 0, 0);
+            var t = new Texture2D(outW, outH, TextureFormat.RGB24, false);
+            if (outW != tw || outH != th) t.SetPixels(new Color[outW * outH]);      // black bars (new Color[] is all black)
+            t.ReadPixels(new Rect(0, 0, tw, th), (outW - tw) / 2, (outH - th) / 2);
             t.Apply();
             RenderTexture.active = prev;
             RenderTexture.ReleaseTemporary(dst);

@@ -315,11 +315,20 @@ namespace RexMagnum
             }
             GUI.color = Color.white;
             float x = w * 0.06f;
-            GUI.Label(new Rect(x + 5 * s, h * 0.12f + 5 * s, w, 130 * s), "REX MAGNUM", MenuSkin.LogoShadow);
-            GUI.Label(new Rect(x, h * 0.12f, w, 130 * s), "REX MAGNUM", MenuSkin.Logo);
+            // the logo slides down into place once the title fades in
+            if (fade > 0.35f) titleSince = Time.unscaledTime;
+            float la = MenuSkin.Appear(titleSince, 0.6f);
+            MenuSkin.DrawLogo(new Rect(x, h * 0.12f - (1f - la) * 30 * s, w, 130 * s), "REX MAGNUM", s, la);
+            GUI.color = new Color(1f, 1f, 1f, la);
             GUI.Label(new Rect(x + 6 * s, h * 0.12f + 118 * s, w, 60 * s), "VACATION VIOLENCE", MenuSkin.Subtitle);
             menuBtn = MenuSkin.MenuItem;
             menuSelStyle = MenuSkin.MenuItemOn;
+            // menu, settings and the NEW GAME question: a short fade + slide from the left when one opens
+            int view = inSettings ? 2 : confirmNew ? 1 : 0;
+            if (view != menuView) { menuView = view; viewSince = Time.unscaledTime; }
+            ua = MenuSkin.Appear(viewSince);
+            x -= (1f - ua) * 40 * s;
+            GUI.color = UA;
 
             if (inSettings)
             {
@@ -328,6 +337,7 @@ namespace RexMagnum
                 settings.Draw(area, s);
                 var back = new Rect(area.x, area.yMax + 20 * s, 300 * s, 60 * s);
                 GUI.Label(back, "< BACK", back.Contains(Event.current.mousePosition) ? menuSelStyle : menuBtn);
+                GUI.color = Color.white;
                 if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && back.Contains(Event.current.mousePosition))
                 {
                     Event.current.Use();
@@ -338,7 +348,7 @@ namespace RexMagnum
                 return;
             }
 
-            if (confirmNew) { DrawConfirm(x, w, h, s); return; }
+            if (confirmNew) { DrawConfirm(x, w, h, s); GUI.color = Color.white; return; }
             int n = MenuCount;
             for (int i = 0; i < n; i++)
             {
@@ -348,9 +358,9 @@ namespace RexMagnum
                 bool on = i == menuSel;
                 if (on)
                 {
-                    GUI.color = new Color(1f, 0.75f, 0.2f, 0.9f);
+                    GUI.color = new Color(1f, 0.75f, 0.2f, 0.9f * ua);
                     GUI.DrawTexture(new Rect(r.x - 22 * s, r.y + 14 * s, 8 * s, r.height - 28 * s), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    GUI.color = UA;
                 }
                 GUI.Label(r, (on ? "  " : "") + MenuItems[i], on ? menuSelStyle : menuBtn);
                 if (fade < 0.05f && Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
@@ -366,7 +376,13 @@ namespace RexMagnum
                       g != null ? "Controller: " + g.displayName + "   (D-pad / stick, A = OK)" : "Mouse, or arrow keys + Enter. Controllers work too.", sm);
             GUI.Label(new Rect(x, h - 80 * s, w * 0.6f, 60 * s),
                       "CONTENT WARNING: crude adult humor, rude gestures, strong language, cartoon slime violence.", sm);
+            GUI.color = Color.white;
         }
+
+        int menuView = -1, hintDrawn = -1;
+        float hintSince;
+        float viewSince, titleSince, ua = 1f;
+        Color UA => new Color(1f, 1f, 1f, ua);
 
         /// <summary>NEW GAME: "are you sure" with YES / NO (mouse, keys, controller).</summary>
         void DrawConfirm(float x, float w, float h, float s)
@@ -384,9 +400,9 @@ namespace RexMagnum
                 bool on = i == confirmSel;
                 if (on)
                 {
-                    GUI.color = i == 0 ? new Color(1f, 0.35f, 0.25f, 0.9f) : new Color(1f, 0.75f, 0.2f, 0.9f);
+                    GUI.color = i == 0 ? new Color(1f, 0.35f, 0.25f, 0.9f * ua) : new Color(1f, 0.75f, 0.2f, 0.9f * ua);
                     GUI.DrawTexture(new Rect(r.x - 22 * s, r.y + 14 * s, 8 * s, r.height - 28 * s), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    GUI.color = UA;
                 }
                 GUI.Label(r, (on ? "  " : "") + opts[i], on ? menuSelStyle : menuBtn);
                 if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
@@ -411,11 +427,17 @@ namespace RexMagnum
                 var r = RMInput.LastDevice == RMInput.DeviceKind.Touch
                     ? new Rect(w * 0.26f, h * 0.22f, w * 0.58f, 92 * s)
                     : new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);
+                // each new hint fades in and drops 16 px into place (unscaled: slow-mo does not stretch it)
+                if (hint != hintDrawn) { hintDrawn = hint; hintSince = Time.unscaledTime; }
+                float a = MenuSkin.Appear(hintSince, 0.3f);
+                r.y -= (1f - a) * 16 * s;
+                GUI.color = new Color(1f, 1f, 1f, a);
                 MenuSkin.DrawPanel(r);
-                GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f);
+                GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
                 GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                GUI.color = new Color(1f, 1f, 1f, a);
                 GUI.Label(r, Hint(hint), MenuSkin.Hint);
+                GUI.color = Color.white;
             }
             if (fade > 0.001f)
             {

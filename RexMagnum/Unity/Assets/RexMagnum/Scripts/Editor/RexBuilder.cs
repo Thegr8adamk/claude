@@ -293,10 +293,12 @@ namespace RexMagnum.EditorTools
             tree.blendParameter = "Speed";
             tree.useAutomaticThresholds = false;
             tree.AddChild(Clip("Rex_Idle"), 0f);
-            tree.AddChild(Clip("Rex_Walk"), 3.0f);          // = walkSpeed: the feet do not slide
+            // threshold = the speed the clip really covers: walk ~1.3 m/s x 1.6 = 2.1 m/s. At walkSpeed 3.0 the tree
+            // then mixes ~77 % walk + ~23 % run, whose stride speed is ~3.0 m/s too, so the feet do not slide
+            tree.AddChild(Clip("Rex_Walk"), 2.1f);
             tree.AddChild(Clip("Rex_Run"), 6.0f);
-            // the walk clip covers ~1.3 m/s and the run ~3.2 m/s; Rex moves at 3.0 / 6.0. Play them faster so the feet
-            // slide less (walk capped at 1.6x: a faster leg cycle looks frantic)
+            // the walk clip covers ~1.3 m/s and the run ~3.2 m/s; Rex moves at 3.0 / 6.0. Play them faster so the
+            // strides match (walk capped at 1.6x: a faster leg cycle looks frantic)
             var tc = tree.children;
             tc[1].timeScale = 1.6f;
             tc[2].timeScale = 6.0f / 3.2f;

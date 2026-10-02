@@ -7,7 +7,8 @@ namespace RexMagnum
     ///  - Beach waves near the shore (low ground), jungle insects and birds inland; the jungle is louder at night.
     ///  - Footsteps (flip-flops) timed by Rex's ground speed, by surface: sand on low terrain by the beach, grass on
     ///    other terrain, tile on buildings. Swim strokes while he swims. A splash when he goes into water.
-    ///  - Listener filters: muffled (low-pass) with the camera under water, Room reverb under a roof.
+    ///  - World filters: muffled (low-pass) with the camera under water, Room reverb under a roof. Only on the world
+    ///    sounds (Sfx pool + these loops), never on the listener: music, voices and UI stay clear.
     /// Clips: Resources/Sfx/amb_beach, amb_jungle, footstep, footstep_sand, footstep_grass, swim_stroke, splash (silent if
     /// missing). Volume: Settings > Sound > Effects.
     /// </summary>
@@ -42,15 +43,24 @@ namespace RexMagnum
             rex = transform;
             cc = GetComponent<CharacterController>();
             ctrl = GetComponent<RexController>();
+            // the loops get their own child object: a filter on Rex's object would also muffle his voice source
+            loops = new GameObject("AmbienceLoops");
+            loops.transform.SetParent(transform, false);
             beach = Loop("amb_beach");
             jungle = Loop("amb_jungle");
+            loopLowPass = loops.AddComponent<AudioLowPassFilter>();
+            loopLowPass.cutoffFrequency = 22000f;
+            loopLowPass.enabled = false;
         }
+
+        GameObject loops;
+        AudioLowPassFilter loopLowPass;
 
         AudioSource Loop(string clipName)
         {
             var clip = Sfx.Get(clipName);
             if (clip == null) return null;
-            var s = gameObject.AddComponent<AudioSource>();
+            var s = loops.AddComponent<AudioSource>();
             s.clip = clip;
             s.loop = true;
             s.spatialBlend = 0f;            // all around the listener
@@ -67,11 +77,12 @@ namespace RexMagnum
             Vector3 p = rex.position;
             // beach: within ~60 m of sea level and outside the hotel; jungle: inland and higher up
             float low = Mathf.Clamp01(1f - (p.y - 1f) / 12f);
-            // under a roof (hotel, cave): outside sound is muffled; checked twice a second
+            // under a roof (hotel, cave): outside sound is muffled; checked twice a second. The roof must be within
+            // ~6 m over the head (a pool umbrella or a palm 20 m up is not a room)
             if (Time.time > nextRoofCheck)
             {
                 nextRoofCheck = Time.time + 0.5f;
-                roofed = Physics.Raycast(p + Vector3.up * 2f, Vector3.up, 25f, ~0, QueryTriggerInteraction.Ignore);
+                roofed = Physics.Raycast(p + Vector3.up * 1.8f, Vector3.up, 6f, ~0, QueryTriggerInteraction.Ignore);
             }
             float outside = roofed ? 0.25f : 1f;
             float wantBeach = title ? 0f : 0.35f * low * outside;
@@ -106,56 +117,40 @@ namespace RexMagnum
             wasInWater = inWater;
         }
 
-        // ------------------------------------------------------------ listener filters (no AudioMixer asset)
+        // ------------------------------------------------------------ world filters (no AudioMixer asset)
 
         AudioListener listener;
-        AudioLowPassFilter lowPass;
-        AudioReverbFilter reverb;
-        float nextListener, nextUnder;
+        float nextListener, nextUnder, cutoff = 22000f;
         bool camUnder;
 
-        /// <summary>Filters on the AudioListener's GameObject (the camera), added at runtime: a low-pass while the camera
-        /// is under water (muffled), Room reverb while Rex is under a roof (hotel, cave). The whole mix goes through them.</summary>
+        /// <summary>A low-pass while the camera (the active AudioListener) is under water, Room reverb while Rex is under
+        /// a roof. Set on the world sounds only (Sfx pool sources, the ambience loops): music, voices and UI stay dry.</summary>
         void ListenerFX(bool title)
         {
             float now = Time.unscaledTime;
-            if (now > nextListener)
+            if (now > nextListener || (listener != null && !listener.isActiveAndEnabled))
             {
                 nextListener = now + 2f;      // the title camera and the player camera can each have a listener
-                AudioListener found = null;
+                listener = null;
                 foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
-                    if (l.isActiveAndEnabled) { found = l; break; }
-                if (found != listener)
-                {
-                    if (lowPass != null) lowPass.enabled = false;
-                    if (reverb != null) reverb.enabled = false;
-                    listener = found;
-                    lowPass = null; reverb = null;
-                    if (listener != null)
-                    {
-                        var go = listener.gameObject;
-                        if (!go.TryGetComponent(out lowPass)) { lowPass = go.AddComponent<AudioLowPassFilter>(); lowPass.cutoffFrequency = 22000f; }
-                        if (!go.TryGetComponent(out reverb)) reverb = go.AddComponent<AudioReverbFilter>();
-                        reverb.reverbPreset = AudioReverbPreset.Room;
-                        lowPass.enabled = false;
-                        reverb.enabled = false;
-                    }
-                }
+                    if (l.isActiveAndEnabled) { listener = l; break; }
             }
-            if (listener == null) return;
             if (now > nextUnder)
             {
                 nextUnder = now + 0.1f;
-                camUnder = !title && WaterVolume.Depth(listener.transform.position) > 0.05f;
+                camUnder = !title && listener != null && WaterVolume.Depth(listener.transform.position) > 0.05f;
             }
-            if (lowPass != null)
+            // into the water fast (~0.3 s), out a bit slower
+            float want = camUnder ? 700f : 22000f;
+            cutoff = Mathf.MoveTowards(cutoff, want, Time.unscaledDeltaTime * (camUnder ? 70000f : 40000f));
+            Sfx.SetWorldFX(cutoff, !title && roofed && !camUnder);
+            if (loopLowPass != null)
             {
-                // into the water fast (~0.3 s), out a bit slower
-                float want = camUnder ? 700f : 22000f;
-                lowPass.cutoffFrequency = Mathf.MoveTowards(lowPass.cutoffFrequency, want, Time.unscaledDeltaTime * (camUnder ? 70000f : 40000f));
-                lowPass.enabled = camUnder || lowPass.cutoffFrequency < 21500f;
+                // indoors the outside loops are muffled a bit too (heard through walls and windows)
+                float c = Mathf.Min(cutoff, roofed ? 3000f : 22000f);
+                loopLowPass.cutoffFrequency = c;
+                loopLowPass.enabled = c < 21500f;
             }
-            if (reverb != null) reverb.enabled = !title && roofed && !camUnder;
         }
 
         /// <summary>What is under Rex's feet: terrain near sea level = beach sand, other terrain = grass,
