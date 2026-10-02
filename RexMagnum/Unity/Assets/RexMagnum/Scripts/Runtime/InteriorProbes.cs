@@ -24,6 +24,7 @@ namespace RexMagnum
             {
                 p.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
                 p.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
+                p.cullingMask &= ~(1 << DayNight.SkyLayer);     // no cloud dome in the rooms / tunnels (it is drawn at the probe's far plane)
             }
         }
 

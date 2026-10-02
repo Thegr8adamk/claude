@@ -25,6 +25,8 @@ namespace RexMagnum.EditorTools
     public static class IslandBuilder
     {
         static BlobSpawner mainSpawner;
+        // walk checks (CheckWalk) for every entrance, run once the whole island stands (end of Build)
+        static readonly List<(string name, Vector3[] path)> walkLegs = new List<(string name, Vector3[] path)>();
 
         const string Dir = "Assets/RexMagnum/Island";
         const string Mats = Dir + "/Materials";
@@ -79,6 +81,7 @@ namespace RexMagnum.EditorTools
             EditorUtility.SetDirty(urp);
 
             var data = JsonUtility.FromJson<Data>(File.ReadAllText(json));
+            walkLegs.Clear();
             try
             {
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Textures", 0.05f);
@@ -101,7 +104,7 @@ namespace RexMagnum.EditorTools
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Terrain", 0.55f);
                 var terrain = BuildTerrain(data, world);
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Ocean + lighting", 0.8f);
-                Ocean(mats, world);
+                Ocean(mats, world, terrain);
                 Lighting();
 
                 EditorUtility.DisplayProgressBar("Rex Magnum", "Rex + blobs + weapons", 0.9f);
@@ -141,6 +144,7 @@ namespace RexMagnum.EditorTools
                     Guests(data.hotel, pool);
                 }
                 Beach(world);
+                foreach (var leg in walkLegs) CheckWalk(leg.name, leg.path);      // every entrance, walls and glass included
                 LightProbeGrid(terrain, data.hotel != null ? data.hotel.elevatorFloors : null);
 
                 string path = Scenes + "/Island.unity";
@@ -704,6 +708,7 @@ namespace RexMagnum.EditorTools
             rp.refreshMode = ReflectionProbeRefreshMode.ViaScripting;     // InteriorProbes: load + dusk / dawn
             rp.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
             if (gp.GetComponent<InteriorProbes>() == null) gp.gameObject.AddComponent<InteriorProbes>();
+            rp.cullingMask = ~(1 << DayNight.SkyLayer);                 // no cloud dome in the room
             rp.importance = 2;
             // title camera: slow shot of the hotel from the beach; then the flow takes over
             var tc = new GameObject("TitleCamera").AddComponent<Camera>();
@@ -741,18 +746,49 @@ namespace RexMagnum.EditorTools
                 if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, 8f)) return hit.point;
                 return new Vector3(from.x, bounds.min.y, from.z);
             }
+            // the dive shop is a closed hut (walls all round, a closed door) and the middle of the tiki bar is the
+            // bartender's space inside a closed counter ring: pickups there could not be reached. Now: the harpoon by
+            // the dive shop's back wall (the land side: its door faces the sea 2 m from the water), the tiki pickups on
+            // the two side counters (reached from the sand pad, ShapeBuildingAccess); the old centre spots stay the fallback.
+            Bounds? BoundsOf(string building)
+            {
+                var bt = world.Find(building);
+                var brs = bt != null ? bt.GetComponentsInChildren<Renderer>().Where(x => x.enabled).ToArray() : new Renderer[0];
+                if (brs.Length == 0) return null;
+                var bb = brs[0].bounds;
+                foreach (var br in brs) bb.Encapsulate(br.bounds);
+                return bb;
+            }
             var dive = Floor("DiveShop", Vector3.zero);
+            var diveB = BoundsOf("DiveShop");
+            bool atBack = false;
+            if (diveB.HasValue && Physics.Raycast(new Vector3(diveB.Value.center.x, diveB.Value.min.y + 1.6f, diveB.Value.max.z - 0.5f), Vector3.down,
+                                                  out RaycastHit backHit, 4f, ~0, QueryTriggerInteraction.Ignore))
+            { dive = backHit.point; atBack = true; }
             if (dive.HasValue)
             {
                 Pickup("Pickup_Harpoon", dive.Value + Vector3.up * 0.9f, root);
                 Pickup("Ammo_Harpoon", dive.Value + new Vector3(0.8f, 0.9f, 0f), root);
             }
             var tiki = Floor("TikiBar", Vector3.zero);
-            if (tiki.HasValue)
+            var tikiB = BoundsOf("TikiBar");
+            Vector3? Counter(float side)
             {
-                Pickup("Pickup_Coconut", tiki.Value + new Vector3(0.9f, 1.0f, 0f), root);
-                FoodPickup.Spawn(FoodPickup.Kind.Cocktail, tiki.Value + new Vector3(-0.9f, 1.0f, 0f), 120f, root);
+                if (!tikiB.HasValue) return null;
+                var tb = tikiB.Value;
+                // side counter top (~1.1 m over the posts' base), 2.4 m out from the middle, a bit to the back
+                if (!Physics.Raycast(new Vector3(tb.center.x + side * 2.4f, tb.min.y + 1.6f, tb.center.z - 0.5f), Vector3.down, out RaycastHit ct, 1.2f,
+                                     ~0, QueryTriggerInteraction.Ignore) || ct.point.y < tb.min.y + 0.8f) return null;
+                return ct.point;
             }
+            var eastTop = Counter(1f);
+            var westTop = Counter(-1f);
+            if (eastTop.HasValue) Pickup("Pickup_Coconut", eastTop.Value + Vector3.up * 0.1f, root);
+            else if (tiki.HasValue) Pickup("Pickup_Coconut", tiki.Value + new Vector3(0.9f, 1.0f, 0f), root);
+            if (westTop.HasValue) FoodPickup.Spawn(FoodPickup.Kind.Cocktail, westTop.Value + Vector3.up * 0.03f, 120f, root);
+            else if (tiki.HasValue) FoodPickup.Spawn(FoodPickup.Kind.Cocktail, tiki.Value + new Vector3(-0.9f, 1.0f, 0f), 120f, root);
+            Debug.Log($"[Rex Magnum] Beach pickups: harpoon {(atBack ? "by the dive shop's back wall" : "fallback (inside)")}, " +
+                      $"tiki coconut {(eastTop.HasValue ? "on the east counter" : "fallback (inside)")}, cocktail {(westTop.HasValue ? "on the west counter" : "fallback (inside)")}.");
             if (dive.HasValue && tiki.HasValue)            // coconuts on the sand between the two
             {
                 Vector3 mid = (dive.Value + tiki.Value) * 0.5f;
@@ -920,6 +956,7 @@ namespace RexMagnum.EditorTools
             rp.intensity = intensity;
             rp.farClipPlane = Mathf.Max(size.x, Mathf.Max(size.y, size.z)) + 10f;
             rp.shadowDistance = 0f;            // six extra scene renders on load: skip their shadow maps
+            rp.cullingMask = ~(1 << DayNight.SkyLayer);     // the cloud dome (drawn at the probe's far plane) stays out
             if (dark)
             {
                 rp.clearFlags = ReflectionProbeClearFlags.SolidColor;    // underground: no sky behind gaps in the rock
@@ -1020,6 +1057,8 @@ namespace RexMagnum.EditorTools
                 // drinks beside the charge station: heal before (or after) the factory fight
                 Vector3 side = Vector3.Cross(Vector3.up, outward).normalized;
                 DrinkStand("RuinsDrinks", GroundAt(at + side * 3f + Vector3.up * 0.5f), root);
+                // walk check: from the charge station through the factory door, 4 m into the hall
+                walkLegs.Add(("ruins / factory door", new[] { door[0] + outward * 8f, door[0], door[0] - outward * 4f }));
             }
             var go = new GameObject("FactoryCore");
             go.transform.SetParent(root, false);
@@ -1252,6 +1291,7 @@ namespace RexMagnum.EditorTools
             var mouth = U(-160f, 232f, 0f); mouth.y = H(mouth);
             var mouthOut = U(-160f, 222f, 0f); mouthOut.y = H(mouthOut) + 0.1f;
             DoorPair("Cave", mouth, mouthOut, main[0], main[0] + (main[1] - main[0]).normalized * 4f, root);
+            walkLegs.Add(("cave mouth", new[] { mouthOut + (mouthOut - mouth).normalized * 4f, mouthOut, mouth }));
             // ruins branch end <-> the factory's back corner (inside the temple hall)
             int fac = json.IndexOf("\"factory\"", StringComparison.Ordinal);
             if (ruins.Count >= 2 && fac >= 0)
@@ -1267,6 +1307,9 @@ namespace RexMagnum.EditorTools
                 var top = U(10f, 290f, 0f); top.y = H(top);
                 var topOut = U(14f, 296f, 0f); topOut.y = H(topOut) + 0.1f;
                 DoorPair("ShipTunnel", ship[1], ship[1] + (ship[0] - ship[1]).normalized * 4f, top, topOut, root);
+                // walk check: out of the tunnel exit (Rex appears at topOut) 6 m into the open, and back to the crack
+                Vector3 shipAway = topOut - top; shipAway.y = 0f;
+                walkLegs.Add(("ship tunnel exit", new[] { topOut, topOut + shipAway.normalized * 6f, topOut, top }));
             }
             // warm work lights along the tunnels (old miners' lamps), the cavern glows green
             var lights = Pts(tj, "lights");
@@ -1926,7 +1969,8 @@ namespace RexMagnum.EditorTools
                     int i = (r * res + c) * 2;
                     hts[r, c] = (bytes[i] | (bytes[i + 1] << 8)) / 65535f;
                 }
-            var walk = ShapePoolAccess(hts, ti, data, parent);      // ramp + deck rim (the buildings are placed already)
+            ShapePoolAccess(hts, ti, data, parent);          // ramp + deck rim + north bank (the buildings are placed already)
+            ShapeBuildingAccess(hts, ti, data, parent);      // tiki bar, dive shop, buffet-terrace doors
             td.SetHeights(0, 0, hts);
 
             // layers
@@ -2072,24 +2116,24 @@ namespace RexMagnum.EditorTools
             var tc = go.GetComponent<TerrainCollider>();
             tc.terrainData = td;
             go.isStatic = true;
-            CheckWalk(walk);
             return t;
         }
 
         /// <summary>Pool deck access (review: the deck was cut off for Rex and the agents). The lobby slab is ~3.48, the
         /// ground at the pool doors ~3.0 - 3.1 and the deck top 4.18 with a 0.4 m tile face and open space under its edge
-        /// all round: no step <= stepOffset 0.35 / NavMesh climb 0.4 anywhere. Raises the terrain (never lowers it,
-        /// except in the ramp band): a ramp from the lobby doors up to the deck edge, and a rim around the deck's outer
+        /// all round: no step <= stepOffset 0.35 / NavMesh climb 0.4 anywhere. Raises the terrain (lowers it only in the
+        /// ramp band and in the banks below): a ramp from the lobby doors up to the deck edge, and a rim around the deck's outer
         /// edge up to (deck top - 0.08), blending out over 4 m. Deck cells are found by short rays onto the PoolArea
-        /// collision (the ground has no collider yet), so the basin, bar and tower are left alone. Returns the
-        /// lobby -> deck -> off-deck path for CheckWalk (null when something is missing).</summary>
-        static Vector3[] ShapePoolAccess(float[,] hts, TerrainInfo ti, Data data, Transform world)
+        /// collision (the ground has no collider yet), so the basin, bar and tower are left alone. Higher ground
+        /// next to the deck (the hill behind its north edge: a 0.5 m trench, then a 2.5 m bank 1 m out) is cut back to
+        /// a 1:3 slope up from the deck edge. Adds the lobby -> deck -> off-deck and deck -> hill legs for CheckWalk.</summary>
+        static void ShapePoolAccess(float[,] hts, TerrainInfo ti, Data data, Transform world)
         {
             var poolT = world.Find("PoolArea");
             var hotelT = world.Find("Hotel");
             if (poolT == null || data.pool == null || data.pool.Length < 3 || data.hotel == null || data.hotel.poolDoors == null ||
                 data.hotel.poolDoors.Length < 3)
-            { Debug.LogWarning("[Rex Magnum] Pool access: PoolArea / pool / hotel doors missing, terrain not shaped."); return null; }
+            { Debug.LogWarning("[Rex Magnum] Pool access: PoolArea / pool / hotel doors missing, terrain not shaped."); return; }
             Physics.SyncTransforms();
             Bounds BoundsOf(Transform bt)
             {
@@ -2113,11 +2157,13 @@ namespace RexMagnum.EditorTools
             float doorBefore = Get(Idx(door.z + 1f), Idx(door.x));
 
             // 1 = deck top (a PoolArea hit within 0.2 m of it), 2 = other PoolArea geometry (basin, bar, tower), 0 = open
-            int c0 = Idx(pb.min.x - 6f), c1 = Idx(pb.max.x + 6f), r0 = Idx(Mathf.Min(pb.min.z, door.z) - 6f), r1 = Idx(pb.max.z + 6f);
+            const float GradeReach = 12f;           // the 1:3 cut into higher ground reaches this far from the deck
+            int c0 = Idx(pb.min.x - GradeReach - 2f), c1 = Idx(pb.max.x + GradeReach + 2f), r0 = Idx(Mathf.Min(pb.min.z, door.z) - 6f),
+                r1 = Idx(pb.max.z + GradeReach + 2f);
             int nc = c1 - c0 + 1, nr = r1 - r0 + 1;
             var kind = new byte[nr, nc];
             var rayHits = new RaycastHit[16];
-            float deckMinX = float.MaxValue, deckMaxX = float.MinValue, deckMinZ = float.MaxValue;
+            float deckMinX = float.MaxValue, deckMaxX = float.MinValue, deckMinZ = float.MaxValue, deckMaxZ = float.MinValue;
             int deckCells = 0;
             for (int rr = 0; rr < nr; rr++)
                 for (int cc = 0; cc < nc; cc++)
@@ -2133,11 +2179,12 @@ namespace RexMagnum.EditorTools
                     }
                     if (kind[rr, cc] != 1) continue;
                     deckCells++;
-                    deckMinX = Mathf.Min(deckMinX, from.x); deckMaxX = Mathf.Max(deckMaxX, from.x); deckMinZ = Mathf.Min(deckMinZ, from.z);
+                    deckMinX = Mathf.Min(deckMinX, from.x); deckMaxX = Mathf.Max(deckMaxX, from.x);
+                    deckMinZ = Mathf.Min(deckMinZ, from.z); deckMaxZ = Mathf.Max(deckMaxZ, from.z);
                 }
             Debug.Log($"[Rex Magnum] Pool access: PoolArea bounds {pb.min:F1} .. {pb.max:F1}, Hotel bounds {hb.min:F1} .. {hb.max:F1}, " +
                       $"deck top {deckTop:F2}, lobby slab {slab:F2}, {deckCells} deck cells (x {deckMinX:F1} .. {deckMaxX:F1}, south edge z {deckMinZ:F1}).");
-            if (deckCells < 20) { Debug.LogWarning("[Rex Magnum] Pool access: deck not found by the rays (no PoolArea collision?), terrain not shaped."); return null; }
+            if (deckCells < 20) { Debug.LogWarning("[Rex Magnum] Pool access: deck not found by the rays (no PoolArea collision?), terrain not shaped."); return; }
 
             // rim: open ground within 4 m of the deck rises to (deck top - 0.08), smoothly back to the ground; deck cells at
             // the outer edge (under the tiles, hidden) go up too, so the ground meets the deck edge itself, not 1 m out
@@ -2166,6 +2213,48 @@ namespace RexMagnum.EditorTools
                     if (want > hv) { Put(r0 + rr, c0 + cc, want); raised++; }
                 }
 
+            // bank: where higher ground rises within 3 m, the ground near the deck follows a 1:3 slope up from the deck
+            // edge, cut into the bank and filling the low strip in front of it (review: behind the north edge a 0.5 m
+            // trench, then a 2.5 m bank 1 m out: a wall of sand with a gap to fall into). Elsewhere (no bank) the rim
+            // and the ground stay as they are. Heights before this pass decide (g0), so the order does not matter.
+            int gReach = Mathf.CeilToInt(GradeReach / cell), nb = Mathf.CeilToInt(3f / cell), graded = 0;
+            float cutMax = 0f, fillMax = 0f;
+            var g0 = new float[nr, nc];
+            for (int rr = 0; rr < nr; rr++)
+                for (int cc = 0; cc < nc; cc++) g0[rr, cc] = Get(r0 + rr, c0 + cc);
+            for (int rr = 0; rr < nr; rr++)
+                for (int cc = 0; cc < nc; cc++)
+                {
+                    if (kind[rr, cc] != 0) continue;
+                    float wx = Wpos(c0 + cc), wz = Wpos(r0 + rr);
+                    if (wx > hb.min.x && wx < hb.max.x && wz > hb.min.z && wz < hb.max.z) continue;   // under the hotel
+                    float near = g0[rr, cc];
+                    for (int dr = -nb; dr <= nb; dr++)
+                        for (int dc = -nb; dc <= nb; dc++)
+                        {
+                            int rq = rr + dr, cq = cc + dc;
+                            if (rq >= 0 && cq >= 0 && rq < nr && cq < nc && kind[rq, cq] == 0) near = Mathf.Max(near, g0[rq, cq]);
+                        }
+                    if (near <= rimTop + 0.6f) continue;                 // no bank anywhere close
+                    float best = float.MaxValue;
+                    for (int dr = -gReach; dr <= gReach; dr++)
+                        for (int dc = -gReach; dc <= gReach; dc++)
+                        {
+                            int rq = rr + dr, cq = cc + dc;
+                            if (rq < 0 || cq < 0 || rq >= nr || cq >= nc || kind[rq, cq] != 1) continue;
+                            best = Mathf.Min(best, Mathf.Sqrt(dr * dr + dc * dc) * cell);
+                        }
+                    if (best > GradeReach) continue;
+                    float slope = rimTop + best / 3f;
+                    if (near <= slope + 0.3f) continue;                  // the bank (if any) is under the 1:3 line here
+                    cutMax = Mathf.Max(cutMax, g0[rr, cc] - slope);
+                    fillMax = Mathf.Max(fillMax, slope - g0[rr, cc]);
+                    Put(r0 + rr, c0 + cc, slope);
+                    graded++;
+                }
+            Debug.Log($"[Rex Magnum] Pool access: {graded} cells by the banks graded 1:3 up from the deck edge " +
+                      $"(deepest cut {cutMax:F2} m, biggest fill {fillMax:F2} m).");
+
             // ramp: lobby doors -> deck south edge (x = doors +- 3 m, blending out over 2 more), from just under the slab
             // to just under the deck top; 1.5 m under the lobby floor too, so the ground meets the slab at the threshold
             float deckZ = deckMinZ;
@@ -2186,26 +2275,126 @@ namespace RexMagnum.EditorTools
                       $"ground at the doors {doorBefore:F2} -> {doorAfter:F2} (slab {slab:F2}).");
             if (Mathf.Abs(doorAfter - slab) > 0.3f) Debug.LogWarning($"[Rex Magnum] Pool access: ground at the lobby doors is {doorAfter - slab:F2} m from the slab.");
 
-            // walk check path: inside the lobby, out of the doors, up onto the deck, along it and off both outer sides
+            // walk check paths: inside the lobby, out of the doors, up onto the deck, along it and off both outer sides;
+            // and from the deck's north edge up the graded bank (at the deck column nearest the doors' x)
             float alongZ = deckZ + 2f;
-            return new[]
+            walkLegs.Add(("hotel pool doors -> deck -> off the deck (W + E)", new[]
             {
                 new Vector3(door.x, slab, door.z - 4f), new Vector3(door.x, slab, door.z), new Vector3(door.x, deckTop, alongZ),
                 new Vector3(deckMinX - 6f, deckTop, alongZ), new Vector3(door.x, deckTop, alongZ), new Vector3(deckMaxX + 6f, deckTop, alongZ)
-            };
+            }));
+            int northRow = Mathf.Clamp(Idx(deckMaxZ) - r0, 0, nr - 1), northCol = -1;
+            for (int cc = 0; cc < nc; cc++)
+                if (kind[northRow, cc] == 1 && (northCol < 0 || Mathf.Abs(Wpos(c0 + cc) - door.x) < Mathf.Abs(Wpos(c0 + northCol) - door.x))) northCol = cc;
+            if (northCol >= 0)
+            {
+                float nx = Wpos(c0 + northCol);
+                walkLegs.Add(("pool deck north edge -> hill", new[] { new Vector3(nx, deckTop, deckMaxZ - 3f), new Vector3(nx, deckTop, deckMaxZ + GradeReach) }));
+            }
         }
 
-        /// <summary>Edit mode has no NavMesh bake: walk the path in 0.5 m steps with down rays from 0.9 m over the
-        /// last ground point and warn for any step over Rex's stepOffset (0.35 m). A wall or a lounger in the way is
-        /// reported the same way (it is a block for Rex too).</summary>
-        static void CheckWalk(Vector3[] path)
+        /// <summary>Raises the ground (never lowers it) to top inside the world rectangle x0..x1 / z0..z1 and back down
+        /// to the old ground at 1:run outside it (at most 12 m out). Returns the cells raised and the biggest fill.</summary>
+        static (int cells, float fill) RaisePad(float[,] hts, TerrainInfo ti, float x0, float x1, float z0, float z1, float top, float run)
+        {
+            int res = ti.res;
+            float cell = ti.size / (res - 1), range = ti.maxH - ti.minH, reach = 12f;
+            int Idx(float wv) => Mathf.Clamp(Mathf.RoundToInt((wv + ti.size / 2) / cell), 0, res - 1);
+            int cells = 0;
+            float fill = 0f;
+            for (int rr = Idx(z0 - reach); rr <= Idx(z1 + reach); rr++)
+                for (int cc = Idx(x0 - reach); cc <= Idx(x1 + reach); cc++)
+                {
+                    float wx = cc * cell - ti.size / 2, wz = rr * cell - ti.size / 2;
+                    float dx = Mathf.Max(0f, Mathf.Max(x0 - wx, wx - x1)), dz = Mathf.Max(0f, Mathf.Max(z0 - wz, wz - z1));
+                    float want = top - Mathf.Sqrt(dx * dx + dz * dz) / run;
+                    float hv = ti.minH + hts[rr, cc] * range;
+                    if (want <= hv) continue;
+                    hts[rr, cc] = Mathf.Clamp01((want - ti.minH) / range);
+                    cells++;
+                    fill = Mathf.Max(fill, want - hv);
+                }
+            return (cells, fill);
+        }
+
+        /// <summary>Walkable entries for the beach buildings and the buffet-terrace doors (review, checked on the RAW and
+        /// the FBX: the tiki bar's posts stand at 3.05 on a dune that falls from 4.5 (north-east) to 1.4 (south-west),
+        /// so its stools and counter stood 1 - 2.3 m over the sand on the sea side, and its middle is the bartender's
+        /// space inside a closed counter ring; the dive shop is a closed hut (closed door on the sea side, 2 m from the
+        /// water) with its floor flush with the dune at the back, up to 0.56 m over it at the back's east end; the
+        /// buffet-terrace doors had a 0.32 - 0.4 m step). Raise-only pads up to the floor, sloping back to the sand;
+        /// the buffet doors get a 1.5 m landing at the slab and a 1:6 ramp. Adds the walk check legs (the pickups sit
+        /// at these spots, see Beach).</summary>
+        static void ShapeBuildingAccess(float[,] hts, TerrainInfo ti, Data data, Transform world)
+        {
+            Physics.SyncTransforms();
+            foreach (var bn in new[] { "TikiBar", "DiveShop" })
+            {
+                var bt = world.Find(bn);
+                var brs = bt != null ? bt.GetComponentsInChildren<Renderer>().Where(br => br.enabled).ToArray() : new Renderer[0];
+                if (brs.Length == 0) { Debug.LogWarning($"[Rex Magnum] Access: {bn} missing, terrain not shaped there."); continue; }
+                var bb = brs[0].bounds;
+                foreach (var br in brs) bb.Encapsulate(br.bounds);
+                // the floor under the centre (dive shop slab), else the base (tiki bar: posts on the sand, open centre)
+                float floorY = bb.min.y;
+                foreach (var fh in Physics.RaycastAll(new Vector3(bb.center.x, bb.min.y + 1.6f, bb.center.z), Vector3.down, 2f, ~0, QueryTriggerInteraction.Ignore))
+                    if (fh.collider.transform.IsChildOf(bt)) floorY = Mathf.Max(floorY, fh.point.y);
+                bool slabFloor = floorY > bb.min.y + 0.2f;
+                float top = slabFloor ? floorY - 0.08f : floorY - 0.03f;
+                // tiki bar: the whole footprint + 1.5 m (stools on the sea side), 1:2 back to the sand (the shore moves
+                // ~1.5 m). Dive shop: its sea-side door is 2 m from the water line (a pad there pushed the shore 5 -
+                // 10 m out to sea): only the land (north) side, a strip over the slab's back edge + 1 m, 1:2.5.
+                float px0 = bb.min.x - (slabFloor ? 1f : 1.5f), px1 = bb.max.x + (slabFloor ? 1f : 1.5f);
+                float pz0 = slabFloor ? bb.max.z - 1.5f : bb.min.z - 1.5f, pz1 = bb.max.z + (slabFloor ? 1f : 1.5f);
+                var (cells, fill) = RaisePad(hts, ti, px0, px1, pz0, pz1, top, slabFloor ? 2.5f : 2f);
+                Debug.Log($"[Rex Magnum] Access {bn}: floor {floorY:F2}, ground pad at {top:F2} over x {px0:F1} .. {px1:F1}, " +
+                          $"z {pz0:F1} .. {pz1:F1}: {cells} cells raised, up to {fill:F2} m.");
+                float cx = bb.center.x, cz = bb.center.z;
+                if (slabFloor)          // dive shop: from the resort side to the back (land side), then along it
+                    walkLegs.Add(($"{bn} dune -> back of the shop -> along it", new[]
+                    {
+                        new Vector3(cx, top, bb.max.z + 6f), new Vector3(cx, top, bb.max.z - 0.4f), new Vector3(cx, top, bb.max.z + 0.6f),
+                        new Vector3(bb.min.x - 0.5f, top, bb.max.z + 0.6f), new Vector3(bb.max.x + 0.5f, top, bb.max.z + 0.6f)
+                    }));
+                else                    // tiki bar: from the beach to both side counters (outside the corner posts / torches)
+                    walkLegs.Add(($"{bn} beach -> west counter -> east counter", new[]
+                    {
+                        new Vector3(cx, top, bb.min.z - 4f), new Vector3(cx - 3.9f, top, bb.min.z - 0.3f), new Vector3(cx - 3.9f, top, cz - 1.5f),
+                        new Vector3(cx - 3.1f, top, cz - 0.5f), new Vector3(cx - 3.9f, top, cz - 1.5f), new Vector3(cx - 3.9f, top, bb.min.z - 0.3f),
+                        new Vector3(cx + 3.9f, top, bb.min.z - 0.3f), new Vector3(cx + 3.9f, top, cz - 1.5f), new Vector3(cx + 3.1f, top, cz - 0.5f)
+                    }));
+            }
+            // buffet-terrace doors: hotel-local x 29.5 - 32.5 on the pool facade (the main doors' line), world x ~70
+            if (data.hotel != null && data.hotel.poolDoors != null && data.hotel.poolDoors.Length >= 3)
+            {
+                Vector3 bd = U(data.hotel.poolDoors[0] + 31f, data.hotel.poolDoors[1], data.hotel.poolDoors[2]);
+                float lo = bd.y - 0.03f, cell = ti.size / (ti.res - 1);
+                int rIdx = Mathf.Clamp(Mathf.RoundToInt((bd.z + 1f + ti.size / 2) / cell), 0, ti.res - 1);
+                int cIdx = Mathf.Clamp(Mathf.RoundToInt((bd.x + ti.size / 2) / cell), 0, ti.res - 1);
+                float before = ti.minH + hts[rIdx, cIdx] * (ti.maxH - ti.minH);
+                var (cells, fill) = RaisePad(hts, ti, bd.x - 2.5f, bd.x + 2.5f, bd.z, bd.z + 1.5f, lo, 6f);
+                float after = ti.minH + hts[rIdx, cIdx] * (ti.maxH - ti.minH);
+                Debug.Log($"[Rex Magnum] Access buffet-terrace doors (x {bd.x:F1}): ground 1 m out {before:F2} -> {after:F2} (slab {bd.y:F2}), " +
+                          $"{cells} cells raised, up to {fill:F2} m.");
+                walkLegs.Add(("buffet-terrace doors", new[] { bd + new Vector3(0f, 0f, -6f), bd, bd + new Vector3(0f, 0f, 6f) }));
+            }
+        }
+
+        /// <summary>Edit mode has no NavMesh bake: walk each path in 0.5 m steps the way Rex's capsule would (radius 0.32,
+        /// height 1.72, stepOffset 0.35). Per step a capsule sweep over the step height sees walls, glass, posts and
+        /// steep banks (a down ray alone walked through them), then a down ray from 0.9 m over the last ground point
+        /// finds the next ground; warns for a block, a step over 0.35 m or a drop with no ground within 2 m.</summary>
+        static void CheckWalk(string name, Vector3[] path)
         {
             if (path == null || path.Length < 2) return;
             Physics.SyncTransforms();
+            const float Radius = 0.32f, Height = 1.72f, StepUp = 0.35f;
             float y = path[0].y;
-            if (Physics.Raycast(path[0] + Vector3.up * 0.9f, Vector3.down, out RaycastHit h0, 3f, ~0, QueryTriggerInteraction.Ignore)) y = h0.point.y;
+            // the first ground under the start (the path's heights are only a guess: the beach is metres below the pads)
+            if (Physics.Raycast(path[0] + Vector3.up * 1.5f, Vector3.down, out RaycastHit h0, 30f, ~0, QueryTriggerInteraction.Ignore)) y = h0.point.y;
             int steps = 0, bad = 0;
             float worst = 0f;
+            Vector3 at = new Vector3(path[0].x, y, path[0].z);
             for (int s = 1; s < path.Length; s++)
             {
                 Vector3 a = path[s - 1], b = path[s];
@@ -2215,30 +2404,44 @@ namespace RexMagnum.EditorTools
                 {
                     var q = Vector3.Lerp(a, b, k / (float)n);
                     steps++;
+                    // the capsule above the step height (lower things are steps, the down ray judges them); a hit that
+                    // faces up like a walkable slope (< 45 deg) is no block
+                    Vector3 move = new Vector3(q.x - at.x, 0f, q.z - at.z);
+                    if (move.sqrMagnitude > 1e-6f &&
+                        Physics.CapsuleCast(at + Vector3.up * (StepUp + Radius + 0.02f), at + Vector3.up * (Height - Radius), Radius - 0.02f,
+                                            move.normalized, out RaycastHit wall, move.magnitude, ~0, QueryTriggerInteraction.Ignore) &&
+                        wall.normal.y < 0.7f)
+                    {
+                        bad++;
+                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check {name}: blocked by {wall.collider.name} at {wall.point.x:F1}, {wall.point.y:F2}, " +
+                                                       $"{wall.point.z:F1} (leg {s}).");
+                    }
                     if (!Physics.Raycast(new Vector3(q.x, y + 0.9f, q.z), Vector3.down, out RaycastHit hit, 3f, ~0, QueryTriggerInteraction.Ignore))
                     {
                         bad++;
-                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check: no ground (drop > 2 m) at {q.x:F1}, {q.z:F1} (leg {s}).");
+                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check {name}: no ground (drop > 2 m) at {q.x:F1}, {q.z:F1} (leg {s}).");
+                        at = new Vector3(q.x, y, q.z);
                         continue;
                     }
                     float dy = hit.point.y - y;
                     worst = Mathf.Max(worst, Mathf.Abs(dy));
-                    if (Mathf.Abs(dy) > 0.35f)
+                    if (Mathf.Abs(dy) > StepUp)
                     {
                         bad++;
-                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check: {dy:+0.00;-0.00} m step at {q.x:F1}, {hit.point.y:F2}, {q.z:F1} " +
+                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check {name}: {dy:+0.00;-0.00} m step at {q.x:F1}, {hit.point.y:F2}, {q.z:F1} " +
                                                        $"(leg {s}, {hit.collider.name}).");
                     }
                     y = hit.point.y;
+                    at = new Vector3(q.x, y, q.z);
                 }
             }
-            if (bad == 0) Debug.Log($"[Rex Magnum] Walk check lobby -> pool deck -> off the deck (W + E): {steps} steps, all <= 0.35 m (worst {worst:F2}).");
-            else Debug.LogWarning($"[Rex Magnum] Walk check lobby -> pool deck: {bad} of {steps} steps over 0.35 m or without ground.");
+            if (bad == 0) Debug.Log($"[Rex Magnum] Walk check {name}: {steps} steps, no block, all steps <= {StepUp:F2} m (worst {worst:F2}).");
+            else Debug.LogWarning($"[Rex Magnum] Walk check {name}: {bad} of {steps} steps blocked, over {StepUp:F2} m or without ground.");
         }
 
         // ---------------------------------------------------------------- ocean, sky, light, post
 
-        static void Ocean(Dictionary<string, Material> mats, Transform parent)
+        static void Ocean(Dictionary<string, Material> mats, Transform parent, Terrain terrain)
         {
             var sh = Shader.Find("RexMagnum/Water");
             var m = Asset("Ocean", sh);
@@ -2250,27 +2453,39 @@ namespace RexMagnum.EditorTools
             m.SetFloat("_WaveHeight", 0.35f);
             m.SetFloat("_WaveLength", 26f);
             EditorUtility.SetDirty(m);
-            // grid: fine near the island, coarse far away
-            const int n = 240;
-            const float size = 3200f;
+            // grid: 4 m cells over the island square (+-640 m), then growing to 1.6 km. It was a power-law grid around
+            // the island centre with 12 - 14 m cells at the beach: the 26 m waves were sampled ~2x per wavelength there
+            // (diamond facets). Quads well above the shore (under the terrain) are left out: no vertex cost there.
+            const float inner = 640f, cellIn = 4f, size = 3200f;
+            const int outer = 40;                  // cells from the inner square to the edge, each side
+            var axis = new List<float>();
+            for (int k = outer; k >= 1; k--) axis.Add(-(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f)));
+            for (float a = -inner; a <= inner + 0.01f; a += cellIn) axis.Add(a);
+            for (int k = 1; k <= outer; k++) axis.Add(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f));
+            int n = axis.Count - 1;
             var verts = new Vector3[(n + 1) * (n + 1)];
+            var dry = new bool[(n + 1) * (n + 1)];
+            float tY = terrain != null ? terrain.transform.position.y : 0f;
             for (int z = 0; z <= n; z++)
                 for (int x = 0; x <= n; x++)
                 {
-                    float u = x / (float)n * 2f - 1f, w = z / (float)n * 2f - 1f;
-                    u = Mathf.Sign(u) * Mathf.Pow(Mathf.Abs(u), 1.6f);
-                    w = Mathf.Sign(w) * Mathf.Pow(Mathf.Abs(w), 1.6f);
-                    verts[z * (n + 1) + x] = new Vector3(u * size / 2, 0f, w * size / 2);
+                    var vp = new Vector3(axis[x], 0f, axis[z]);
+                    verts[z * (n + 1) + x] = vp;
+                    // 1.5 m: over the highest wave crest (~0.3 m) with room for the terrain's LOD error
+                    dry[z * (n + 1) + x] = terrain != null && terrain.SampleHeight(vp) + tY > 1.5f;
                 }
-            var tris = new int[n * n * 6];
-            int t = 0;
+            var triList = new List<int>(n * n * 6);
+            int skipped = 0;
             for (int z = 0; z < n; z++)
                 for (int x = 0; x < n; x++)
                 {
                     int a = z * (n + 1) + x;
-                    tris[t++] = a; tris[t++] = a + n + 1; tris[t++] = a + 1;
-                    tris[t++] = a + 1; tris[t++] = a + n + 1; tris[t++] = a + n + 2;
+                    if (dry[a] && dry[a + 1] && dry[a + n + 1] && dry[a + n + 2]) { skipped++; continue; }
+                    triList.Add(a); triList.Add(a + n + 1); triList.Add(a + 1);
+                    triList.Add(a + 1); triList.Add(a + n + 1); triList.Add(a + n + 2);
                 }
+            var tris = triList.ToArray();
+            Debug.Log($"[Rex Magnum] Ocean grid: {n} x {n} cells ({cellIn:F0} m inside +-{inner:F0} m), {tris.Length / 6} quads, {skipped} under dry land left out.");
             var mesh = new Mesh { name = "OceanGrid", indexFormat = IndexFormat.UInt32, vertices = verts, triangles = tris };
             mesh.RecalculateNormals();
             mesh.bounds = new Bounds(Vector3.zero, new Vector3(size, 10f, size));
@@ -2284,7 +2499,7 @@ namespace RexMagnum.EditorTools
             r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
-        /// <summary>Coarse light probes (resort, ruins, cave mouth): after Bake Lighting the lower building LODs, Rex,
+        /// <summary>Coarse light probes (resort, ruins, cave mouth): after Bake Lighting the buildings (not the biggest), Rex,
         /// blobs and props are lit from these instead of the one ambient probe (they were flat / too bright in shade).
         /// A sparse grid over each area at 1, 4 and 10 m above the ground, plus a layer inside the hotel on every floor
         /// (+1.5 m) and on the roof (floors 4 / 5 and the roof had none: the 10 m layer stops at floor 3). Points inside
@@ -2351,7 +2566,9 @@ namespace RexMagnum.EditorTools
 
         /// <summary>A point inside a non-convex mesh collider (rock, hill, thick wall): CheckSphere does not see it (mesh
         /// colliders are hollow). Upward ray with back faces on: hitting a face from behind within 50 m = inside; anything
-        /// right overhead (0.5 m) = in a slab / under a stair. Such probes baked black and darkened whatever used them.</summary>
+        /// right overhead (0.5 m) = in a slab / under a stair. Such probes baked black and darkened whatever used them.
+        /// A back face above alone is not enough (one-sided roofs, awnings, a single upward-facing plank): the down ray
+        /// must hit a back face too (a face looking down from below = we are inside a closed shell).</summary>
         static bool InsideSolid(Vector3 p)
         {
             bool old = Physics.queriesHitBackfaces;
@@ -2359,7 +2576,10 @@ namespace RexMagnum.EditorTools
             try
             {
                 if (!Physics.Raycast(p, Vector3.up, out RaycastHit hit, 50f, ~0, QueryTriggerInteraction.Ignore)) return false;
-                return hit.distance < 0.5f || Vector3.Dot(hit.normal, Vector3.up) > 0.01f;   // the face looks up: we hit its back
+                if (hit.distance < 0.5f) return true;
+                if (Vector3.Dot(hit.normal, Vector3.up) <= 0.01f) return false;              // a front face above: open air
+                return Physics.Raycast(p, Vector3.down, out RaycastHit below, 50f, ~0, QueryTriggerInteraction.Ignore) &&
+                       Vector3.Dot(below.normal, Vector3.down) > 0.01f;                   // and the face below looks down too
             }
             finally { Physics.queriesHitBackfaces = old; }
         }
@@ -2380,6 +2600,7 @@ namespace RexMagnum.EditorTools
             var dome = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             UnityEngine.Object.DestroyImmediate(dome.GetComponent<Collider>());
             dome.name = "CloudDome";
+            dome.layer = DayNight.SkyLayer;            // own layer: the mirror and the box probes leave it out
             dome.transform.localScale = Vector3.one * 6000f;
             var dr = dome.GetComponent<MeshRenderer>();
             dr.sharedMaterial = cm;
@@ -2475,89 +2696,59 @@ namespace RexMagnum.EditorTools
 
         // ---------------------------------------------------------------- optional bakes (menus)
 
-        /// <summary>Optional: lightmaps for the buildings, so rooms and corridors get real occlusion instead of the flat
-        /// sky ambient. Night-safe: every light is set to Realtime (DayNight moves the sun, switches the lamps) and the
-        /// bake uses a dim flat ambient instead of the noon sky, so the lightmaps hold soft AO-darkened fill light only
-        /// (a lightmapped wall ignores DayNight's ambient: a day-sky bake glowed all night). The scene's sky ambient
-        /// comes back when the bake ends. Slow (GPU lightmapper, minutes); the game works without it. Buildings get
-        /// lightmap UVs (FBX reimport) first. The light probes bake with the same flat ambient: they keep only each
-        /// spot's openness, and DayNight.ScaleProbes multiplies the live sky ambient by it (they follow day / night).</summary>
+        /// <summary>Optional: baked light probes with real occlusion (rooms, corridors, under roofs and arcades) instead of
+        /// the one flat sky ambient everywhere. The buildings contribute to the bake (they shade the probes) but receive
+        /// NO lightmaps: they are lit from the probes like Rex and the props. Why: a lightmap holds one fixed
+        /// brightness, URP Lit has no runtime lightmap multiplier, and lightmapped buildings ignored DayNight (lit the
+        /// same at noon and at midnight). The probes bake with a dim flat ambient (all lights Realtime: DayNight moves
+        /// the sun, switches the lamps), so each probe keeps only its openness, and DayNight.ScaleProbes multiplies the
+        /// live sky ambient by it: occlusion that follows day / night. Big renderers (hotel shell, ruins) span many
+        /// probes but get one probe value (their centre: often an inner room): they stay on the live ambient probe
+        /// instead. Lightmap UVs are not needed (no reimport). The scene's sky ambient comes back when the bake ends.</summary>
         [MenuItem("Rex Magnum/Bake Lighting (slow, optional)", priority = 30)]
         public static void BakeLighting()
         {
             var island = GameObject.Find("Island");
             if (island == null) { EditorUtility.DisplayDialog("Rex Magnum", "Open Scenes/Island.unity first (Build Island makes it).", "OK"); return; }
             if (Lightmapping.isRunning) { EditorUtility.DisplayDialog("Rex Magnum", "A lighting bake is already running.", "OK"); return; }
-            if (!EditorUtility.DisplayDialog("Rex Magnum", "Bake building lightmaps?\n\n" +
-                    "Time: the model reimport takes 1 to 3 minutes (Unity is busy), then the bake runs in the background, " +
-                    "about 5 to 30 minutes (progress bar at the bottom right of the Unity window). To stop the bake: click " +
-                    "the X next to that progress bar, or Window > Rendering > Lighting > Cancel.\n\n" +
-                    "What it does: soft shadows in corners and rooms (ambient occlusion with a dim fill light). It is " +
-                    "night-safe: the sun and all lamps stay realtime, so nights stay dark. Shaded building sides look a " +
-                    "little darker by day.\n\nSave the scene when the bake is done.", "Bake", "Cancel")) return;
-            // night-safe: no light may be baked into the lightmaps (DayNight turns the sun and switches the lamps)
+            if (!EditorUtility.DisplayDialog("Rex Magnum", "Bake the light probes?\n\n" +
+                    "Time: the bake runs in the background, a few minutes (progress bar at the bottom right of the Unity " +
+                    "window). To stop it: click the X next to that progress bar, or Window > Rendering > Lighting > Cancel.\n\n" +
+                    "What it does: soft shading in rooms, corridors and under roofs for characters, props and the smaller " +
+                    "buildings (ambient occlusion in the light probes). Day / night stays live: the buildings get no " +
+                    "lightmaps (a lightmap keeps one brightness all day and night), the probes follow the sky. The sun and " +
+                    "all lamps stay realtime.\n\nSave the scene when the bake is done.", "Bake", "Cancel")) return;
+            // night-safe: no light may be baked (DayNight turns the sun and switches the lamps)
             foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 { SetProp(l, "lightmapBakeType", "Realtime"); EditorUtility.SetDirty(l); }
-            // lightmap UVs for every building FBX (not vegetation / characters)
-            var fbx = new HashSet<string>();
-            foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
-            {
-                var mf = r.GetComponent<MeshFilter>();
-                if (mf == null || mf.sharedMesh == null) continue;
-                if ((GameObjectUtility.GetStaticEditorFlags(r.gameObject) & StaticEditorFlags.OccluderStatic) == 0) continue;
-                string p = AssetDatabase.GetAssetPath(mf.sharedMesh);
-                if (p.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase)) fbx.Add(p);
-            }
-            AssetDatabase.StartAssetEditing();
-            try
-            {
-                foreach (var p in fbx)
-                    if (AssetImporter.GetAtPath(p) is ModelImporter mi && !mi.generateSecondaryUV)
-                    {
-                        mi.generateSecondaryUV = true;
-                        mi.SaveAndReimport();
-                    }
-            }
-            finally { AssetDatabase.StopAssetEditing(); }
-            // buildings: every LOD (LOD0 / 1 / 2) in the lightmap, moving parts and see-through parts on probes / SH.
-            // Only LOD0 used to be lightmapped: it showed the flat bake ambient (fixed AO fill), the lower LODs the
-            // live probes (DayNight.ScaleProbes) -> a brightness jump at every LOD switch. Now all levels show the same
-            // bake; the lower LODs at a lower lightmap resolution (they are only seen from far away).
+            // buildings: contribute (they occlude the probes), receive from the probes. Empty or hidden renderers
+            // (Room304_LOD1 has no triangles) stay out: the bake warned about them / they can not shade anything.
+            int giCount = 0, bigCount = 0;
             foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
             {
                 var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
                 if ((flags & StaticEditorFlags.OccluderStatic) == 0) continue;
-                GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.ContributeGI);
-                int lodLevel = r.name.EndsWith("_LOD0") ? 0 : r.name.EndsWith("_LOD1") ? 1 : r.name.EndsWith("_LOD2") ? 2 : -1;
-                SetProp(r, "receiveGI", lodLevel >= 0 ? "Lightmaps" : "LightProbes");
-                if (lodLevel > 0)
-                {
-                    var rso = new SerializedObject(r);
-                    var sp = rso.FindProperty("m_ScaleInLightmap");
-                    if (sp != null) { sp.floatValue = lodLevel == 1 ? 0.5f : 0.25f; rso.ApplyModifiedPropertiesWithoutUndo(); }
-                }
-                // the glass split (SplitSeeThrough) made copies in Generated/: they missed the FBX's lightmap UVs
                 var mf = r.GetComponent<MeshFilter>();
-                if (lodLevel >= 0 && mf != null && mf.sharedMesh != null && AssetDatabase.GetAssetPath(mf.sharedMesh).StartsWith(Gen))
-                {
-                    // the split parts are saved non-readable (no CPU copy in the build): readable while we unwrap
-                    var mso = new SerializedObject(mf.sharedMesh);
-                    var rp = mso.FindProperty("m_IsReadable");
-                    bool wasReadable = rp == null || rp.boolValue;
-                    if (!wasReadable) { rp.boolValue = true; mso.ApplyModifiedPropertiesWithoutUndo(); }
-                    var uv2 = new List<Vector2>();
-                    mf.sharedMesh.GetUVs(1, uv2);
-                    if (uv2.Count == 0) { Unwrapping.GenerateSecondaryUVSet(mf.sharedMesh); EditorUtility.SetDirty(mf.sharedMesh); }
-                    if (!wasReadable) { mso.Update(); rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); EditorUtility.SetDirty(mf.sharedMesh); }
-                }
+                bool empty = !r.enabled || mf == null || mf.sharedMesh == null || TriangleCount(mf.sharedMesh) == 0;
+                if (empty) { GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags & ~StaticEditorFlags.ContributeGI); continue; }
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.ContributeGI);
+                SetProp(r, "receiveGI", "LightProbes");
+                // one probe value for a 90 m shell is wrong everywhere: big ones keep the live ambient probe (as unbaked)
+                var ext = r.bounds.extents;
+                bool big = Mathf.Max(ext.x, ext.z) > 12f;
+                r.lightProbeUsage = big ? LightProbeUsage.Off : LightProbeUsage.BlendProbes;
+                giCount++;
+                if (big) bigCount++;
+                EditorUtility.SetDirty(r);
             }
+            Debug.Log($"[Rex Magnum] Bake Lighting: {giCount} building renderers contribute to the probes ({bigCount} big ones keep the live ambient).");
             AssetDatabase.SaveAssets();
             var ls = AssetDatabase.LoadAssetAtPath<LightingSettings>(Gen + "/IslandLighting.lighting");
             if (ls == null) { ls = new LightingSettings(); AssetDatabase.CreateAsset(ls, Gen + "/IslandLighting.lighting"); }
             ls.bakedGI = true;
             ls.realtimeGI = false;
             SetProp(ls, "lightmapper", "ProgressiveGPU");
-            SetProp(ls, "lightmapResolution", 2f);       // texels per metre: the hotel alone is 90 m long
+            SetProp(ls, "lightmapResolution", 2f);       // texels per metre (nothing receives lightmaps now: keeps the bake light)
             SetProp(ls, "lightmapMaxSize", 2048);
             SetProp(ls, "ao", true);
             SetProp(ls, "aoMaxDistance", 1.5f);
@@ -2580,11 +2771,11 @@ namespace RexMagnum.EditorTools
             if (!Lightmapping.BakeAsync())
             {
                 RestoreBakeAmbient();
-                Debug.LogWarning("[Rex Magnum] Lightmap bake did not start (another bake running?).");
+                Debug.LogWarning("[Rex Magnum] Light probe bake did not start (another bake running?).");
                 return;
             }
             HookBake();
-            Debug.Log("[Rex Magnum] Lightmap bake started (progress bottom-right, X there cancels). Save the scene when it is done.");
+            Debug.Log("[Rex Magnum] Light probe bake started (progress bottom-right, X there cancels). Save the scene when it is done.");
         }
 
         const string BakeAmbientKey = "RexMagnum.BakeAmbient";     // "mode;r;g;b" while a bake holds the flat ambient
@@ -2631,6 +2822,14 @@ namespace RexMagnum.EditorTools
                 float.TryParse(s[3], System.Globalization.NumberStyles.Float, ci, out float cb))
                 RenderSettings.ambientLight = new Color(cr, cg, cb);
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+        }
+
+        /// <summary>Triangles in a mesh, also for non-readable meshes (index counts, no CPU copy needed).</summary>
+        static long TriangleCount(Mesh m)
+        {
+            long n = 0;
+            for (int i = 0; i < m.subMeshCount; i++) n += (long)m.GetIndexCount(i) / 3;
+            return n;
         }
 
         /// <summary>Sets a property by name (enum values by name). Lighting / GI members are set this way so the

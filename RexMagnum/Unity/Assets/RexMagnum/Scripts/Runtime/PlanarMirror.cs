@@ -162,6 +162,8 @@ namespace RexMagnum
             mirrorCam.CopyFrom(cam);
             mirrorCam.targetTexture = rt;
             mirrorCam.useOcclusionCulling = false;          // the game camera's occlusion data is for its own view, not the reflected one
+            // no cloud dome: it sits at 90% of the far plane, which is 27 m here (clouds floated in the room)
+            mirrorCam.cullingMask = cam.cullingMask & ~(1 << DayNight.SkyLayer);
             mirrorCam.worldToCameraMatrix = cam.worldToCameraMatrix * refl;
             // rooms and corridors: ~30 m of reflected view is enough (fewer objects culled in and drawn)
             mirrorCam.farClipPlane = Mathf.Min(cam.farClipPlane, 30f);

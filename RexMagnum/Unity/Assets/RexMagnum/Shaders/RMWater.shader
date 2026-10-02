@@ -58,7 +58,7 @@ Shader "RexMagnum/Water"
                 float fog : TEXCOORD3;
                 float2 uv : TEXCOORD4;
                 float4 color : TEXCOORD5;
-                float2 crest : TEXCOORD6;        // ocean: wave height (-1..1 of the peak) and steepness, for crest foam
+                float3 wave : TEXCOORD6;         // ocean: undisplaced world xz + wave fade (the crest foam is per pixel)
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -74,6 +74,15 @@ Shader "RexMagnum/Water"
                 return float3(d.x * a * cos(f), a * sin(f), d.y * a * cos(f));
             }
 
+            // the three ocean wave trains at the undisplaced point p (fade 0..1): offset, tangent and binormal
+            float3 Waves(float3 p, float fade, inout float3 t, inout float3 b)
+            {
+                float s = _WaveHeight / _WaveLength * 6.2831853 * fade;
+                return Gerstner(p, float2(1, 0.4), s * 0.5, _WaveLength, t, b)
+                     + Gerstner(p, float2(-0.3, 1), s * 0.35, _WaveLength * 0.61, t, b)
+                     + Gerstner(p, float2(0.7, -0.6), s * 0.2, _WaveLength * 0.37, t, b);
+            }
+
             V vert(A i)
             {
                 V o;
@@ -81,19 +90,14 @@ Shader "RexMagnum/Water"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);   // single-pass instanced VR: right eye index
                 float3 ws = TransformObjectToWorld(i.positionOS.xyz);
                 float3 n = TransformObjectToWorldNormal(i.normalOS);
-                o.crest = 0;
+                o.wave = 0;
                 if (_WaveHeight > 0)
                 {
                     float fade = saturate(1 - distance(ws.xz, _WorldSpaceCameraPos.xz) / _WaveFade);
-                    float s = _WaveHeight / _WaveLength * 6.2831853 * fade;
                     float3 t = float3(1, 0, 0), b = float3(0, 0, 1);
-                    float3 off = Gerstner(ws, float2(1, 0.4), s * 0.5, _WaveLength, t, b)
-                               + Gerstner(ws, float2(-0.3, 1), s * 0.35, _WaveLength * 0.61, t, b)
-                               + Gerstner(ws, float2(0.7, -0.6), s * 0.2, _WaveLength * 0.37, t, b);
-                    ws += off;
+                    o.wave = float3(ws.xz, fade);
+                    ws += Waves(ws, fade, t, b);
                     n = normalize(cross(b, t));
-                    // the three amplitudes add up to ~0.79 x _WaveHeight; far (faded) waves stay low: no crest foam there
-                    o.crest = float2(off.y / (_WaveHeight * 0.79 + 1e-4), 1 - n.y);
                 }
                 o.positionWS = ws;
                 o.normalWS = n;
@@ -124,6 +128,17 @@ Shader "RexMagnum/Water"
                 float3 n2 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv * 1.7 - flow * 1.3 + 0.37), _NormalStrength);
                 float3 nt = normalize(float3(n1.xy + n2.xy, n1.z * n2.z));
                 float3 up = normalize(i.normalWS);
+                float2 crestFoam = 0;
+                if (_WaveHeight > 0)
+                {
+                    // ocean: wave height and normal per pixel (the grid's vertices are metres apart: per-vertex crest
+                    // foam came out as diamond patches, the interpolated normals were faceted)
+                    float3 wt = float3(1, 0, 0), wb = float3(0, 0, 1);
+                    float3 off = Waves(float3(i.wave.x, 0, i.wave.y), i.wave.z, wt, wb);
+                    up = normalize(cross(wb, wt));
+                    // the three amplitudes add up to ~0.79 x _WaveHeight; far (faded) waves stay low: no crest foam there
+                    crestFoam = float2(off.y / (_WaveHeight * 0.79 + 1e-4), 1 - up.y);
+                }
                 // reference axis never parallel to the normal (cross with +Z alone gave NaN on +-Z faces)
                 float3 refAxis = abs(up.z) > 0.9 ? float3(1, 0, 0) : float3(0, 0, 1);
                 float3 tx = normalize(cross(up, refAxis));
@@ -158,7 +173,7 @@ Shader "RexMagnum/Water"
                 if (_WaveHeight > 0)
                 {
                     // ocean whitecaps: on the high, steep part of each crest, torn into streaks by the normal maps
-                    float crest = smoothstep(0.4, 0.85, i.crest.x) * saturate(0.35 + i.crest.y * 6);
+                    float crest = smoothstep(0.4, 0.85, crestFoam.x) * saturate(0.35 + crestFoam.y * 6);
                     foam = max(foam, crest * saturate((n1.x + n2.y) * 1.5 + 0.45) * 0.85);
                 }
                 rgb = lerp(rgb, _FoamColor.rgb * (L.color * 0.8 + amb * 0.6 + 0.05), foam * _FoamColor.a);

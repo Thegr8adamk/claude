@@ -114,7 +114,11 @@ Shader "RexMagnum/Clouds"
                     float ms = dot(d, sd), mm = dot(d, md);
                     float sunDisc = smoothstep(0.99985, 0.99993, ms) + pow(saturate(ms), 900.0) * 0.35;   // ~0.6 deg + a soft halo
                     float moonDisc = smoothstep(0.99988, 0.99994, mm);
-                    float2 mp = (d - md * mm).xz * 300.0;                               // moon face: a few soft dark seas
+                    // moon face: a few soft dark seas, in a frame around the moon direction (the xz projection
+                    // stretched the pattern into streaks when the moon stood low)
+                    float3 mr = normalize(cross(md, abs(md.y) > 0.99 ? float3(1, 0, 0) : float3(0, 1, 0)));
+                    float3 mu2 = cross(mr, md);
+                    float2 mp = float2(dot(d, mr), dot(d, mu2)) * 300.0;
                     float seas = Noise(mp * 0.35 + 3.7) * 0.6 + Noise(mp * 0.9) * 0.4;
                     float hz = saturate(d.y * 8.0);
                     float sa = saturate(sunDisc) * saturate(sd.y * 12.0 + 0.2) * hz;

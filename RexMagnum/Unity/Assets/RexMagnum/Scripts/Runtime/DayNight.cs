@@ -20,6 +20,9 @@ namespace RexMagnum
         public List<Light> nightLights = new List<Light>();  // torches, lamps, street lights
         public Renderer cloudDome;                          // RexMagnum/Clouds sphere (IslandBuilder.CloudDome); found by name if empty
         public static float Night { get; private set; }
+        /// <summary>The cloud dome's own layer (unnamed user layer): the mirror and the interior / tunnel box probes
+        /// leave it out of their culling mask (it sits at their far plane: clouds in a mirror at 27 m, in the rooms).</summary>
+        public const int SkyLayer = 30;
         float baseSun, baseAmbient, baseFog, baseExposure;
         Color baseSkyTint, baseGround;
         // night floor: away from the lamps the island stays readable (it was near-black at 0.25 ambient / 0.12 sky)
@@ -34,7 +37,7 @@ namespace RexMagnum
         BlobSpawner[] spawners;
         AudioSource nightMusic;
         float nightLevel;
-        bool skyDiscsOff;           // the sky's sun disc is off: the cloud layer draws sun + moon
+        int skyDiscMode = -1;       // 0: the cloud layer draws sun + moon, 1: the sky's own sun disc, 2: none (Low tier at night)
 
         void Start()
         {
@@ -162,17 +165,19 @@ namespace RexMagnum
                     bool cloudsOn = quality == null || quality.Tier != QualityTier.Low;
                     if (cloudDome.enabled != cloudsOn) cloudDome.enabled = cloudsOn;
                     // the cloud layer draws the sun + moon discs: the Procedural sky's own sun disc goes off then (it
-                    // followed the night light: a sun-like disc in the moonlight's place); without clouds it stays
+                    // followed the night light: a sun-like disc in the moonlight's place); without clouds (Low tier) it
+                    // stays by day and goes off at night, for the same reason
                     bool discs = cloudsOn && clouds != null && clouds.HasProperty("_Discs");
-                    if (discs != skyDiscsOff)
+                    int mode = discs ? 0 : Night > 0.5f ? 2 : 1;
+                    if (mode != skyDiscMode)
                     {
-                        skyDiscsOff = discs;
+                        skyDiscMode = mode;
                         if (clouds != null && clouds.HasProperty("_Discs")) clouds.SetFloat("_Discs", discs ? 1f : 0f);
                         if (sky != null && sky.HasProperty("_SunDisk"))
                         {
-                            sky.SetFloat("_SunDisk", discs ? 0f : 2f);     // None / High Quality (as built)
+                            sky.SetFloat("_SunDisk", mode == 1 ? 2f : 0f);     // High Quality (as built) / None
                             foreach (var kw in new[] { "_SUNDISK_NONE", "_SUNDISK_SIMPLE", "_SUNDISK_HIGH_QUALITY" }) sky.DisableKeyword(kw);
-                            sky.EnableKeyword(discs ? "_SUNDISK_NONE" : "_SUNDISK_HIGH_QUALITY");
+                            sky.EnableKeyword(mode == 1 ? "_SUNDISK_HIGH_QUALITY" : "_SUNDISK_NONE");
                         }
                     }
                 }
@@ -204,6 +209,8 @@ namespace RexMagnum
         // and trees on probes kept one fixed brightness day and night. Each probe's openness (its L0 against the open-
         // air probes) is kept from the original data; the live ambient probe times that openness is written back
         // whenever the ambient changes. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
+        // The buildings use these probes too (Bake Lighting gives them no lightmaps: a lightmap holds one fixed
+        // brightness, URP Lit cannot scale it at runtime, and lightmapped buildings stayed lit the same day and night).
         float[] probeOpen;
         SphericalHarmonicsL2[] probeLive;
         Vector3 probeAmb = new Vector3(-1f, -1f, -1f);
