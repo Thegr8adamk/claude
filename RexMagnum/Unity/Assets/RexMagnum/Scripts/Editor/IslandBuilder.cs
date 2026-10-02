@@ -2428,6 +2428,8 @@ namespace RexMagnum.EditorTools
                         new Vector3(cx - 3.1f, top, cz - 0.5f), new Vector3(cx - 3.9f, top, cz - 1.5f), new Vector3(cx - 3.9f, top, bb.min.z - 0.3f),
                         new Vector3(cx + 3.9f, top, bb.min.z - 0.3f), new Vector3(cx + 3.9f, top, cz - 1.5f), new Vector3(cx + 3.1f, top, cz - 0.5f)
                     }));
+                if (!slabFloor)         // and from the dune side (the cut must meet the dune, not leave a bank)
+                    walkLegs.Add(($"{bn} dune -> east counter", new[] { new Vector3(cx + 8f, top, cz), new Vector3(cx + 3.9f, top, cz - 1.5f) }));
             }
             // buffet-terrace doors: hotel-local x 29.5 - 32.5 on the pool facade (the main doors' line), world x ~70
             if (data.hotel != null && data.hotel.poolDoors != null && data.hotel.poolDoors.Length >= 3)
