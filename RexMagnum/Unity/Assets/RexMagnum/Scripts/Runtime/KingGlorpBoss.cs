@@ -336,7 +336,7 @@ namespace RexMagnum
             ring.transform.position = transform.position + Vector3.up * 0.05f;
             Sfx.Play("shockwave", transform.position);
             var mr = ring.GetComponent<Renderer>();
-            mr.material.color = new Color(1f, 0.85f, 0.2f);
+            mr.sharedMaterial = RingMat(mr);                         // one gold material for every ring (no copy per wave)
             bool hit = false;
             var rc = rex.GetComponent<RexController>();
             for (float r = 1f; r < 30f; r += Time.deltaTime * 12f)
@@ -430,6 +430,14 @@ namespace RexMagnum
                 yield return null;
             }
             foreach (var m in marks) if (m != null) Destroy(m);
+        }
+
+        static Material ringMat;
+        /// <summary>The gold ring material (Shockwave, Hop landing), made once from a primitive's material.</summary>
+        static Material RingMat(Renderer from)
+        {
+            if (ringMat == null) ringMat = new Material(from.sharedMaterial) { color = new Color(1f, 0.85f, 0.2f) };
+            return ringMat;
         }
 
         /// <summary>The orange warning material (the slime pools' marks), made once from a primitive's material.</summary>
@@ -573,7 +581,8 @@ namespace RexMagnum
             Destroy(ring.GetComponent<Collider>());
             Destroy(ring, 1.5f);
             ring.transform.position = land + Vector3.up * 0.05f;
-            ring.GetComponent<Renderer>().material.color = new Color(1f, 0.85f, 0.2f);
+            var ringR = ring.GetComponent<Renderer>();
+            ringR.sharedMaterial = RingMat(ringR);                   // shared with the shockwave (no copy per hop)
             var rc = rex.GetComponent<RexController>();
             var rh = rex.GetComponent<Health>();
             bool hit = false;

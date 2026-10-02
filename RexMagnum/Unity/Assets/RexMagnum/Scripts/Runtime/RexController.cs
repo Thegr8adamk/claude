@@ -179,8 +179,15 @@ namespace RexMagnum
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
             planar = Vector3.MoveTowards(planar, wish.normalized * target, acceleration * Mathf.Max(target, 2f) * dt);
             // dodge (Ctrl / B / touch Dodge): a quick ~4 m burst, untouchable for a moment. Fast at the start, easing out.
-            if (InputEnabled && RMInput.Dodge && cc.isGrounded && !IsSwimming && Time.time >= lockedUntil && Time.time >= nextDodge)
-                StartDodge(input.sqrMagnitude > 0.01f ? wish.normalized : -transform.forward, input.sqrMagnitude <= 0.01f);
+            if (InputEnabled && RMInput.Dodge && cc.isGrounded && !IsSwimming && Time.time >= lockedUntil)
+            {
+                if (Time.time >= nextDodge) StartDodge(input.sqrMagnitude > 0.01f ? wish.normalized : -transform.forward, input.sqrMagnitude <= 0.01f);
+                else if (Time.time >= nextRefusedCue)       // still on cooldown: a quiet low puff says "not yet" (max 2 a second)
+                {
+                    nextRefusedCue = Time.time + 0.5f;
+                    Sfx.Play("swing", transform.position + Vector3.up, 0.15f, 0.5f);
+                }
+            }
             bool dodging = Time.time < dodgeUntil;
             if (dodging) planar = dodgeDir * Mathf.Lerp(18f, 8.7f, 1f - (dodgeUntil - Time.time) / DodgeTime);   // avg ~13.3 m/s = 4 m
             velocity.x = planar.x;
@@ -248,7 +255,7 @@ namespace RexMagnum
 
         const float DodgeTime = 0.3f;
         static readonly int DodgeHash = Animator.StringToHash("Dodge");
-        float dodgeUntil, nextDodge, lastDodge = -10f;
+        float dodgeUntil, nextDodge, lastDodge = -10f, nextRefusedCue;
         Vector3 dodgeDir;
         bool dodgeBack;
         Health hp;

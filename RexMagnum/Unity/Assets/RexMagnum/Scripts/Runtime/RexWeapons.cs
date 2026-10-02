@@ -424,6 +424,7 @@ namespace RexMagnum
                     anyBig = true;
                     if (!h.IsDead)
                     {
+                        if (bigHits.Count > 32) bigHits.Clear();      // popped / destroyed blobs never come back: no slow growth
                         Vector2 bh = bigHits.TryGetValue(blob, out Vector2 prev) && Time.time - prev.y <= 2f ? prev : new Vector2(0f, Time.time);
                         bh.x += 1f;
                         if (bh.x >= 3f)
