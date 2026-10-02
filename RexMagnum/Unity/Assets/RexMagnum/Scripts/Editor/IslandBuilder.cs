@@ -722,6 +722,20 @@ namespace RexMagnum.EditorTools
             var core = Pts(fac, "core");
             if (core.Count == 0) return;
             var root = new GameObject("Factory_Gameplay").transform;
+            // brief section 6: a golf-cart charge station at the ruins too, 8 m outside the factory door
+            var door = Pts(fac, "door");
+            var hallPt = Pts(fac, "hall");
+            if (door.Count > 0 && hallPt.Count > 0)
+            {
+                Vector3 outward = Vector3.ProjectOnPlane(door[0] - hallPt[0], Vector3.up).normalized;
+                Vector3 at = door[0] + outward * 8f;
+                Physics.SyncTransforms();
+                if (Physics.Raycast(at + Vector3.up * 30f, Vector3.down, out RaycastHit ground, 60f)) at = ground.point;
+                var ch = new GameObject("ChargeStation").transform;
+                ch.SetParent(root, false);
+                ch.position = at + Vector3.up * 0.05f;
+                ch.gameObject.AddComponent<ChargeStation>();
+            }
             var go = new GameObject("FactoryCore");
             go.transform.SetParent(root, false);
             go.transform.position = core[0];
