@@ -37,6 +37,7 @@ namespace RexMagnum
 
         public DeathStyle deathStyle = DeathStyle.Pop;
         [HideInInspector] public Vector3 flingDirection;
+        [HideInInspector] public float flingSpeed;          // golf: set to reach the water; 0 = default 14 m/s
         public bool IsStunned => Time.time < stunUntil;
         static int alive;
         public static int AliveCount() => alive;
@@ -316,7 +317,7 @@ namespace RexMagnum
                 case DeathStyle.Fling:         // golf: flies away (into the pool / sea), then pops
                     var rb = gameObject.AddComponent<Rigidbody>();
                     rb.mass = 30f;
-                    rb.AddForce(flingDirection.normalized * 14f, ForceMode.VelocityChange);
+                    rb.AddForce(flingDirection.normalized * (flingSpeed > 0f ? flingSpeed : 14f), ForceMode.VelocityChange);
                     rb.AddTorque(Random.onUnitSphere * 8f, ForceMode.VelocityChange);
                     yield return new WaitForSeconds(1.6f);
                     break;

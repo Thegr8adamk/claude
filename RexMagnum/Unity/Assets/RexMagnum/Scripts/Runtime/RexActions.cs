@@ -118,7 +118,13 @@ namespace RexMagnum
                 if (h == null || h.gameObject == gameObject) continue;
                 bool wasAlive = !h.IsDead;
                 h.Damage(damage, col.ClosestPoint(c), gameObject);
-                if (wasAlive && h.IsDead) RexVoice.Say(gameObject, "Fists");
+                if (wasAlive && h.IsDead)
+                {
+                    RexVoice.Say(gameObject, "Fists");
+                    // brief: fist kill cam (X-ray, fist in the jelly) on a heavy punch or the last blob of a group
+                    if (heavy || (h.GetComponent<Blob>() != null && Blob.LivingNear(transform.position, 30f) == 0))
+                        KillCam.Show(h.transform, transform.position, KillCam.Style.Fist);
+                }
                 break;
             }
         }

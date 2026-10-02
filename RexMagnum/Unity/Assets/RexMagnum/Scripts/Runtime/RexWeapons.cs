@@ -266,6 +266,16 @@ namespace RexMagnum
                 {
                     blob.deathStyle = heavy ? d.holdDeath : d.tapDeath;
                     blob.flingDirection = transform.forward + Vector3.up * 0.6f;
+                    // golf (brief: the blob flies into the pool / sea): aim the fling at water nearby, if any
+                    if (d.id == WeaponId.GolfClub && heavy && WaterVolume.RandomSurfacePoint(blob.transform.position, 35f, out Vector3 wet))
+                    {
+                        Vector3 flat = Vector3.ProjectOnPlane(wet - blob.transform.position, Vector3.up);
+                        if (Vector3.Dot(flat.normalized, transform.forward) > -0.2f)      // not straight back at Rex
+                        {
+                            blob.flingDirection = flat.normalized + Vector3.up;            // 45 degrees
+                            blob.flingSpeed = Mathf.Clamp(Mathf.Sqrt(flat.magnitude * 9.81f), 8f, 20f);
+                        }
+                    }
                     if (d.id == WeaponId.Towel && heavy) blob.Stun(2f);          // brief: wind-up snap stuns 2 s
                 }
                 float dmg = (heavy ? d.holdDamage : d.tapDamage) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
@@ -277,7 +287,10 @@ namespace RexMagnum
                     KillLine(d, blob);
                     // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
                     if ((heavy && d.killCamOnHold) || (blob != null && Blob.LivingNear(transform.position, 30f) == 0))
-                        KillCam.Show(h.transform, transform.position, false);
+                        KillCam.Show(h.transform, transform.position,
+                            d.id == WeaponId.GolfClub && heavy ? KillCam.Style.Follow :
+                            d.id == WeaponId.Towel ? KillCam.Style.Towel :
+                            d.id == WeaponId.Fists ? KillCam.Style.Fist : KillCam.Style.Orbit);
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
