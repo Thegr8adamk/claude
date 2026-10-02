@@ -3,14 +3,20 @@
   {
    "name": "A_AlienFloor",
    "kind": "lit",
+   "baseMap": "Textures/A_AlienFloor_base.png",
+   "normalMap": "Textures/A_AlienFloor_nrm.png",
+   "maskMap": "Textures/A_AlienFloor_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.8,
-   "smoothness": 0.7
+   "smoothness": 1.0,
+   "tile": 4,
+   "tileV": 4,
+   "uvTile": 2.0
   },
   {
    "name": "A_Aluminum",
@@ -26,7 +32,8 @@
    ],
    "metallic": 0.9,
    "smoothness": 1.0,
-   "tile": 2
+   "tile": 2,
+   "tileV": 2
   },
   {
    "name": "A_Bamboo",
@@ -113,14 +120,20 @@
   {
    "name": "A_BunkerSand",
    "kind": "lit",
+   "baseMap": "Textures/A_BunkerSand_base.png",
+   "normalMap": "Textures/A_BunkerSand_nrm.png",
+   "maskMap": "Textures/A_BunkerSand_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.05
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_CanvasBlue",
@@ -189,38 +202,56 @@
   {
    "name": "A_CasinoCarpet",
    "kind": "lit",
+   "baseMap": "Textures/A_CasinoCarpet_base.png",
+   "normalMap": "Textures/A_CasinoCarpet_nrm.png",
+   "maskMap": "Textures/A_CasinoCarpet_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.05
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_CorridorCarpet",
    "kind": "lit",
+   "baseMap": "Textures/A_CorridorCarpet_base.png",
+   "normalMap": "Textures/A_CorridorCarpet_nrm.png",
+   "maskMap": "Textures/A_CorridorCarpet_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.05
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_CorridorPaper",
    "kind": "lit",
+   "baseMap": "Textures/A_CorridorPaper_base.png",
+   "normalMap": "Textures/A_CorridorPaper_nrm.png",
+   "maskMap": "Textures/A_CorridorPaper_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.15
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_Curtain0",
@@ -301,7 +332,8 @@
    ],
    "metallic": 0.0,
    "smoothness": 1.0,
-   "tile": 2
+   "tile": 2,
+   "tileV": 2
   },
   {
    "name": "A_Dark",
@@ -613,14 +645,20 @@
   {
    "name": "A_Green",
    "kind": "lit",
+   "baseMap": "Textures/A_Green_base.png",
+   "normalMap": "Textures/A_Green_nrm.png",
+   "maskMap": "Textures/A_Green_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.2
+   "smoothness": 1.0,
+   "tile": 2.5133,
+   "tileV": 2.5133,
+   "uvTile": 2.0
   },
   {
    "name": "A_GymBlack",
@@ -649,14 +687,19 @@
   {
    "name": "A_JungleFall",
    "kind": "lit",
+   "baseMap": "Textures/A_JungleFall_base.png",
+   "normalMap": "Textures/A_JungleFall_nrm.png",
+   "maskMap": "Textures/A_JungleFall_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.8,
+   "smoothness": 1.0,
+   "tile": 1,
+   "tileV": 1,
    "emission": [
     0.06,
     0.135,
@@ -850,7 +893,8 @@
    ],
    "metallic": 0.0,
    "smoothness": 1.0,
-   "tile": 6
+   "tile": 6,
+   "tileV": 6
   },
   {
    "name": "A_RoomLight",
@@ -1080,7 +1124,8 @@
    ],
    "metallic": 0.0,
    "smoothness": 1.0,
-   "tile": 2
+   "tile": 2,
+   "tileV": 2
   },
   {
    "name": "A_SlideFiberglass",
@@ -1162,26 +1207,38 @@
   {
    "name": "A_SpaWood",
    "kind": "lit",
+   "baseMap": "Textures/A_SpaWood_base.png",
+   "normalMap": "Textures/A_SpaWood_nrm.png",
+   "maskMap": "Textures/A_SpaWood_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.4
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 1.8,
+   "uvTile": 2.0
   },
   {
    "name": "A_StairStone",
    "kind": "lit",
+   "baseMap": "Textures/A_StairStone_base.png",
+   "normalMap": "Textures/A_StairStone_nrm.png",
+   "maskMap": "Textures/A_StairStone_mask.png",
    "color": [
-    0.8,
-    0.8,
-    0.8,
+    1,
+    1,
+    1,
     1
    ],
    "metallic": 0.0,
-   "smoothness": 0.4
+   "smoothness": 1.0,
+   "tile": 2,
+   "tileV": 2,
+   "uvTile": 2.0
   },
   {
    "name": "A_Straw",
