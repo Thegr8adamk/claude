@@ -189,8 +189,8 @@ namespace RexMagnum
 
             // third person against a wall: the camera comes very close to Rex; hide his body (shadow stays) so the
             // view is not inside his head
-            bool near = !fp && b < 0.5f && Vector3.Distance(transform.position, pivot) < 0.9f;
-            if (near != bodyHiddenNear)
+            bool near = !fp && !scoped && b < 0.5f && Vector3.Distance(transform.position, pivot) < 0.9f;
+            if (!fp && near != bodyHiddenNear)
             {
                 bodyHiddenNear = near;
                 foreach (var (r, mode) in saved)

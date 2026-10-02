@@ -107,7 +107,7 @@ namespace RexMagnum
             if (canvas == null) return;
             canvas.renderMode = on ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay;
             canvas.worldCamera = on && rig != null ? rig.cam : null;
-            canvas.planeDistance = 1f;
+            canvas.planeDistance = 0.3f;      // nearer than walls in the small room (the UI is depth-tested in VR)
             var sc = canvas.GetComponent<CanvasScaler>();
             if (sc != null) sc.referenceResolution = on ? new Vector2(2600, 1460) : new Vector2(1920, 1080);   // VR: keep text inside the view
         }

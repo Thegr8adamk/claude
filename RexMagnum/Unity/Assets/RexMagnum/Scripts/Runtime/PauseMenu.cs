@@ -36,7 +36,7 @@ namespace RexMagnum
                 if (tab == 3)
                 {
                     if (panel.Update()) { SetOpen(false); return; }
-                    if (panel.Waiting) return;
+                    if (panel.Waiting || MenuNav.Consumed) return;      // a key that just finished a rebind does nothing else
                 }
                 else if (MenuNav.Back) { MenuNav.Consume(); SetOpen(false); return; }
                 var g = UnityEngine.InputSystem.Gamepad.current;
@@ -55,6 +55,14 @@ namespace RexMagnum
             }
             if (GameFlow.Busy) return;
             if (RMInput.Pause) SetOpen(true);
+        }
+
+        int pendingTab = -1;
+
+        void LateUpdate()
+        {
+            // a tab clicked in OnGUI changes here, between GUI passes (changing it mid-event breaks the IMGUI layout)
+            if (pendingTab >= 0) { SetTab(pendingTab); pendingTab = -1; }
         }
 
         void SetTab(int t)
@@ -98,7 +106,7 @@ namespace RexMagnum
             GUI.Label(new Rect(0, 20 * s, w, 50 * s), "PAUSED", title);
             float tw = w / Tabs.Length;
             for (int i = 0; i < Tabs.Length; i++)
-                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 46 * s), tab == i, Tabs[i], button) && tab != i) SetTab(i);
+                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 46 * s), tab == i, Tabs[i], button) && tab != i) pendingTab = i;
             var area = new Rect(w * 0.08f, 150 * s, w * 0.84f, h - 260 * s);
             if (tab == 3)
             {

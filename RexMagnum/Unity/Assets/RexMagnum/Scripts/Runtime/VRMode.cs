@@ -29,7 +29,7 @@ namespace RexMagnum
         static VRMode inst;
         RexCameraRig rig;
         Camera cam;
-        bool busy;
+        bool busy, loaderOn, stopAfterStart;
         Quaternion headRot = Quaternion.identity;
         Vector3 headPos, headZero;
         bool zeroed;
@@ -50,7 +50,7 @@ namespace RexMagnum
         void OnDestroy()
         {
             if (inst == this) inst = null;
-            if (Active) StopXRNow();
+            if (Active || loaderOn) StopXRNow();
         }
 
         /// <summary>Settings toggle. Saves the choice and starts or stops VR now.</summary>
@@ -59,9 +59,9 @@ namespace RexMagnum
             PlayerPrefs.SetInt(PrefKey, on ? 1 : 0);
             PlayerPrefs.Save();
             if (inst == null) { Status = on ? "VR starts when the game starts." : "VR is off."; return; }
-            if (inst.busy) return;
+            if (inst.busy) { inst.stopAfterStart = !on; return; }     // remembered: applied when the start finishes
             if (on && !Active) inst.StartCoroutine(inst.StartXR());
-            else if (!on && Active) inst.StopXRNow();
+            else if (!on && (Active || inst.loaderOn)) inst.StopXRNow();
         }
 
         /// <summary>Put the view straight ahead again (Settings button and when VR starts).</summary>
@@ -96,12 +96,21 @@ namespace RexMagnum
                 busy = false;
                 yield break;
             }
+            loaderOn = true;
             m.GetType().GetMethod("StartSubsystems")?.Invoke(m, null);
-            yield return null;
-            Active = XRSettings.isDeviceActive;
-            Status = Active ? "VR is on: " + XRSettings.loadedDeviceName : "The headset did not start. Check the headset app.";
+            // an OpenXR session can take a few seconds to come up
+            for (float t = 0f; t < 6f && !XRSettings.isDeviceActive; t += Time.unscaledDeltaTime) yield return null;
             busy = false;
-            if (Active) Enter();
+            if (!XRSettings.isDeviceActive)
+            {
+                StopXRNow();
+                Status = "The headset did not start. Put it on, check the headset app (Quest Link / SteamVR), then turn VR on again.";
+                yield break;
+            }
+            Active = true;
+            Status = "VR is on: " + XRSettings.loadedDeviceName;
+            Enter();
+            if (stopAfterStart) { stopAfterStart = false; StopXRNow(); }
         }
 
         void StopXRNow()
@@ -112,6 +121,7 @@ namespace RexMagnum
                 m.GetType().GetMethod("StopSubsystems")?.Invoke(m, null);
                 m.GetType().GetMethod("DeinitializeLoader")?.Invoke(m, null);
             }
+            loaderOn = false;
             Active = false;
             Status = "VR is off.";
             Leave();
@@ -162,6 +172,7 @@ namespace RexMagnum
                 zeroed = true;
             }
             if (rig == null) return;
+            if (!rig.isActiveAndEnabled) { transform.rotation = Quaternion.Euler(0f, rig.Yaw, 0f) * headRot; return; }   // title / intro: the rig does not reset the position, so no lean
             Quaternion local = Quaternion.Euler(0f, -yawZero, 0f) * headRot;     // head turn from "straight ahead"
             rig.HeadYaw = Mathf.DeltaAngle(0f, local.eulerAngles.y);
             Quaternion body = Quaternion.Euler(0f, rig.Yaw, 0f);
