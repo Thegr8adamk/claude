@@ -53,7 +53,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
-ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_RiverRocks", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
+ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_RiverRocks", "Asset_Bridges", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
 
@@ -327,6 +327,13 @@ def splat_maps(h):
     inland = smooth(h, 1.5, 3.0)
     W = mix((1 - smooth(d, 16.0, 19.0)) * inland, 5)      # mossy banks
     W = mix((1 - smooth(d, 10.0, 12.5)) * inland, 1)      # wet mud at the edge
+    # golf-cart road (brief section 6): packed dirt, soft edges
+    rd = np.full(h.shape, 1e9)
+    for x, y in I.road_path(3.0):
+        x0, x1 = int(max((x - 8 + I.SIZE / 2) / cell, 0)), int(min((x + 8 + I.SIZE / 2) / cell, res - 1)) + 1
+        y0, y1 = int(max((y - 8 + I.SIZE / 2) / cell, 0)), int(min((y + 8 + I.SIZE / 2) / cell, res - 1)) + 1
+        rd[y0:y1, x0:x1] = np.minimum(rd[y0:y1, x0:x1], np.hypot(X[y0:y1, x0:x1] - x, Y[y0:y1, x0:x1] - y))
+    W = mix((1 - smooth(rd + (fine - 0.5) * 1.2, I.ROAD_HALF - 0.4, I.ROAD_HALF + 0.8)) * inland, 1)
     W /= W.sum(-1, keepdims=True)
     return W
 
@@ -686,10 +693,12 @@ def rebuild_assets(names, res):
                     TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship, Cave=IA.cave,
                     Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder,
                     JungleFalls=lambda m_: falls_builder(m_)[0],
-                    RiverRocks=lambda m_: IA.river_rocks(m_, ha, I.heightmap()[3], skip=[f[0] for f in falls_builder(m_)[1]]))
+                    RiverRocks=lambda m_: IA.river_rocks(m_, ha, I.heightmap()[3], skip=[f[0] for f in falls_builder(m_)[1]]
+                                                         + [(c[0][0], c[0][1], 0) for c in I.road_river_crossings(I.heightmap()[3])]),
+                    Bridges=lambda m_: IA.bridges(m_, ha, I.heightmap()[3], I.road_river_crossings(I.heightmap()[3])))
     for n in names:
         coll = builders[n](m)
-        if n in ("Golf", "GolfCart", "JungleFalls", "RiverRocks"):
+        if n in ("Golf", "GolfCart", "JungleFalls", "RiverRocks", "Bridges"):
             pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
         elif n == "Ruins":           # same placement as build_island_v2: on the highest ground under the temple
             from mathutils import Matrix

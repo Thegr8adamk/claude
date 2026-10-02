@@ -92,6 +92,7 @@ def heightmap(res=RES, seed=304):
     h = np.where(land > 0, h, -6 * (1 - land))
     h = np.where(land <= 0, -8.0, h - (1 - land) * 8)
     h = carve_river(X, Y, h, rx, ry)
+    h = flatten_road(X, Y, h, (rx, ry))
     return X, Y, h, (rx, ry)
 
 
@@ -507,6 +508,89 @@ def blender_blockout(h, river, tree_count=2500):
 
 
 VIEW_LINES = [((40, -395), (40, -270)), ((20, 120), (40, 262)), ((215, -40), (300, 70))]
+
+
+ROAD_LOOP = [(-40, -300), (-150, -200), Z["golf"], (-250, 120), Z["cave"], (40, 180), (200, 150), Z["ruins"],
+             (250, -120), (150, -250), (115, -300), (80, -326), (0, -326)]
+# golf-cart road (brief section 6): closed loop resort -> golf -> cave -> ruins -> resort; at the resort it runs
+# round the south (beach) side of the hotel, clear of the hotel and the pool deck
+ROAD_HALF = 3.0                                 # 6 m wide dirt road
+
+
+def road_path(step=2.0):
+    """Closed Catmull-Rom loop through ROAD_LOOP, sampled about every `step` metres: list of (x, y)."""
+    P = [(float(x) + 0.0, float(y) + 0.0) for x, y in ROAD_LOOP]
+    n = len(P)
+    out = []
+    for i in range(n):
+        p0, p1, p2, p3 = P[i - 1], P[i], P[(i + 1) % n], P[(i + 2) % n]
+        L = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        k = max(2, int(L / step))
+        for j in range(k):
+            t = j / k
+            t2, t3 = t * t, t * t * t
+            out.append(tuple(0.5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2
+                                    + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3) for c in (0, 1)))
+    return out
+
+
+def road_river_crossings(river, road=None):
+    """Points where the road crosses the slime river (bridge spots): list of ((x, y), road direction (dx, dy))."""
+    road = road or road_path()
+    rx, ry = river
+    out = []
+    n = len(road)
+    for i in range(n):
+        x0, y0 = road[i]
+        x1, y1 = road[(i + 1) % n]
+        for k in range(0, len(rx) - 1):
+            # segment intersection test
+            ax, ay, bx, by = rx[k], ry[k], rx[k + 1], ry[k + 1]
+            d = (x1 - x0) * (by - ay) - (y1 - y0) * (bx - ax)
+            if abs(d) < 1e-9:
+                continue
+            t = ((ax - x0) * (by - ay) - (ay - y0) * (bx - ax)) / d
+            u = ((ax - x0) * (y1 - y0) - (ay - y0) * (x1 - x0)) / d
+            if 0 <= t <= 1 and 0 <= u <= 1:
+                L = math.hypot(x1 - x0, y1 - y0) or 1
+                out.append(((x0 + t * (x1 - x0), y0 + t * (y1 - y0)), ((x1 - x0) / L, (y1 - y0) / L)))
+    return out
+
+
+def flatten_road(X, Y, h, river_xy):
+    """Level the ground across the road (cart can drive): inside the road the height is the smoothed centre-line
+    height; a 4 m shoulder blends back. Not near the river channel (bridges cross there)."""
+    road = road_path()
+    n = h.shape[0] - 1
+    def hat(x, y):
+        fx = min(max((x + SIZE / 2) / SIZE * n, 0), n - 1e-6)
+        fy = min(max((y + SIZE / 2) / SIZE * n, 0), n - 1e-6)
+        ix, iy, tx, ty = int(fx), int(fy), fx - int(fx), fy - int(fy)
+        return (h[iy, ix] * (1 - tx) * (1 - ty) + h[iy, ix + 1] * tx * (1 - ty) + h[iy + 1, ix] * (1 - tx) * ty
+                + h[iy + 1, ix + 1] * tx * ty)
+    zc = np.array([hat(x, y) for x, y in road])
+    k = np.ones(9) / 9                                    # smooth the centre line along the road (no bumps)
+    zc = np.convolve(np.concatenate([zc[-4:], zc, zc[:4]]), k, mode="valid")
+    rx, ry = river_xy
+    rpts = np.stack([rx, ry], 1)
+    cell = SIZE / n
+    out = h.copy()
+    wsum = np.zeros_like(h)
+    acc = np.zeros_like(h)
+    for (x, y), z in zip(road[::1], zc):
+        if np.min(np.hypot(rpts[:, 0] - x, rpts[:, 1] - y)) < 16:
+            continue
+        x0, x1 = int(max((x - 8 + SIZE / 2) / cell, 0)), int(min((x + 8 + SIZE / 2) / cell, n)) + 1
+        y0, y1 = int(max((y - 8 + SIZE / 2) / cell, 0)), int(min((y + 8 + SIZE / 2) / cell, n)) + 1
+        d = np.hypot(X[y0:y1, x0:x1] - x, Y[y0:y1, x0:x1] - y)
+        w = np.clip(1 - (d - ROAD_HALF) / 4.0, 0, 1)
+        w = w * w * (3 - 2 * w)
+        upd = w > wsum[y0:y1, x0:x1]
+        wsum[y0:y1, x0:x1] = np.where(upd, w, wsum[y0:y1, x0:x1])
+        acc[y0:y1, x0:x1] = np.where(upd, z, acc[y0:y1, x0:x1])
+    land = h > 0.5
+    out = np.where(land & (wsum > 0), h * (1 - wsum) + acc * wsum, h)
+    return out
 
 
 def _seg_dist(x, y, a, b):

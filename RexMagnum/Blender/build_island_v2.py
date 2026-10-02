@@ -65,7 +65,9 @@ def build(trees):
     import island as I_
     _, _, _, river = I_.heightmap()
     _, falls = IA.jungle_falls(m, ha, river)
-    IA.river_rocks(m, ha, river, skip=[f[0] for f in falls])
+    cross = I_.road_river_crossings(river)
+    IA.river_rocks(m, ha, river, skip=[f[0] for f in falls] + [(c[0][0], c[0][1], 0) for c in cross])
+    IA.bridges(m, ha, river, cross)
     gcol, gmk = IA.golf(m, ha)
     bpy.context.scene["golf_markers"] = json.dumps(gmk)
     cart = IA.golf_cart(m)
@@ -157,7 +159,7 @@ def grass(ha, zones):
             z = ha(q.x, q.y)
             if z < 1.4 or z > 140:
                 continue
-            if HQ._river_dist(q.x, q.y) < 8.5:                 # no grass in the river
+            if HQ._river_dist(q.x, q.y) < 8.5 or HQ._road_dist(q.x, q.y) < 3.5:   # no grass in the river or road
                 continue
             # slope check
             if abs(ha(q.x + 2, q.y) - z) > 1.2 or abs(ha(q.x, q.y + 2) - z) > 1.2:

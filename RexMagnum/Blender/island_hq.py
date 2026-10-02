@@ -505,6 +505,8 @@ def scatter(height_at, protos_list, count, rng, zmin, zmax, clear, name, scale=(
             continue
         if _river_dist(x, y) < 9.5:           # nothing grows in the river channel
             continue
+        if _road_dist(x, y) < I.ROAD_HALF + 2.0:   # nor on the golf-cart road
+            continue
         inst = bpy.data.objects.new(name, None)
         inst.instance_type = "COLLECTION"
         inst.instance_collection = protos_list[rng.randrange(len(protos_list))]
@@ -547,7 +549,7 @@ def river_banks(height_at, ferns, rocks, rng, tree_scale=1.0):
             side = rng.choice((-1, 1))
             o = side * rng.uniform(9.5, 15.0)
             px, py = x + nx * o + rng.uniform(-0.6, 0.6), y + ny * o + rng.uniform(-0.6, 0.6)
-            if _river_dist(px, py) < 9.5:
+            if _river_dist(px, py) < 9.5 or _road_dist(px, py) < I.ROAD_HALF + 2.0:
                 continue
             z = height_at(px, py)
             if z < 1.5:                      # river mouth / beach
@@ -563,6 +565,48 @@ def river_banks(height_at, ferns, rocks, rng, tree_scale=1.0):
             link(inst, "Vegetation")
             placed += 1
     return placed
+
+
+def road_surface(height_at):
+    """Packed-dirt road ribbon for the Blender pictures (the game draws the road in the terrain splat map)."""
+    import island_assets as IA
+    pts = I.road_path(2.0)
+    n = len(pts)
+    bm = bmesh.new()
+    rows = []
+    for i, (x, y) in enumerate(pts):
+        x1, y1 = pts[(i + 1) % n]
+        x0, y0 = pts[i - 1]
+        L = math.hypot(x1 - x0, y1 - y0) or 1.0
+        nx, ny = -(y1 - y0) / L, (x1 - x0) / L
+        row = []
+        for a in (-1.0, -0.5, 0.0, 0.5, 1.0):
+            px, py = x + nx * a * I.ROAD_HALF, y + ny * a * I.ROAD_HALF
+            row.append(bm.verts.new((px, py, height_at(px, py) + 0.12)))
+        rows.append(row)
+    for i in range(n):
+        a, b = rows[i], rows[(i + 1) % n]
+        for k in range(4):
+            if min(v.co.z for v in (a[k], a[k + 1], b[k + 1], b[k])) > 0.3:
+                bm.faces.new((a[k], a[k + 1], b[k + 1], b[k]))
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    mesh_ob("CartRoad", bm, IA.road_material(), smooth=True)
+
+
+_ROAD_KD = []
+
+
+def _road_dist(x, y):
+    """Distance (m) from a point to the golf-cart road centre line."""
+    if not _ROAD_KD:
+        from mathutils import kdtree
+        pts = I.road_path(1.0)
+        kd = kdtree.KDTree(len(pts))
+        for i, (a, b) in enumerate(pts):
+            kd.insert((a, b, 0.0), i)
+        kd.balance()
+        _ROAD_KD.append(kd)
+    return _ROAD_KD[0].find((x, y, 0.0))[2]
 
 
 VIEWS_CLEAR = [((75, -420), (40, -268)), ((15, 110), (40, 250)), ((215, -40), (300, 70))]
@@ -907,6 +951,7 @@ def build(tree_scale=1.0, v2=False):
     n3 = scatter(ha, ferns, int(14000 * tree_scale), rng, 2.5, 150, clear[:5], "Fern", (0.8, 1.8), 0.05, False)
     n4 = scatter(ha, rocks, int(500 * tree_scale), rng, -2, 4, clear[:3], "Boulder", (0.6, 2.5), 0.4, False)
     n5 = river_banks(ha, ferns, rocks, rng, tree_scale)
+    road_surface(ha)
     # palms around the hotel and pool (resort landscaping)
     for k in range(26):
         x = -20 + (k % 13) * 10

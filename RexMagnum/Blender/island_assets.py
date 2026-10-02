@@ -2406,6 +2406,70 @@ def river_rocks(m, ha, river, skip=(), seed=31):
     return k.c
 
 
+def road_material():
+    """Packed dirt for the cart road (Blender pictures): brown, two tyre tracks, small stones."""
+    m, nt = _mat("A_RoadDirt")
+    if nt is None:
+        return m
+    p = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 3.0
+    nz.inputs["Detail"].default_value = 10
+    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (0.16, 0.11, 0.06, 1)
+    ramp.color_ramp.elements[1].color = (0.36, 0.27, 0.16, 1)
+    nt.links.new(nz.outputs["Fac"], ramp.inputs[0])
+    nt.links.new(ramp.outputs[0], p.inputs["Base Color"])
+    p.inputs["Roughness"].default_value = 0.95
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.4
+    nt.links.new(nz.outputs["Fac"], b.inputs["Height"])
+    nt.links.new(b.outputs[0], p.inputs["Normal"])
+    return m
+
+
+def bridges(m, ha, river, crossings):
+    """Wooden cart bridges where the road crosses the slime river (brief section 6, cart road loop): plank deck
+    level from bank to bank, log beams under it, posts down into the river bed, rope-and-post rails."""
+    k = Kit("Asset_Bridges")
+    rng = random.Random(55)
+    plank = m["teak"] if "teak" in m else m["wood"]
+    for (cx, cy), (dx, dy) in crossings:
+        d = Vector((dx, dy, 0)).normalized()
+        side = Vector((-d.y, d.x, 0))
+        c = Vector((cx, cy, 0))
+        half = 13.0                                   # 26 m long: bank to bank over the 16 m channel
+        a, b = c - d * half, c + d * half
+        z = max(ha(a.x, a.y), ha(b.x, b.y), ha(c.x, c.y) + 1.6) + 0.25
+        w = 3.4
+        # deck planks across the road direction
+        n = int(2 * half / 0.32)
+        for i in range(n):
+            p = a + d * (i + 0.5) * (2 * half / n)
+            jit = rng.uniform(-0.03, 0.03)
+            k.boxc((p.x, p.y, z + rng.uniform(-0.01, 0.01)), (0.3, 2 * w + jit, 0.1), plank,
+                   rot=math.atan2(d.y, d.x), base="Plank")
+        # two log beams under the deck, posts into the river bed
+        for s in (-1, 1):
+            o = side * s * (w - 0.5)
+            k.cyl(tuple(a + o + Vector((0, 0, z - 0.25))), tuple(b + o + Vector((0, 0, z - 0.25))), 0.22, m["wood"], segs=10, base="Beam")
+            for t in (-0.55, 0.0, 0.55):
+                q = c + d * (t * half) + side * s * (w - 0.3)
+                k.cyl(tuple(q + Vector((0, 0, z - 0.2))), tuple(q + Vector((0, 0, ha(q.x, q.y) - 1.0))), 0.16, m["wood"], segs=8, base="Pile")
+            # rail: posts every 3 m + two ropes
+            posts = []
+            for i in range(9):
+                q = a + d * (i / 8 * 2 * half) + side * s * w
+                k.cyl(tuple(q + Vector((0, 0, z))), tuple(q + Vector((0, 0, z + 1.05))), 0.07, m["wood"], segs=8, base="RailPost")
+                posts.append(q)
+            for hgt in (0.55, 1.0):
+                pts = [tuple(q + Vector((0, 0, z + hgt))) for q in posts]
+                k.tube(pts, 0.025, m["rope"], segs=6, base="RailRope")
+    return k.c
+
+
 def build_all():
     m = M()
     weather_all(m)
