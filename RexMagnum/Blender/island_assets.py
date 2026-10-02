@@ -2207,6 +2207,8 @@ def river_profile(ha, river, step=1):
         zs.append(min(z, zs[-1]) if zs else z)
         if i:
             dist.append(dist[-1] + math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]))
+    import island as I
+    zs = list(I.smooth_level(__import__("numpy").array(zs)))
     n = len(pts)
     for i, (x, y) in enumerate(pts):
         a, b = pts[max(i - 1, 0)], pts[min(i + 1, n - 1)]
@@ -2257,19 +2259,19 @@ def river_material():
     sub.inputs[1].default_value = 0.62
     L(sub.outputs[0], add.inputs[1])
     ramp = nt.nodes.new("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].position = 0.35
-    ramp.color_ramp.elements[1].position = 0.6
+    ramp.color_ramp.elements[0].position = 0.55
+    ramp.color_ramp.elements[1].position = 0.85
     L(add.outputs[0], ramp.inputs["Fac"])
     water_col = nt.nodes.new("ShaderNodeMix")
     water_col.data_type = "RGBA"
-    water_col.inputs[6].default_value = (0.05, 0.16, 0.03, 1)
-    water_col.inputs[7].default_value = (0.16, 0.38, 0.06, 1)
+    water_col.inputs[6].default_value = (0.03, 0.12, 0.02, 1)
+    water_col.inputs[7].default_value = (0.1, 0.3, 0.04, 1)
     L(nz.outputs["Fac"], water_col.inputs[0])
     col = nt.nodes.new("ShaderNodeMix")
     col.data_type = "RGBA"
     L(ramp.outputs["Color"], col.inputs[0])
     L(water_col.outputs[2], col.inputs[6])
-    col.inputs[7].default_value = (0.72, 0.9, 0.6, 1)
+    col.inputs[7].default_value = (0.55, 0.8, 0.45, 1)
     L(col.outputs[2], p.inputs["Base Color"])
     rough = nt.nodes.new("ShaderNodeMapRange")
     L(ramp.outputs["Color"], rough.inputs[0])
@@ -2278,7 +2280,7 @@ def river_material():
     L(rough.outputs[0], p.inputs["Roughness"])
     tr = nt.nodes.new("ShaderNodeMapRange")
     L(ramp.outputs["Color"], tr.inputs[0])
-    tr.inputs[3].default_value = 0.55
+    tr.inputs[3].default_value = 0.3
     tr.inputs[4].default_value = 0.0
     L(tr.outputs[0], p.inputs["Transmission Weight"])
     p.inputs["Emission Color"].default_value = (0.2, 0.8, 0.12, 1)

@@ -53,7 +53,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
-ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
+ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_RiverRocks", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
 
@@ -658,13 +658,20 @@ def rebuild_assets(names, res):
         off = (-160.0, 228.0, IA.TUNNEL_Z)
         extra["tunnels"] = {k: [[p[0] + off[0], p[1] + off[1], p[2] + off[2]] for p in v] for k, v in mk.items()}
         return c
+    falls_cache = []
+
+    def falls_builder(m_):          # built once: RiverRocks needs the fall spots too
+        if not falls_cache:
+            falls_cache.append(IA.jungle_falls(m_, ha, I.heightmap()[3]))
+        return falls_cache[0]
     builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
                     TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship,
                     Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder,
-                    JungleFalls=lambda m_: IA.jungle_falls(m_, ha, I.heightmap()[3])[0])
+                    JungleFalls=lambda m_: falls_builder(m_)[0],
+                    RiverRocks=lambda m_: IA.river_rocks(m_, ha, I.heightmap()[3], skip=[f[0] for f in falls_builder(m_)[1]]))
     for n in names:
         coll = builders[n](m)
-        if n in ("Golf", "GolfCart", "JungleFalls"):
+        if n in ("Golf", "GolfCart", "JungleFalls", "RiverRocks"):
             pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
         elif n == "Ruins":           # same placement as build_island_v2: on the highest ground under the temple
             from mathutils import Matrix

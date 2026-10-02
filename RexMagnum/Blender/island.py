@@ -109,7 +109,15 @@ def river_surface_z(h, rx, ry):
         z = max(z, 0.2)
         last = z if last is None else min(z, last)
         out.append(last)
-    return np.array(out)
+    return smooth_level(np.array(out))
+
+
+def smooth_level(z, win=15):
+    """Turn the stair steps of a running minimum into slopes: moving average, then never uphill again."""
+    k = np.ones(win) / win
+    zp = np.concatenate([np.full(win // 2, z[0]), z, np.full(win // 2, z[-1])])
+    zs = np.convolve(zp, k, mode="valid")[:len(z)]
+    return np.minimum.accumulate(np.minimum(zs, z + 0.0))
 
 
 def carve_river(X, Y, h, rx, ry, half=8.0, bank=6.0, depth=0.8):
