@@ -174,6 +174,7 @@ namespace RexMagnum
             XRay(last, false);
             EndCam();
             running = riding = false;
+            RMInput.ActionBlockedFrame = Time.frameCount + 1;   // one frame of grace: a press as the cam closes does nothing
         }
 
         IEnumerator Run(Transform tr, Vector3 target, Vector3 from, Style style)
@@ -220,6 +221,7 @@ namespace RexMagnum
             XRay(target, false);
             EndCam();
             running = false;
+            RMInput.ActionBlockedFrame = Time.frameCount + 1;   // one frame of grace: a press as the cam closes does nothing
         }
 
         /// <summary>Towel kill cam: the jelly's see-through level pulses, so a wave seems to run through it.</summary>

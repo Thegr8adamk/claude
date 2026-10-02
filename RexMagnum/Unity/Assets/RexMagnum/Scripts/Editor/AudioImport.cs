@@ -6,11 +6,15 @@ namespace RexMagnum.EditorTools
     /// <summary>
     /// Import settings for the game audio (Resources/Voice, Sfx, Music), so sounds play on the frame they are
     /// asked for and subtitles stay in sync:
-    ///  - voice and sound effects: decompressed on load and preloaded (no decode delay on PlayOneShot);
+    ///  - sound effects: decompressed on load and preloaded (no decode delay on PlayOneShot);
+    ///  - voice lines (Resources/Voice): compressed in memory (many long lines; Vorbis decodes fast enough to start on time);
     ///  - music and the long ambience loops (Sfx/amb_*): streamed, stereo (they play all around the listener).
     /// </summary>
     public class AudioImport : AssetPostprocessor
     {
+        // bump when the rules below change: Unity then reimports the clips with them
+        public override uint GetVersion() => 2;
+
         // preload stays at Unity's default (on)
         void OnPreprocessAudio()
         {
@@ -18,8 +22,10 @@ namespace RexMagnum.EditorTools
             var ai = (AudioImporter)assetImporter;
             // amb_* loops are long 2D beds: like music (stereo kept, streamed), not like 3D one-shots
             bool music = assetPath.Contains("/Resources/Music/") || System.IO.Path.GetFileName(assetPath).StartsWith("amb_");
+            bool voice = assetPath.Contains("/Resources/Voice/");
             var s = ai.defaultSampleSettings;
-            s.loadType = music ? AudioClipLoadType.Streaming : AudioClipLoadType.DecompressOnLoad;
+            // voices: decompressed they would take ~10x the memory (hundreds of lines); short effects stay decompressed
+            s.loadType = music ? AudioClipLoadType.Streaming : voice ? AudioClipLoadType.CompressedInMemory : AudioClipLoadType.DecompressOnLoad;
             s.compressionFormat = AudioCompressionFormat.Vorbis;
             s.quality = music ? 0.6f : 0.7f;
             ai.defaultSampleSettings = s;

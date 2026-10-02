@@ -100,6 +100,15 @@ namespace RexMagnum
                 seen = v.z > 0f && v.x > -0.1f && v.x < 1.1f && v.y > -0.1f && v.y < 1.1f;
             }
             bool sleep = far && !seen && state != State.Rescued && !lockedIn;     // rescued: let them walk off and go
+            // night: an indoor guest still walking home would sleep on the way and jump back in when Rex comes near
+            // (the rescue / objective target moved): lock in at home now, as it would on arrival
+            if (sleep && !dormant && indoors && !security && DayNight.Night > LockNight && state != State.Panic)
+            {
+                if (agent.enabled && agent.isOnNavMesh) agent.Warp(home);
+                else transform.position = home;
+                SetLockedIn(true);
+                return;
+            }
             if (sleep == dormant) return;
             dormant = sleep;
             if (anim != null) anim.enabled = !sleep;
@@ -201,6 +210,8 @@ namespace RexMagnum
                 case State.Rescued:
                     // safe inside: not before 2 s, so nobody blinks out right in front of Rex
                     if (Time.time - rescuedAt > 2f && !agent.pathPending && agent.remainingDistance < 0.8f) gameObject.SetActive(false);
+                    // path blocked (it would wander forever): gone after 20 s anyway
+                    else if (Time.time - rescuedAt > 20f) gameObject.SetActive(false);
                     break;
             }
         }

@@ -53,7 +53,7 @@ namespace RexMagnum
             D("taunt_25", "Rex", "Here's My Autograph", "Taunt 25 times.", "taunts", 25),
             D("slip_10", "Rex", "Stunt Fall", "Slip on slime 10 times.", "slips", 10),
             D("mirror", "Rex", "Hello, Handsome", "Admire yourself in a mirror.", "mirror", 1),
-            D("die", "Rex", "Finally. Publicity.", "Die. Wake up in room 304.", "deaths", 1),
+            D("die", "Rex", "Finally. Publicity.", "Die. Wake up in room 304, or at a checkpoint (cave, ruins, ship, boss).", "deaths", 1),
             D("photo_1", "Photos", "Me and a Fan", "Take a photo with a blob.", "photos_blob", 1),
             D("photo_10", "Photos", "Album", "Take 10 photos.", "photos", 10),
             D("photo_glorp", "Photos", "Me and Royalty", "Take a photo with King Glorp.", "photos_glorp", 1),

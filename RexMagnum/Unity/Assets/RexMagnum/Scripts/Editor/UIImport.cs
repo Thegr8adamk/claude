@@ -5,6 +5,9 @@ namespace RexMagnum.EditorTools
     /// <summary>Pictures in Resources/UI (title picture, touch icons): sharp on screen, no mip maps, alpha kept.</summary>
     public class UIImport : AssetPostprocessor
     {
+        // bump when the rules below change: Unity then reimports the pictures with them
+        public override uint GetVersion() => 2;
+
         void OnPreprocessTexture()
         {
             if (!assetPath.Contains("/RexMagnum/Resources/UI/")) return;

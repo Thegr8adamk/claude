@@ -35,6 +35,11 @@ namespace RexMagnum
         const float ChargeTime = 3f, ChargeFactor = 2f, VolleyAfter = 4f, VolleyEvery = 5f, VolleyRange = 80f;
         float chargeUntil = -1f, farSince = -1f, nextVolley;
         bool charging;
+        // weak-point window after each volley / charge: dizzy (stunned) for 2 s, every hit counts 1.5x
+        const float DizzyTime = 2f, DizzyFactor = 1.5f;
+        float dizzyUntil = -1f;
+        bool dizzyTold, bonusHit;
+        bool Dizzy => Time.time < dizzyUntil;
         float nextAbsorb, nextWave, nextMinions, nextLine;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
         AudioSource music;
@@ -111,7 +116,7 @@ namespace RexMagnum
                 started = false;
                 Fighting = false;
                 music.Stop();
-                if (charging) { charging = false; blob.speed /= ChargeFactor; }
+                if (charging) { charging = false; blob.speed /= ChargeFactor; blob.bossCharging = false; }
                 chargeUntil = -1f;
                 farSince = -1f;
                 return;
@@ -127,7 +132,13 @@ namespace RexMagnum
             if (phase == 3 && Time.time > nextWave) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
             // charge after a long shot: double speed for 3 s (the multiplier comes off again; phase 3's 1.4x stays)
             bool charge = Time.time < chargeUntil;
-            if (charge != charging) { charging = charge; blob.speed *= charge ? ChargeFactor : 1f / ChargeFactor; }
+            if (charge != charging)
+            {
+                charging = charge;
+                blob.bossCharging = charge;                         // Blob caps the charge at MaxBossChargeSpeed (7 m/s)
+                blob.speed *= charge ? ChargeFactor : 1f / ChargeFactor;
+                if (!charge) StartDizzy();                          // out of breath after the charge
+            }
             // Rex stays out of his 14 m reach for over 4 s: a 3-shot slime volley every ~5 s
             if (d > blob.attackRange && d < VolleyRange)
             {
@@ -219,6 +230,7 @@ namespace RexMagnum
         void OnDamaged(float amount, Vector3 point, GameObject by)
         {
             // a sniper shot from the ship approach (or any hit) starts the whole fight: phases, armor, minions
+            if (bonusHit) return;                               // our own dizzy bonus (already counted)
             float taken = amount;                               // what really counts (long shots: less)
             if (!dead && by != null && rex != null && by.transform == rex)
             {
@@ -239,7 +251,7 @@ namespace RexMagnum
                     }
                 }
             }
-            if (armor.Count == 0 || dead) return;
+            if (armor.Count == 0 || dead) { DizzyBonus(taken, point, by); return; }
             // the nearest armor piece takes the hit (health is given back); heavy hits knock it off
             int best = 0; float bd = float.MaxValue;
             for (int i = 0; i < armor.Count; i++)
@@ -248,7 +260,7 @@ namespace RexMagnum
                 float dd = Vector3.Distance(armor[i].t.position, point);
                 if (dd < bd) { bd = dd; best = i; }
             }
-            if (bd > 3f) return;
+            if (bd > 3f) { DizzyBonus(taken, point, by); return; }
             health.Heal(taken * 0.8f);
             var (t, hp) = armor[best];
             hp -= taken;
@@ -330,6 +342,29 @@ namespace RexMagnum
                 SlimeProjectile.Launch(mouth, target, blob.damage * 0.6f, gameObject, blob.BaseColor());
                 yield return new WaitForSeconds(0.35f);
             }
+            StartDizzy();                                           // the volley leaves him dizzy: Rex's window to close in
+        }
+
+        /// <summary>Weak-point window: stunned-looking pause (Blob.Stun), hits count DizzyFactor times.</summary>
+        void StartDizzy()
+        {
+            if (dead || !started || blob.IsDead) return;
+            dizzyUntil = Time.time + DizzyTime;
+            blob.Stun(DizzyTime);
+            if (crown != null) SlimeFX.Splat(crown.position, Vector3.up, new Color(1f, 0.9f, 0.3f), 12);   // a little burst over his head
+            RexTestHUD.Notice(dizzyTold ? "KING GLORP IS DIZZY!" : "KING GLORP IS DIZZY! Hit him now!", 2f);
+            dizzyTold = true;
+        }
+
+        /// <summary>Dizzy: the extra 50% of a hit that got through. Never the killing part (Damage would run Died twice).</summary>
+        void DizzyBonus(float taken, Vector3 point, GameObject by)
+        {
+            if (!Dizzy || bonusHit || dead) return;
+            float extra = Mathf.Min(taken * (DizzyFactor - 1f), health.Current - 1f);
+            if (extra <= 0f) return;
+            bonusHit = true;                                        // the nested Damaged call must not add another bonus
+            health.Damage(extra, point, by);
+            bonusHit = false;
         }
 
         IEnumerator Victory(GameObject by, Vector3 at)

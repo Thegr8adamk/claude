@@ -297,6 +297,7 @@ namespace RexMagnum
             }
             else tapCount = 0;
             StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo));
+            if (heavy && cameraRig != null) cameraRig.FovPush(4f);   // wind-up cue: the view leans in before the big hit
             // a whoosh on every swing: the towel and golf club have their own sound, the rest a plain swing
             // (lower and louder for a heavy attack)
             bool own = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub;
@@ -360,6 +361,10 @@ namespace RexMagnum
                 Vector3 hp = col.ClosestPoint(chest);
                 Vector3 flat = Vector3.ProjectOnPlane(hp - chest, Vector3.up);
                 if (flat.sqrMagnitude > 0.36f && Vector3.Angle(transform.forward, flat) > arc) continue;   // behind / beside (touching counts)
+                // no hits through walls / doors: the first thing on the line from the chest must be something with Health
+                // (this target, or another blob in the group)
+                if (Physics.Linecast(chest, hp, out RaycastHit block, ~0, QueryTriggerInteraction.Ignore) &&
+                    block.collider.GetComponentInParent<Health>() == null) continue;
                 struck.Add(h);
                 var blob = h.GetComponent<Blob>();
                 if (blob != null)
@@ -572,7 +577,7 @@ namespace RexMagnum
 
         Vector3 ThrowVelocity(bool longThrow)
         {
-            Vector3 dir = cameraRig.transform.forward;
+            Vector3 dir = cameraRig.AimForward;          // steady aim: a shake or recoil kick does not bend the throw
             dir.y = Mathf.Max(dir.y, -0.2f) + 0.35f;
             return dir.normalized * (longThrow ? 15f : 8f);
         }

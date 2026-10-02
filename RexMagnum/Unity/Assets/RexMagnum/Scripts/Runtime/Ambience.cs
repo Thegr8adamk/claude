@@ -85,7 +85,12 @@ namespace RexMagnum
                 roofed = Physics.Raycast(p + Vector3.up * 1.8f, Vector3.up, 6f, ~0, QueryTriggerInteraction.Ignore);
             }
             float outside = roofed ? 0.25f : 1f;
-            float wantBeach = title ? 0f : 0.35f * low * outside;
+            // ...and only near the beach itself: low inland ground (golf course, cave mouth) is not the shore.
+            // Flat distance to the beach zone centre: full within 60 m, gone at 150 m
+            Vector3 toBeach = p - GameGuide.Zones[2].at;
+            toBeach.y = 0f;
+            float nearBeach = Mathf.Clamp01(1f - (toBeach.magnitude - 60f) / 90f);
+            float wantBeach = title ? 0f : 0.35f * low * nearBeach * outside;
             float wantJungle = title ? 0f : (0.22f + 0.18f * DayNight.Night) * Mathf.Clamp01((p.y - 4f) / 10f + (1f - low) * 0.5f) * outside;
             if (beach != null) beach.volume = Mathf.MoveTowards(beach.volume, wantBeach * AudioMix.Effects, dt * 0.2f);
             if (jungle != null) jungle.volume = Mathf.MoveTowards(jungle.volume, wantJungle * AudioMix.Effects, dt * 0.2f);

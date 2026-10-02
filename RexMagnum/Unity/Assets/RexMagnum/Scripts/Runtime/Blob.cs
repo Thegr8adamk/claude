@@ -64,6 +64,10 @@ namespace RexMagnum
         public bool IsAngry => Time.time < angryUntil;
         /// <summary>Top chase speed: below Rex's run speed (6.0), so running away always works.</summary>
         public const float MaxChaseSpeed = 5.7f;
+        /// <summary>King Glorp's long-shot charge cap: faster than Rex's run for 3 s, but a sprint / dodge still escapes.</summary>
+        public const float MaxBossChargeSpeed = 7f;
+        /// <summary>Set by KingGlorpBoss while he charges (the only time he may pass MaxChaseSpeed).</summary>
+        [System.NonSerialized] public bool bossCharging;
 
         /// <summary>Hit reaction: slides the blob back along dir (flat) by metres over 0.15 s, on the NavMesh.
         /// Not for the boss (too big to shove) or a blob that is already popping.</summary>
@@ -73,7 +77,8 @@ namespace RexMagnum
             dir.y = 0f;
             if (dir.sqrMagnitude < 0.0001f) return;
             if (knockRoutine != null) StopCoroutine(knockRoutine);
-            knockRoutine = StartCoroutine(KnockSlide(dir.normalized * metres, 0.15f));
+            // a little variety: not every hit shoves the same distance
+            knockRoutine = StartCoroutine(KnockSlide(dir.normalized * metres * Random.Range(0.75f, 1.3f), 0.15f));
         }
         Coroutine knockRoutine;
 
@@ -128,7 +133,7 @@ namespace RexMagnum
 
         // hit reaction (every hit): a short white flash and a squash of the jelly
         const float FlashTime = 0.08f, SquashTime = 0.16f;
-        float flashUntil, squashUntil;
+        float flashUntil, squashUntil, squashAmount = 0.22f;
 
         // attack telegraph: an orange-red glow pulse just before every whip / spit / throw (time to dodge)
         public const float TelegraphTime = 0.3f;
@@ -143,7 +148,9 @@ namespace RexMagnum
         const float TokenHold = 8f;                                        // then the token goes back so others get a turn
         static int attackTokens;
         bool hasToken, circling;
-        float tokenSince, noTokenUntil, orbitAngle, orbitRadius, orbitDir;
+        float tokenSince, noTokenUntil, orbitAngle, orbitRadius, orbitDir, orbitSpeed = 25f;
+        // hurt (<30% health): now and then backs off a few metres for 1-2 s, then comes back
+        float retreatUntil, nextRetreat;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => attackTokens = 0;                    // no stale count with domain reload off
 
@@ -169,9 +176,16 @@ namespace RexMagnum
         {
             if (!agent.isOnNavMesh) return;
             agent.isStopped = false;
-            orbitAngle += orbitDir * 25f * Time.deltaTime;
+            orbitAngle += orbitDir * orbitSpeed * Time.deltaTime;
             if (Time.time <= nextPath) return;
             nextPath = Time.time + 0.4f;
+            // flank: spread out from the other waiting blobs (no bunching on one side of Rex)
+            foreach (var o in All)
+            {
+                if (o == null || o == this || !o.circling || o.IsDead) continue;
+                float diff = Mathf.DeltaAngle(orbitAngle, o.orbitAngle);
+                if (Mathf.Abs(diff) < 50f) orbitAngle -= Mathf.Sign(diff) * 15f;
+            }
             float a = orbitAngle * Mathf.Deg2Rad;
             Vector3 p = rex.position + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * orbitRadius;
             if (NavMesh.SamplePosition(p, out NavMeshHit nh, 2f, NavMesh.AllAreas)) agent.SetDestination(nh.position);
@@ -179,13 +193,29 @@ namespace RexMagnum
         }
         Vector3 jellyBaseScale = Vector3.one;
 
+        /// <summary>Hurt: slide a few metres away from Rex (on the NavMesh), facing him.</summary>
+        void Retreat()
+        {
+            if (!agent.isOnNavMesh) return;
+            agent.isStopped = false;
+            if (Time.time > nextPath)
+            {
+                nextPath = Time.time + 0.5f;
+                Vector3 away = transform.position - rex.position; away.y = 0f;
+                if (away.sqrMagnitude < 0.01f) away = -transform.forward;
+                Vector3 p = transform.position + away.normalized * 4f;
+                if (NavMesh.SamplePosition(p, out NavMeshHit nh, 2f, NavMesh.AllAreas)) agent.SetDestination(nh.position);
+                else retreatUntil = 0f;                                    // wall or water behind it: fight on
+            }
+        }
+
         void Squash()
         {
             if (squashT == null) return;
             float k = squashUntil > Time.time ? (squashUntil - Time.time) / SquashTime : 0f;
             var t = squashT;
             if (k <= 0f) { if (t.localScale != jellyBaseScale) t.localScale = jellyBaseScale; return; }
-            float s = Mathf.Sin(k * Mathf.PI) * 0.22f;                     // flat and wide, then back
+            float s = Mathf.Sin(k * Mathf.PI) * squashAmount;              // flat and wide, then back
             t.localScale = Vector3.Scale(jellyBaseScale, new Vector3(1f + s * 0.5f, 1f - s, 1f + s * 0.5f));
         }
 
@@ -239,6 +269,7 @@ namespace RexMagnum
             nextCull = Time.time + Random.Range(0f, 1f);                   // spread the checks over the frames
             orbitRadius = Random.Range(4f, 6f);
             orbitDir = Random.value < 0.5f ? -1f : 1f;
+            orbitSpeed = Random.Range(18f, 32f);
             SetNightGlow(DayNight.Night);         // DayNight only writes the glow when Night changes: a new blob gets it here
         }
 
@@ -261,7 +292,8 @@ namespace RexMagnum
             float angry = IsAngry ? 1f : 0f;
             agent.speed = speed * DayNight.BlobSpeed * (IsAngry ? 1.5f : 1f) * (IsStunned ? 0f : 1f);
             // fairness: night + angry must never outrun Rex's run (6 m/s); the lifeguard's 3.6 is 5.76 at full night
-            if (kind != Kind.KingGlorp) agent.speed = Mathf.Min(agent.speed, MaxChaseSpeed);
+            // the boss too: only his long-shot charge may go a little faster (still escapable)
+            agent.speed = Mathf.Min(agent.speed, kind == Kind.KingGlorp && bossCharging ? MaxBossChargeSpeed : MaxChaseSpeed);
             if (jellyRenderer != null)
             {
                 bool glowDirty = false;
@@ -316,6 +348,7 @@ namespace RexMagnum
                 ReleaseToken();
                 return;
             }
+            if (Time.time < retreatUntil) { Retreat(); return; }
             // attack turns (not the boss): near Rex a blob needs one of the tokens, else it circles and waits
             if (kind != Kind.KingGlorp)
             {
@@ -474,6 +507,16 @@ namespace RexMagnum
             if (!health.IsDead && !IsStunned) Play("Hit", 0.03f);
             flashUntil = Time.time + FlashTime;                            // every hit, light ones too
             squashUntil = Time.time + SquashTime;
+            squashAmount = Random.Range(0.15f, 0.3f);                      // not the same wobble every hit
+            // badly hurt: sometimes backs off for a moment (gives the attack turn to another blob)
+            if (!health.IsDead && kind != Kind.KingGlorp && health.Fraction < 0.3f && Time.time > nextRetreat && Random.value < 0.4f)
+            {
+                retreatUntil = Time.time + Random.Range(1f, 2f);
+                nextRetreat = Time.time + 6f;
+                nextPath = 0f;
+                ReleaseToken();
+                if (circling) circling = false;
+            }
             Sfx.Play("blob_hit", point);
         }
 

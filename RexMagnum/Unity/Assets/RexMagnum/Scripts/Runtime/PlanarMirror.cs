@@ -35,6 +35,23 @@ namespace RexMagnum
         float nextLine;
 
         readonly Plane[] frustum = new Plane[6];
+        // VR: one mono render sampled in screen space is wrong in each eye (swims, double image): a plain shiny
+        // surface instead (reflection probe only), back to the real mirror when VR is off
+        Material mirrorMat, vrMat;
+        bool vrLook;
+
+        void SetVRLook(bool on)
+        {
+            vrLook = on;
+            if (on && vrMat == null)
+            {
+                vrMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                vrMat.SetColor("_BaseColor", new Color(0.55f, 0.6f, 0.65f));
+                vrMat.SetFloat("_Metallic", 1f);
+                vrMat.SetFloat("_Smoothness", 0.95f);
+            }
+            rend.sharedMaterial = on ? vrMat : mirrorMat;
+        }
 
         void Start()
         {
@@ -48,6 +65,7 @@ namespace RexMagnum
             var mat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
             mat.SetTexture("_BaseMap", rt);
             rend.material = mat;
+            mirrorMat = mat;
             var rex = FindAnyObjectByType<RexController>();
             if (rex != null) player = rex.transform;
         }
@@ -56,6 +74,7 @@ namespace RexMagnum
         {
             if (rt != null) rt.Release();
             if (mirrorCam != null) Destroy(mirrorCam.gameObject);
+            if (vrMat != null) Destroy(vrMat);
         }
 
         void Update()
@@ -73,6 +92,8 @@ namespace RexMagnum
         {
             var cam = Camera.main;
             if (cam == null || rendering) return;
+            if (VRMode.Active != vrLook) SetVRLook(VRMode.Active);
+            if (vrLook) return;
             if (Vector3.Distance(cam.transform.position, transform.position) > activeDistance || !rend.isVisible) return;
             Vector3 n = transform.TransformDirection(localNormal).normalized;
             Vector3 p = transform.position;
@@ -89,6 +110,7 @@ namespace RexMagnum
             refl.m33 = 1;
             mirrorCam.CopyFrom(cam);
             mirrorCam.targetTexture = rt;
+            mirrorCam.useOcclusionCulling = false;          // the game camera's occlusion data is for its own view, not the reflected one
             mirrorCam.worldToCameraMatrix = cam.worldToCameraMatrix * refl;
             Vector4 plane = CameraSpacePlane(mirrorCam, p, n);
             mirrorCam.projectionMatrix = cam.CalculateObliqueMatrix(plane);

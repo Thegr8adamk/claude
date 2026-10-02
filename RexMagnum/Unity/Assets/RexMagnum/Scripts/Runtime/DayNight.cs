@@ -19,6 +19,10 @@ namespace RexMagnum
         public List<Light> nightLights = new List<Light>();  // torches, lamps, street lights
         public static float Night { get; private set; }
         float baseSun, baseAmbient, baseFog, baseExposure;
+        Color baseSkyTint, baseGround;
+        // night floor: away from the lamps the island stays readable (it was near-black at 0.25 ambient / 0.12 sky)
+        const float NightAmbient = 0.5f, NightExposure = 0.35f;
+        static readonly Color MoonSkyTint = new Color(0.22f, 0.32f, 0.62f), MoonGround = new Color(0.12f, 0.15f, 0.24f);
         Material sky;
         float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f, glowNight = -1f;
         ReflectionProbe islandProbe;
@@ -36,6 +40,8 @@ namespace RexMagnum
             sky = RenderSettings.skybox != null ? new Material(RenderSettings.skybox) : null;   // do not edit the asset
             RenderSettings.skybox = sky;
             if (sky != null && sky.HasProperty("_Exposure")) baseExposure = sky.GetFloat("_Exposure");
+            if (sky != null && sky.HasProperty("_SkyTint")) baseSkyTint = sky.GetColor("_SkyTint");
+            if (sky != null && sky.HasProperty("_GroundColor")) baseGround = sky.GetColor("_GroundColor");
             spawners = FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None);   // every zone, not only the first
             foreach (var sp in spawners) if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;
             if (sunColor == null || sunColor.colorKeys.Length < 2)
@@ -79,11 +85,15 @@ namespace RexMagnum
                 sun.intensity = Mathf.Lerp(0.12f, baseSun, Mathf.Clamp01(elev * 3f));   // night: moonlight
                 sun.shadowStrength = Mathf.Lerp(0.5f, 0.9f, day);
             }
-            RenderSettings.ambientIntensity = Mathf.Lerp(0.25f, baseAmbient, day);
+            RenderSettings.ambientIntensity = Mathf.Lerp(Mathf.Min(NightAmbient, baseAmbient), baseAmbient, day);
             RenderSettings.fogColor = fogColor.Evaluate(timeOfDay);
             RenderSettings.fogDensity = baseFog * Mathf.Lerp(1.6f, 1f, day);
-            if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(0.12f, baseExposure, day));
+            if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(Mathf.Min(NightExposure, baseExposure), baseExposure, day));
+            // cool moonlit sky (and so a cool skybox ambient) at night; the day colours stay exactly as built
+            if (sky != null && sky.HasProperty("_SkyTint")) sky.SetColor("_SkyTint", Color.Lerp(MoonSkyTint, baseSkyTint, day));
+            if (sky != null && sky.HasProperty("_GroundColor")) sky.SetColor("_GroundColor", Color.Lerp(MoonGround, baseGround, day));
             if (Time.time > nextLights) { nextLights = Time.time + 0.5f; NightLights(Night > 0.3f); }
+            FadeLights();
             // the glow only when Night really changed (a property block write per blob per frame added up); new blobs set it in Start
             if (Mathf.Abs(Night - glowNight) > 0.01f || (Night == 0f && glowNight != 0f))      // and exactly off by day
             {
@@ -142,39 +152,89 @@ namespace RexMagnum
         Transform rexT;
         float[] lightDist;
 
-        /// <summary>Night: the MaxNightLights lights nearest to Rex on, all others off. Day: all off.</summary>
+        float[] lightBase;          // each light's built intensity (the fade goes 0 .. this)
+        bool[] lightWant;           // chosen to burn (fades in); false: fades out, then disabled
+        const float LightFade = 2f;  // per second, of the base intensity: ~0.5 s in / out (no popping lamps)
+        const float SwapCloser = 0.85f * 0.85f;   // a light must be 15% closer than the weakest burning one to take its place
+
+        /// <summary>Night: the MaxNightLights lights nearest to Rex on (with hysteresis, so they do not flicker
+        /// at equal distances), all others off. Day: all off. Lights fade in / out in FadeLights.</summary>
         void NightLights(bool night)
         {
             int n = nightLights.Count;
-            if (!night || n == 0)
+            if (n == 0) return;
+            if (lightBase == null || lightBase.Length != n)
             {
-                foreach (var l in nightLights) if (l != null && l.enabled) l.enabled = false;
+                lightBase = new float[n];
+                lightWant = new bool[n];
+                lightDist = new float[n];
+                for (int i = 0; i < n; i++)
+                {
+                    var l = nightLights[i];
+                    lightBase[i] = l != null ? l.intensity : 0f;
+                    if (l != null && l.enabled) { l.enabled = false; l.intensity = 0f; }     // all start dark, chosen below
+                }
+            }
+            if (!night)
+            {
+                for (int i = 0; i < n; i++) lightWant[i] = false;
                 return;
             }
             if (rexT == null) { var rc = FindAnyObjectByType<RexController>(); if (rc != null) rexT = rc.transform; }
             Vector3 c = rexT != null ? rexT.position : (Camera.main != null ? Camera.main.transform.position : Vector3.zero);
-            if (lightDist == null || lightDist.Length != n) lightDist = new float[n];
             for (int i = 0; i < n; i++)
                 lightDist[i] = nightLights[i] != null ? (nightLights[i].transform.position - c).sqrMagnitude : float.MaxValue;
-            // the distance of the MaxNightLights-th nearest (a few passes over the list, no sorting garbage)
-            float limit = float.MaxValue;
-            if (n > MaxNightLights)
+            // lit = enabled (also still fading out): never more than MaxNightLights, counted as they switch on
+            int wanted = 0;
+            for (int i = 0; i < n; i++) if (lightWant[i]) wanted++;
+            for (int guard = 0; guard < n; guard++)
             {
-                float below = -1f;
-                for (int k = 0; k < MaxNightLights; k++)
+                int near = -1, far = -1;
+                for (int i = 0; i < n; i++)
                 {
-                    float m = float.MaxValue;
-                    for (int i = 0; i < n; i++) if (lightDist[i] > below && lightDist[i] < m) m = lightDist[i];
-                    below = m;
+                    if (nightLights[i] == null) { lightWant[i] = false; continue; }
+                    if (lightWant[i]) { if (far < 0 || lightDist[i] > lightDist[far]) far = i; }
+                    else if (near < 0 || lightDist[i] < lightDist[near]) near = i;      // also one still fading out
                 }
-                limit = below;
+                if (near < 0) break;
+                if (wanted < MaxNightLights)
+                {
+                    // a free slot (a fading-out light still counts as on until it is dark)
+                    if (nightLights[near].enabled || Lit() < MaxNightLights) { lightWant[near] = true; wanted++; SwitchOn(near); continue; }
+                    break;
+                }
+                // full: the weakest burning light fades out only for a clearly nearer one (it switches on once its slot is free)
+                if (far >= 0 && lightDist[near] < lightDist[far] * SwapCloser) { lightWant[far] = false; wanted--; continue; }
+                break;
             }
-            for (int i = 0; i < n; i++)
+        }
+
+        int Lit()
+        {
+            int k = 0;
+            foreach (var l in nightLights) if (l != null && l.enabled) k++;
+            return k;
+        }
+
+        void SwitchOn(int i)
+        {
+            var l = nightLights[i];
+            if (l == null || l.enabled) return;
+            l.intensity = 0f;
+            l.enabled = true;
+        }
+
+        /// <summary>Every frame: chosen lights fade up to their intensity, dropped ones fade out and switch off.</summary>
+        void FadeLights()
+        {
+            if (lightBase == null || lightBase.Length != nightLights.Count) return;
+            for (int i = 0; i < lightBase.Length; i++)
             {
                 var l = nightLights[i];
-                if (l == null) continue;
-                bool on = lightDist[i] <= limit;
-                if (l.enabled != on) l.enabled = on;
+                if (l == null || !l.enabled) continue;
+                float target = lightWant[i] ? lightBase[i] : 0f;
+                if (l.intensity != target) l.intensity = Mathf.MoveTowards(l.intensity, target, lightBase[i] * LightFade * Time.deltaTime);
+                if (!lightWant[i] && l.intensity <= 0f) l.enabled = false;
             }
         }
 

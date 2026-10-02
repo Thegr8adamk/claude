@@ -193,7 +193,8 @@ namespace RexMagnum
                     Note("The whole island is open. The NEXT line and the compass at the top of the screen show a goal. " +
                          "Pause > MAP shows where you are, the zones you visited and the clues from rescued guests.");
                     Note("Hands down: guests talk to you. Rescue hiding guests when no blob is near. Food and drinks heal. " +
-                         "If you die, you wake up in room 304 and keep your weapons.");
+                         "If you die, you keep your weapons and wake up in room 304, or at the last checkpoint " +
+                         "(the cave, the ruins, the ship or the boss) if you died near it.");
                     break;
             }
             if (sel < 0 || sel >= rows.Count || !rows[sel].Selectable) sel = Next(-1, 1);

@@ -450,8 +450,9 @@ namespace RexMagnum.EditorTools
             foreach (var r in rs)
             {
                 r.shadowCastingMode = ShadowCastingMode.On;
-                GameObjectUtility.SetStaticEditorFlags(r.gameObject,
-                    StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+                // only the building shells occlude; extras (Ruins_Core, door, bottles) move or are small: occludee only
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, r.name.Contains("_LOD")
+                    ? StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic : StaticEditorFlags.OccludeeStatic);
             }
             // see-through sub-meshes in an occluder hide what is behind the windows / pools / falls after the
             // occlusion bake: move them to a child renderer that is only an occludee (same LOD level as its parent)
@@ -504,8 +505,9 @@ namespace RexMagnum.EditorTools
             var mats = r.sharedMaterials;
             var solid = new List<int>();
             var clear = new List<int>();
-            for (int s = 0; s < src.subMeshCount; s++)
-                (s < mats.Length && mats[s] != null && SeeThrough.Contains(mats[s].name) ? clear : solid).Add(s);
+            // a sub-mesh without a material was never drawn: it goes to neither part (mats[s] would be out of range)
+            for (int s = 0; s < src.subMeshCount && s < mats.Length; s++)
+                (mats[s] != null && SeeThrough.Contains(mats[s].name) ? clear : solid).Add(s);
             if (clear.Count == 0) return null;
             if (solid.Count == 0)
             {
@@ -514,14 +516,54 @@ namespace RexMagnum.EditorTools
             }
             Mesh Part(List<int> subs, string tag)
             {
-                var m = UnityEngine.Object.Instantiate(src);         // same vertices / UVs / normals, fewer sub-meshes
-                m.name = $"{building}_{r.name}_{tag}";
+                // only the vertices these sub-meshes use (a whole copy kept every vertex in both parts: double memory),
+                // every channel the source has (UV2 lightmap UVs, colours...)
+                var map = new int[src.vertexCount];
+                for (int k = 0; k < map.Length; k++) map[k] = -1;
+                var used = new List<int>();
+                var subTris = new List<int[]>();
+                foreach (int sub in subs)
+                {
+                    var t = src.GetTriangles(sub);
+                    for (int k = 0; k < t.Length; k++)
+                    {
+                        if (map[t[k]] < 0) { map[t[k]] = used.Count; used.Add(t[k]); }
+                        t[k] = map[t[k]];
+                    }
+                    subTris.Add(t);
+                }
+                List<T> Pick<T>(List<T> all) => all.Count == 0 ? all : used.Select(k => all[k]).ToList();
+                var m = new Mesh { name = $"{building}_{r.name}_{tag}" };
+                m.indexFormat = used.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+                var v3 = new List<Vector3>();
+                src.GetVertices(v3); m.SetVertices(Pick(v3));
+                src.GetNormals(v3); if (v3.Count > 0) m.SetNormals(Pick(v3));
+                var v4 = new List<Vector4>();
+                src.GetTangents(v4); if (v4.Count > 0) m.SetTangents(Pick(v4));
+                var col = new List<Color>();
+                src.GetColors(col); if (col.Count > 0) m.SetColors(Pick(col));
+                for (int ch = 0; ch < 8; ch++)
+                {
+                    var attr = VertexAttribute.TexCoord0 + ch;
+                    if (!src.HasVertexAttribute(attr)) continue;
+                    src.GetUVs(ch, v4);
+                    var uvs = Pick(v4);
+                    int dim = src.GetVertexAttributeDimension(attr);
+                    if (dim <= 2) m.SetUVs(ch, uvs.Select(u => (Vector2)u).ToList());
+                    else if (dim == 3) m.SetUVs(ch, uvs.Select(u => (Vector3)u).ToList());
+                    else m.SetUVs(ch, uvs);
+                }
                 m.subMeshCount = subs.Count;
-                for (int i = 0; i < subs.Count; i++) m.SetTriangles(src.GetTriangles(subs[i]), i);    // with sub-mesh bounds (WaterVolume reads them)
+                for (int i = 0; i < subs.Count; i++) m.SetTriangles(subTris[i], i);    // with sub-mesh bounds (WaterVolume reads them)
                 m.RecalculateBounds();
                 string p = $"{Gen}/{m.name}.asset";
                 AssetDatabase.DeleteAsset(p);
                 AssetDatabase.CreateAsset(m, p);
+                // no CPU copy in the build: nothing reads these at runtime (WaterVolume only reads the sub-mesh bounds,
+                // the colliders use their own CollisionMesh); the editor (lightmap UVs) can still read the asset
+                var mso = new SerializedObject(m);
+                var rp = mso.FindProperty("m_IsReadable");
+                if (rp != null) { rp.boolValue = false; mso.ApplyModifiedPropertiesWithoutUndo(); }
                 return m;
             }
             var child = new GameObject(r.name.Replace("_LOD", "_SeeThroughLOD"));     // no "_LOD0" suffix: not a lightmap / collision part
@@ -1019,6 +1061,60 @@ namespace RexMagnum.EditorTools
             }
         }
 
+        /// <summary>A hanging board at the cave fork, read when walking in from the cave mouth: which way to the ship and
+        /// to the ruins (players got lost in the dark cavern). The approach runs along the main tunnel's last lamp
+        /// (lamps sit 2.5 m above the floor on the path points); arrows come from the branch end directions.</summary>
+        static void TunnelSign(Vector3 fork, List<Vector3> lamps, Vector3 ruinsEnd, Vector3 shipEnd, Transform root)
+        {
+            Vector3 Flat(Vector3 p) { p.y = 0f; return p; }
+            // the lamp 15 to 40 m before the fork on the main tunnel: the one farthest from both branch ends
+            var prev = lamps.Where(p => { float dd = Vector3.Distance(Flat(p), Flat(fork)); return dd > 15f && dd < 40f; })
+                .OrderByDescending(p => Mathf.Min(Vector3.Distance(p, ruinsEnd), Vector3.Distance(p, shipEnd)))
+                .Select(p => (Vector3?)p).FirstOrDefault();
+            if (prev == null) return;
+            var dir = Flat(fork - prev.Value).normalized;
+            if (dir.sqrMagnitude < 0.5f) return;
+            string Arrow(Vector3 end, string label)
+            {
+                float ang = Vector3.SignedAngle(dir, Flat(end - fork), Vector3.up);    // + = to the right
+                return ang > 30f ? label + "  -->" : ang < -30f ? "<--  " + label : "^  " + label + "  ^";
+            }
+            Font font = null;
+            foreach (var fn in new[] { "LegacyRuntime.ttf", "Arial.ttf" })      // Unity 6 / older editors
+                if (font == null) try { font = Resources.GetBuiltinResource<Font>(fn); } catch (Exception) { }
+            var sign = new GameObject("TunnelSign").transform;
+            sign.SetParent(root, false);
+            var at = Vector3.Lerp(prev.Value, fork + Vector3.up * 2.5f, 0.6f);
+            sign.position = at + Vector3.up * 0.2f;                      // about 2.7 m above the floor: Rex walks under it
+            sign.rotation = Quaternion.LookRotation(dir);                 // text and quad face the player walking in
+            var board = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            UnityEngine.Object.DestroyImmediate(board.GetComponent<Collider>());
+            board.name = "Board";
+            board.transform.SetParent(sign, false);
+            board.transform.localScale = new Vector3(2.6f, 1.1f, 1f);
+            var bm = Asset("TunnelSign", Shader.Find("Universal Render Pipeline/Lit"));
+            bm.SetColor("_BaseColor", new Color(0.18f, 0.11f, 0.06f));    // old painted plank
+            bm.SetFloat("_Smoothness", 0.15f);
+            EditorUtility.SetDirty(bm);
+            board.GetComponent<MeshRenderer>().sharedMaterial = bm;
+            if (font == null) return;
+            var tg = new GameObject("Text");
+            tg.transform.SetParent(sign, false);
+            tg.transform.localPosition = new Vector3(0f, 0f, -0.02f);     // just in front of the board
+            var tm = tg.AddComponent<TextMesh>();
+            tm.font = font;
+            tm.text = Arrow(shipEnd, "SHIP") + "\n" + Arrow(ruinsEnd, "RUINS");
+            tm.fontSize = 64;
+            tm.characterSize = 0.06f;
+            tm.lineSpacing = 1.1f;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = new Color(1f, 0.85f, 0.4f);                        // unlit: readable in the dark cavern
+            var tr = tg.GetComponent<MeshRenderer>();
+            tr.sharedMaterial = font.material;
+            tr.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
         static Transform DoorPair(string name, Vector3 a, Vector3 aOut, Vector3 b, Vector3 bOut, Transform root)
         {
             ZoneDoor Make(string n, Vector3 at)
@@ -1091,6 +1187,7 @@ namespace RexMagnum.EditorTools
                 l.color = i % 5 == 4 ? new Color(0.4f, 1f, 0.35f) : new Color(1f, 0.75f, 0.45f);
                 l.shadows = i % 3 == 0 ? LightShadows.Soft : LightShadows.None;
             }
+            if (ruins.Count >= 2 && ship.Count >= 2) TunnelSign(main[main.Count - 1], lights, ruins[1], ship[1], root);
             // one dark box probe per tunnel branch (axis-aligned box around the branch, 4 m margin)
             foreach (var (pn, seg) in new[] { ("TunnelProbeMain", main), ("TunnelProbeRuins", ruins), ("TunnelProbeShip", ship) })
             {
@@ -1393,6 +1490,8 @@ namespace RexMagnum.EditorTools
                 fr.sharedMaterial = far.Value.mat;
                 fr.shadowCastingMode = ShadowCastingMode.Off;      // far beyond the shadow distance anyway
                 lg.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r }), new LOD(0.008f, new Renderer[] { fr }) });
+                lg.fadeMode = LODFadeMode.CrossFade;        // dithered blend mesh <-> picture instead of a pop
+                lg.animateCrossFading = true;               // time-based: the LODs' fade widths stay 0
             }
             else lg.SetLODs(new[] { new LOD(pr.kind == "fern" ? 0.02f : 0.008f, new Renderer[] { r }) });
             if (pr.kind == "palm" || pr.kind == "tree")
@@ -1435,6 +1534,7 @@ namespace RexMagnum.EditorTools
             bool fog = RenderSettings.fog;
             var probe = RenderSettings.ambientProbe;
             var prevActive = RenderTexture.active;
+            var aoOff = new List<ScriptableRendererFeature>();      // SSAO darkened the picture (baked-in, doubled in game)
             Texture2D tex;
             try
             {
@@ -1446,6 +1546,7 @@ namespace RexMagnum.EditorTools
                 mr.shadowCastingMode = ShadowCastingMode.Off;
                 foreach (var l in lights) l.enabled = false;
                 RenderSettings.fog = false;
+                foreach (var f in AOFeatures()) if (FeatureOn(f)) { SetFeature(f, false); aoOff.Add(f); }
                 var sh = new SphericalHarmonicsL2();
                 sh.AddAmbientLight(Color.white);
                 RenderSettings.ambientProbe = sh;
@@ -1474,6 +1575,7 @@ namespace RexMagnum.EditorTools
                 RenderTexture.active = prevActive;
                 cam.targetTexture = null;
                 foreach (var l in lights) if (l != null) l.enabled = true;
+                foreach (var f in aoOff) SetFeature(f, true);
                 RenderSettings.fog = fog;
                 RenderSettings.ambientProbe = probe;
                 UnityEngine.Object.DestroyImmediate(cam.gameObject);
@@ -1531,26 +1633,30 @@ namespace RexMagnum.EditorTools
             m.renderQueue = (int)RenderQueue.AlphaTest;
             m.enableInstancing = true;
             EditorUtility.SetDirty(m);
-            // two crossed quads (X and Z planes) through the trunk; normals up so both sides take the same light
+            // two crossed quads (X and Z planes) through the trunk; normals up and tilted out to the quad's side (a
+            // round crown: both faces take the same light, and a low dawn / dusk sun does not leave far trees black
+            // as straight-up normals did)
             float h = size * 0.5f;
             Vector3 c0 = b.center;
             var v = new List<Vector3>();
             var uv = new List<Vector2>();
+            var nrm = new List<Vector3>();
             var tri = new List<int>();
             foreach (var axis in new[] { Vector3.right, Vector3.forward })
             {
                 int o = v.Count;
-                v.Add(c0 - axis * h - Vector3.up * h); uv.Add(new Vector2(0f, 0f));
-                v.Add(c0 + axis * h - Vector3.up * h); uv.Add(new Vector2(1f, 0f));
-                v.Add(c0 + axis * h + Vector3.up * h); uv.Add(new Vector2(1f, 1f));
-                v.Add(c0 - axis * h + Vector3.up * h); uv.Add(new Vector2(0f, 1f));
+                Vector3 nl = (Vector3.up * 0.5f - axis).normalized, nr = (Vector3.up * 0.5f + axis).normalized;
+                v.Add(c0 - axis * h - Vector3.up * h); uv.Add(new Vector2(0f, 0f)); nrm.Add(nl);
+                v.Add(c0 + axis * h - Vector3.up * h); uv.Add(new Vector2(1f, 0f)); nrm.Add(nr);
+                v.Add(c0 + axis * h + Vector3.up * h); uv.Add(new Vector2(1f, 1f)); nrm.Add(nr);
+                v.Add(c0 - axis * h + Vector3.up * h); uv.Add(new Vector2(0f, 1f)); nrm.Add(nl);
                 tri.AddRange(new[] { o, o + 2, o + 1, o, o + 3, o + 2 });
             }
             var q = new Mesh { name = name + "_Far" };
             q.SetVertices(v);
             q.SetUVs(0, uv);
             q.SetTriangles(tri, 0);
-            q.SetNormals(Enumerable.Repeat(Vector3.up, v.Count).ToList());
+            q.SetNormals(nrm);
             q.RecalculateBounds();
             q.RecalculateTangents();
             string mp = $"{Gen}/{name}_Far.asset";
@@ -1558,6 +1664,23 @@ namespace RexMagnum.EditorTools
             AssetDatabase.CreateAsset(q, mp);
             return (q, m);
         }
+
+        /// <summary>The SSAO features of the renderers the editor draws with (the impostor capture turns them off).</summary>
+        static IEnumerable<ScriptableRendererFeature> AOFeatures()
+        {
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            if (urp == null) yield break;
+            var list = new SerializedObject(urp).FindProperty("m_RendererDataList");
+            for (int i = 0; list != null && i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue is ScriptableRendererData data)
+                    foreach (var f in data.rendererFeatures)
+                        if (f != null && f.GetType().Name.Contains("AmbientOcclusion")) yield return f;
+        }
+
+        // by reflection: the check build's older URP has no isActive / SetActive
+        static bool FeatureOn(ScriptableRendererFeature f) => !(f.GetType().GetProperty("isActive")?.GetValue(f) is bool on) || on;
+        static void SetFeature(ScriptableRendererFeature f, bool on) =>
+            f.GetType().GetMethod("SetActive", new[] { typeof(bool) })?.Invoke(f, new object[] { on });
 
         static GameObject DetailPrefab(Proto pr)
         {
@@ -1929,8 +2052,16 @@ namespace RexMagnum.EditorTools
             Lightmapping.lightingSettings = ls;
             EditorSceneManager.MarkSceneDirty(island.scene);
             // dim flat ambient for the bake (about the night level, not the noon sky); the sky comes back after
-            bakeAmbientMode = RenderSettings.ambientMode;
-            bakeAmbientLight = RenderSettings.ambientLight;
+            // the old ambient goes to EditorPrefs, not a static: a script reload / editor restart mid-bake lost it
+            // and the scene kept the flat bake ambient for good
+            if (!EditorPrefs.HasKey(BakeAmbientKey))
+            {
+                var al = RenderSettings.ambientLight;
+                EditorPrefs.SetString(BakeAmbientKey, string.Join(";", (int)RenderSettings.ambientMode,
+                    al.r.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    al.g.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    al.b.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+            }
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.3f, 0.31f, 0.34f);
             if (!Lightmapping.BakeAsync())
@@ -1939,25 +2070,53 @@ namespace RexMagnum.EditorTools
                 Debug.LogWarning("[Rex Magnum] Lightmap bake did not start (another bake running?).");
                 return;
             }
-            EditorApplication.update += WaitBake;
+            HookBake();
             Debug.Log("[Rex Magnum] Lightmap bake started (progress bottom-right, X there cancels). Save the scene when it is done.");
         }
 
-        static AmbientMode bakeAmbientMode;
-        static Color bakeAmbientLight;
+        const string BakeAmbientKey = "RexMagnum.BakeAmbient";     // "mode;r;g;b" while a bake holds the flat ambient
+
+        static void HookBake()
+        {
+            Lightmapping.bakeCompleted -= WaitBake;
+            Lightmapping.bakeCompleted += WaitBake;
+            EditorApplication.update -= WaitBake;          // also catches a cancelled bake (no bakeCompleted then)
+            EditorApplication.update += WaitBake;
+        }
+
+        /// <summary>After a domain reload or an editor restart the handlers are gone: hook again when an old ambient
+        /// is still stored (WaitBake restores it at once when no bake runs any more).</summary>
+        [InitializeOnLoadMethod]
+        static void CheckBakeAmbient()
+        {
+            if (EditorPrefs.HasKey(BakeAmbientKey)) EditorApplication.delayCall += HookBake;
+        }
 
         static void WaitBake()
         {
             if (Lightmapping.isRunning) return;
+            if (!EditorPrefs.HasKey(BakeAmbientKey) || GameObject.Find("Island") == null)
+            {
+                if (!EditorPrefs.HasKey(BakeAmbientKey)) { EditorApplication.update -= WaitBake; Lightmapping.bakeCompleted -= WaitBake; }
+                return;     // another scene open: wait for the island scene
+            }
             EditorApplication.update -= WaitBake;
+            Lightmapping.bakeCompleted -= WaitBake;
             RestoreBakeAmbient();
             Debug.Log("[Rex Magnum] Lighting bake ended; sky ambient restored. Save the scene (File > Save).");
         }
 
         static void RestoreBakeAmbient()
         {
-            RenderSettings.ambientMode = bakeAmbientMode;
-            RenderSettings.ambientLight = bakeAmbientLight;
+            var s = EditorPrefs.GetString(BakeAmbientKey, "").Split(';');
+            EditorPrefs.DeleteKey(BakeAmbientKey);
+            if (s.Length < 4) return;
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            if (int.TryParse(s[0], out int mode)) RenderSettings.ambientMode = (AmbientMode)mode;
+            if (float.TryParse(s[1], System.Globalization.NumberStyles.Float, ci, out float cr) &&
+                float.TryParse(s[2], System.Globalization.NumberStyles.Float, ci, out float cg) &&
+                float.TryParse(s[3], System.Globalization.NumberStyles.Float, ci, out float cb))
+                RenderSettings.ambientLight = new Color(cr, cg, cb);
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
         }
 

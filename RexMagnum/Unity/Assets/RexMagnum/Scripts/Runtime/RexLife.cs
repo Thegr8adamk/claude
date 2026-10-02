@@ -9,12 +9,16 @@ namespace RexMagnum
     [RequireComponent(typeof(Health))]
     public class RexLife : MonoBehaviour
     {
-        /// <summary>Low health (under 25 %): Rex limps (animator bool Hurt). Checked on damage and twice a second.</summary>
+        /// <summary>Low health (under 25 %): Rex limps (animator bool Hurt) when no blob is within 15 m; in a fight he
+        /// only slows (walk 3, run ~4 m/s) so he can still get away. Checked on damage and twice a second.</summary>
         void UpdateLimp()
         {
             if (ctrl == null || health == null) return;
-            bool limp = !health.IsDead && health.Fraction < 0.25f;
+            bool low = !health.IsDead && health.Fraction < 0.25f;
+            bool fight = low && Blob.LivingNear(transform.position, 15f) > 0;
+            bool limp = low && !fight;
             ctrl.Limping = limp;                       // speed cap 2 m/s, no run (RexController)
+            ctrl.HurtInFight = fight;
             if (ctrl.bodyAnimator != null) ctrl.bodyAnimator.SetBool("Hurt", limp);
         }
 
@@ -48,6 +52,11 @@ namespace RexMagnum
             if (key == checkpointKey) return;                         // set once per entry, not every step
             // walking along a zone edge (out and in again) near the checkpoint: keep it, no new notice
             if (hasCheckpoint && key != "boss" && (transform.position - checkpointPos).sqrMagnitude < 900f) { checkpointKey = key; return; }
+            // not next to a running blob spawner (the factory core hall): waking up among fresh blobs is a death loop.
+            // Keep the old checkpoint; the next check (Rex moved on) tries again.
+            if (key != "boss")
+                foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+                    if (sp.isActiveAndEnabled && (sp.transform.position - transform.position).sqrMagnitude < 225f) return;
             checkpointKey = key;
             hasCheckpoint = true;
             checkpointPos = transform.position;
@@ -102,6 +111,7 @@ namespace RexMagnum
             if (ctrl.armsAnimator && ctrl.armsAnimator.gameObject.activeInHierarchy) ctrl.armsAnimator.Play("Locomotion", 0, 0f);
             health.ResetHealth();
             ctrl.Revive();
+            health.Invulnerable(2f);                   // respawn grace: a blob waiting at the checkpoint gets no free hit
             RexVoice.Say(gameObject, "Respawn", true);
         }
     }

@@ -36,6 +36,10 @@ namespace RexMagnum
         /// <summary>Low health (set by RexLife): no run, top speed LimpSpeed (the limp clip cannot go faster).</summary>
         public bool Limping { get; set; }
         public const float LimpSpeed = 2.0f;
+        /// <summary>Low health with a blob near (set by RexLife): no limp (a 2 m/s limp vs 5.7 m/s blobs is a death
+        /// spiral), but tired: walk 3, run capped at HurtRunSpeed.</summary>
+        public bool HurtInFight { get; set; }
+        public const float HurtRunSpeed = 4.0f;
         public Vector3 Velocity => velocity;
         public bool IsRunning { get; private set; }
         public bool Grounded => cc.isGrounded;
@@ -171,6 +175,7 @@ namespace RexMagnum
             float target = IsSwimming ? (run ? swimFastSpeed : swimSpeed) * input.magnitude
                                       : (run ? runSpeed : walkSpeed) * (HandsDown ? handsDownBonus : 1f) * input.magnitude;
             if (Limping && !IsSwimming) target = Mathf.Min(target, LimpSpeed);    // the limp: no sliding feet
+            else if (HurtInFight && !IsSwimming) target = Mathf.Min(target, run ? HurtRunSpeed : walkSpeed);
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
             planar = Vector3.MoveTowards(planar, wish.normalized * target, acceleration * Mathf.Max(target, 2f) * dt);
             // dodge (Ctrl / B / touch Dodge): a quick ~4 m burst, untouchable for a moment. Fast at the start, easing out.

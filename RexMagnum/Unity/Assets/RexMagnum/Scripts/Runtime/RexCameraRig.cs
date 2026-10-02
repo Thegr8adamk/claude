@@ -66,6 +66,9 @@ namespace RexMagnum
         /// <summary>Gun recoil: the view kicks up by this many degrees and settles back in ~0.2 s (the aim does not move).</summary>
         public void Kick(float degrees) => kick = Mathf.Min(kick + degrees, 6f);
         float kick;
+        /// <summary>Heavy attack wind-up cue: the view pushes in by this many degrees of FOV and eases back (~0.35 s).</summary>
+        public void FovPush(float degrees) => fovPush = Mathf.Max(fovPush, degrees);
+        float fovPush;
         /// <summary>Melee soft aim: turn the view (and so Rex) this many degrees over ~0.1 s. Not in VR (sickness).</summary>
         public void NudgeYaw(float degrees) { if (!VRControlled) nudge = degrees; }
         float nudge;
@@ -239,7 +242,9 @@ namespace RexMagnum
             }
             if (kick > 0.01f)
             {
-                transform.rotation *= Quaternion.Euler(-kick, 0f, 0f);       // muzzle climb, view only
+                // through the scope the same degrees fill far more of the narrow view: scale like the shake
+                float climb = scoped ? kick * cam.fieldOfView / 65f : kick;
+                transform.rotation *= Quaternion.Euler(-climb, 0f, 0f);      // muzzle climb, view only
                 kick = Mathf.Lerp(kick, 0f, Time.unscaledDeltaTime * 14f);
             }
             fov = FovSetting; fpFov = FovSetting + 10f; aimFov = FovSetting - 15f;
@@ -248,7 +253,12 @@ namespace RexMagnum
                 // aim zoom blends over ~0.15 s (no snap); unscaled so it also works in the weapon wheel's slow motion
                 aimT = Mathf.MoveTowards(aimT, IsAiming ? 1f : 0f, Time.unscaledDeltaTime / 0.15f);
                 float ak = aimT * aimT * (3f - 2f * aimT);
-                cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, ak), fpFov, b);
+                cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, ak), fpFov, b) - fovPush;
+            }
+            if (fovPush > 0f)
+            {
+                if (VRControlled || scoped) fovPush = 0f;
+                fovPush = Mathf.MoveTowards(fovPush, 0f, Time.unscaledDeltaTime * 12f);
             }
 
             // third person against a wall: the camera comes very close to Rex; hide his body (shadow stays) so the
@@ -283,6 +293,8 @@ namespace RexMagnum
 
         /// <summary>World point the player aims at (crosshair), for both modes.</summary>
         Quaternion aimRot = Quaternion.identity;
+        /// <summary>Steady aim direction: the crosshair without shake / recoil kick (VR: the head).</summary>
+        public Vector3 AimForward => VRControlled ? transform.forward : aimRot * Vector3.forward;
 
         public Vector3 AimPoint(float range = 200f)
         {
@@ -304,8 +316,12 @@ namespace RexMagnum
                     float ang = Vector3.Angle(fwd, c - transform.position);
                     if (ang >= bestAng) continue;
                     // in clear view: nothing between the camera and the blob, or the first thing hit is this blob
-                    bool seen = !Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore)
-                                || wall.collider.GetComponentInParent<Blob>() == b;
+                    // (the line from the camera often passes through Rex himself: look again from just past him)
+                    bool blocked = Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore);
+                    if (blocked && target != null && wall.transform.IsChildOf(target))
+                        blocked = Physics.Linecast(wall.point + (c - transform.position).normalized * 0.7f, c, out wall,
+                                                   collisionMask, QueryTriggerInteraction.Ignore);
+                    bool seen = !blocked || wall.collider.GetComponentInParent<Blob>() == b;
                     if (seen) { bestAng = ang; best = b; }
                 }
                 if (best != null) return best.transform.position + Vector3.up * 1.0f;

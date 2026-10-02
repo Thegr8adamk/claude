@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace RexMagnum
 {
@@ -32,6 +33,11 @@ namespace RexMagnum
                 if (d.open) continue;
                 d.open = true;
                 d.transform.localRotation = d.transform.localRotation * Quaternion.Euler(0f, d.openAngle, 0f);
+                // an open door is out of the fight: its Health is spent (no damage, no bottle hit counted on it;
+                // open is set first, so no bang / line) and its carving obstacle goes off (agents walk through)
+                var dh = d.GetComponent<Health>();
+                if (dh != null && !dh.IsDead) dh.Damage(dh.maxHealth + 1f, d.transform.position);
+                foreach (var ob in d.GetComponentsInChildren<NavMeshObstacle>()) ob.enabled = false;
             }
             AnyOpen = true;
         }

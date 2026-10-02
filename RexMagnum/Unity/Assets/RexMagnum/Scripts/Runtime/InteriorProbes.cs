@@ -7,7 +7,8 @@ namespace RexMagnum
     /// <summary>
     /// Renders the small interior box probes under this object (lobby, corridors, tunnels, room 304) by script:
     /// once on load, then again when DayNight.Night crosses 0.3 or 0.7 (dusk / night / dawn), so the rooms do not
-    /// keep reflecting the noon sky all night. One probe per frame: each is six small scene renders.
+    /// keep reflecting the noon sky all night. One probe at a time, time-sliced (IndividualFaces: one cube face per
+    /// frame, not six scene renders in one frame: no hitch at dusk / dawn).
     /// Added by IslandBuilder to the probes' parent; the probes are set to ViaScripting.
     /// </summary>
     public class InteriorProbes : MonoBehaviour
@@ -19,7 +20,11 @@ namespace RexMagnum
         void Start()
         {
             probes = GetComponentsInChildren<ReflectionProbe>(true);
-            foreach (var p in probes) p.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+            foreach (var p in probes)
+            {
+                p.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+                p.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
+            }
         }
 
         void Update()
@@ -42,8 +47,9 @@ namespace RexMagnum
                 foreach (var p in probes)
                 {
                     if (p == null || !p.isActiveAndEnabled) continue;
-                    p.RenderProbe();
-                    yield return null;
+                    int id = p.RenderProbe();
+                    // wait for the slices (about 9 frames); cap it so a probe disabled mid-render cannot stall the pass
+                    for (int f = 0; f < 30 && p != null && !p.IsFinishedRendering(id); f++) yield return null;
                 }
             } while (again);
             busy = false;

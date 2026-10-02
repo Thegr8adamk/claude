@@ -70,6 +70,15 @@ namespace RexMagnum
             SpeakingUntil = Mathf.Max(SpeakingUntil, now + seconds);
         }
 
+        /// <summary>PauseMenu open (AudioListener.pause stops the clip): the line, its duck and the wait for the
+        /// next line move on by the paused time, so they finish after the menu closes instead of during it.</summary>
+        public static void Freeze(float dt)
+        {
+            float now = Time.unscaledTime;
+            if (SpeakingUntil > now - 0.8f) { SpeakingSince += dt; SpeakingUntil += dt; }     // the duck's tail too
+            if (nextAllowed > now) nextAllowed += dt;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() { SpeakingSince = -10f; SpeakingUntil = -10f; nextAllowed = 0f; }   // editor with Domain Reload off
         public static System.Action<string> Subtitle;   // UI hook (shown about 3 s)

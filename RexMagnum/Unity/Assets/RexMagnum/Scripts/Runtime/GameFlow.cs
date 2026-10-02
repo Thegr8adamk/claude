@@ -13,6 +13,7 @@ namespace RexMagnum
     ///  3. Rex stands next to the bed; controls are taught one hint at a time (look/walk, punch the stuck door,
     ///     pick up the beer, taunt at the mirror, camera switch, dodge, towel on the balcony rail). A hint stays until the player
     ///     does it (or a time-out), then the next one shows. Day music loops.
+    ///  4. The first fight teaches dodge, heavy (hold) and combo (3 taps) the same way, each once per save.
     /// Music and sounds load from Resources/Music and Resources/Sfx when the ElevenLabs files are added
     /// (title_theme, day_resort, chaos); without them the flow still works, silently.
     /// </summary>
@@ -65,6 +66,20 @@ namespace RexMagnum
             }
         }
 
+        const int CombatHintCount = 3;
+
+        /// <summary>The fight hints, after the first fight starts (one at a time, each shown once per save).</summary>
+        static string CombatHint(int i)
+        {
+            string B(string a) => Glyph.B(a);
+            switch (i)
+            {
+                case 0: return $"{B("Dodge")}: dodge. A blob glows red just before it hits: dodge then.";
+                case 1: return $"Hold {B("Action")}: heavy attack. Slower, about 3x the damage, knocks blobs back.";
+                default: return $"Tap {B("Action")} 3 times fast: combo. The 3rd hit is a finisher.";
+            }
+        }
+
         public static bool Busy { get; private set; }
         /// <summary>The room tutorial hints still show (the HUD hides the objective line meanwhile).</summary>
         public static bool TutorialActive { get; private set; }
@@ -80,6 +95,9 @@ namespace RexMagnum
         {
             Busy = !skipTitle;
             SettingsPanel.ApplyAll();
+            // QUIT TO TITLE reloads the scene but statics stay: no play time from the last session (PLAY sets it again)
+            playStart = Time.time;
+            TutorialActive = false;
             titleBg = Resources.Load<Texture2D>("UI/title_bg");
             if (rex != null) weapons = rex.GetComponent<RexWeapons>();
             music = gameObject.AddComponent<AudioSource>();
@@ -110,6 +128,7 @@ namespace RexMagnum
                 StartCoroutine(Intro());
                 return;
             }
+            MenuNav.Opened();         // a key still held from play does not move the title menu
             Play("Music/title_theme");
         }
 
@@ -149,6 +168,7 @@ namespace RexMagnum
             else if (state == State.Play)
             {
                 UpdateHint();
+                CombatHints();
                 FightMusic();
             }
             TutorialActive = state == State.Play && hint < HintCount;
@@ -218,6 +238,40 @@ namespace RexMagnum
                 default: done = (weapons != null && weapons.Has(WeaponId.Towel)) || t > 60f; break;
             }
             if (done) { hint++; hintTime = Time.time; }
+        }
+
+        int combatHint = -1, comboTaps;
+        float combatHintTime, actionDownAt = -1f, lastTapAt = -10f;
+
+        /// <summary>After the room hints: the first time a blob comes close, dodge, heavy and combo are taught one at a
+        /// time. Each stays until the player does it (or a time-out); "combat_tips" in the save counts the ones shown.</summary>
+        void CombatHints()
+        {
+            if (hint < HintCount || rex == null) return;
+            int shown = Progress.Value("combat_tips");
+            if (shown >= CombatHintCount) { combatHint = -1; return; }
+            if (combatHint < 0)
+            {
+                if (Blob.LivingNear(rex.transform.position, 15f) == 0) return;      // waits for a fight
+                combatHint = shown; combatHintTime = Time.time; comboTaps = 0; actionDownAt = -1f;
+            }
+            float t = Time.time - combatHintTime;
+            if (RMInput.ActionDown)
+            {
+                actionDownAt = Time.time;
+                comboTaps = Time.time - lastTapAt <= 0.8f ? comboTaps + 1 : 1;       // RexWeapons' combo window
+                lastTapAt = Time.time;
+            }
+            bool done;
+            switch (combatHint)
+            {
+                case 0: done = (RMInput.Dodge && t > 1f) || t > 20f; break;
+                case 1: done = (actionDownAt >= 0f && RMInput.ActionHeld && Time.time - actionDownAt >= 0.3f && t > 1f) || t > 25f; break;
+                default: done = (comboTaps >= 3 && t > 1f) || t > 25f; break;
+            }
+            if (!done) return;
+            Progress.Set("combat_tips", combatHint + 1);
+            combatHint = -1;          // the next one shows right away while the fight goes on, else at the next fight
         }
 
         void FightMusic()
@@ -420,15 +474,16 @@ namespace RexMagnum
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             MenuSkin.Use(s);              // the shared menu look (title, pause, settings, hints)
             if (state == State.Title) DrawTitle(w, h, s);
-            else if (state == State.Play && hint < HintCount && !PauseMenu.Open)
+            else if (state == State.Play && (hint < HintCount || combatHint >= 0) && !PauseMenu.Open)
             {
+                int shownHint = hint < HintCount ? hint : HintCount + combatHint;
                 // under the HUD compass. Touch: below the top button row (centres 0.1 H from the top, radius 0.075 H,
                 // bigger if resized) and right of the top-left compass / health, clear of Pause and Jump on the right
                 var r = RMInput.LastDevice == RMInput.DeviceKind.Touch
                     ? new Rect(w * 0.26f, h * 0.22f, w * 0.58f, 92 * s)
                     : new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);
                 // each new hint fades in and drops 16 px into place (unscaled: slow-mo does not stretch it)
-                if (hint != hintDrawn) { hintDrawn = hint; hintSince = Time.unscaledTime; }
+                if (shownHint != hintDrawn) { hintDrawn = shownHint; hintSince = Time.unscaledTime; }
                 float a = MenuSkin.Appear(hintSince, 0.3f);
                 r.y -= (1f - a) * 16 * s;
                 GUI.color = new Color(1f, 1f, 1f, a);
@@ -436,7 +491,7 @@ namespace RexMagnum
                 GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
                 GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
                 GUI.color = new Color(1f, 1f, 1f, a);
-                GUI.Label(r, Hint(hint), MenuSkin.Hint);
+                GUI.Label(r, hint < HintCount ? Hint(hint) : CombatHint(combatHint), MenuSkin.Hint);
                 GUI.color = Color.white;
             }
             if (fade > 0.001f)

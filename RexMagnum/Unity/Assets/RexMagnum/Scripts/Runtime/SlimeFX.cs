@@ -140,6 +140,8 @@ namespace RexMagnum
                 var c = hit.collider;
                 bool character = c is CharacterController || c.attachedRigidbody != null ||
                                  c.GetComponentInParent<Health>() != null || c.GetComponentInParent<UnityEngine.AI.NavMeshAgent>() != null;
+                // the elevator cab moves too: a decal on it would hang in the shaft (no decal there, the ray stops)
+                if (c.GetComponentInParent<Elevator>() != null) return false;
                 if (!character) return true;
                 from = hit.point + dir * 0.05f;
                 range -= hit.distance + 0.05f;

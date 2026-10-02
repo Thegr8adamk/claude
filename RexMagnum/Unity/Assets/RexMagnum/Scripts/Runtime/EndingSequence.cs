@@ -47,6 +47,10 @@ namespace RexMagnum
             if (rex != null)
             {
                 rex.InputEnabled = false;
+                // Rex stands still for the whole ending: no damage (a slime shot / shockwave still in the air, a blob off the
+                // stun list); renewed every frame in Update, so it lasts as long as the ending (its length depends on the clips)
+                rexHealth = rex.GetComponent<Health>();
+                if (rexHealth != null) rexHealth.Invulnerable(2f);
                 // Rex cannot move in the cutscene: blobs still near him stop for its length (about 26 s)
                 foreach (var b in Blob.All)
                     if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) { b.Stun(45f); stunned.Add(b); }
@@ -106,6 +110,7 @@ namespace RexMagnum
         }
 
         Camera hiddenMain;
+        Health rexHealth;
         bool vr, vrReceipt;
         UnityEngine.UI.Image vrFade;
 
@@ -124,6 +129,7 @@ namespace RexMagnum
         void Update()
         {
             if (hiddenMain != null && hiddenMain.enabled) hiddenMain.enabled = false;   // a kill cam ending late turned it back on
+            if (rexHealth != null) rexHealth.Invulnerable(2f);                           // ends ~2 s after the ending
             if (PauseMenu.Open) return;      // wait behind the pause menu (it runs on unscaled time; keys there must not skip it)
             t += Time.unscaledDeltaTime;
             if (t > 3f && RMInput.AnyKey && t < tBack)                       // skip to "I'm back."

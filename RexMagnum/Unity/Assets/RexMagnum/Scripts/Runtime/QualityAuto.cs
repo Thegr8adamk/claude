@@ -33,6 +33,29 @@ namespace RexMagnum
             DynamicGI.UpdateEnvironment();     // ambient light from the sky
         }
 
+        // the tier's anti-aliasing, for cameras made after Apply (kill cam, selfie, ending): they had no
+        // UniversalAdditionalCameraData, so URP gave them no SMAA / the asset's MSAA whatever the tier
+        bool tierSmaa, tierMsaa;
+        float camCheck;
+        readonly System.Collections.Generic.HashSet<Camera> seenCams = new System.Collections.Generic.HashSet<Camera>();
+
+        void Update()
+        {
+            if (Time.unscaledTime < camCheck) return;
+            camCheck = Time.unscaledTime + 0.5f;           // twice a second is enough: Camera.allCameras allocates
+            if (seenCams.Count > 64) seenCams.RemoveWhere(c => c == null);
+            foreach (var c in Camera.allCameras)
+                if (seenCams.Add(c)) TierAA(c);
+        }
+
+        void TierAA(Camera c)
+        {
+            if (c.targetTexture != null) return;           // mirror / photo cameras keep theirs
+            if (!c.TryGetComponent(out UniversalAdditionalCameraData cd)) cd = c.gameObject.AddComponent<UniversalAdditionalCameraData>();
+            cd.antialiasing = tierSmaa ? AntialiasingMode.SubpixelMorphologicalAntiAliasing : AntialiasingMode.None;
+            c.allowMSAA = tierMsaa;
+        }
+
         // ---- Editor: tier changes must not be saved into the project's URP asset / renderer data.
         // Play mode runs on a copy of the URP asset; the original asset and the SSAO switch are put back on exit.
         // The renderer data (SSAO on/off and its settings) is shared with the original asset: also put back on exit,
@@ -236,6 +259,9 @@ namespace RexMagnum
                     SsaoCost(ssao, t == QualityTier.Medium);
                 }
             }
+            tierSmaa = smaa;
+            tierMsaa = msaa[i] > 1;
+            seenCams.Clear();                              // Update gives every live camera the new tier's AA
             foreach (var cam in FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (cam.targetTexture != null || !cam.TryGetComponent(out UniversalAdditionalCameraData cd)) continue;  // mirror / photo cameras keep theirs

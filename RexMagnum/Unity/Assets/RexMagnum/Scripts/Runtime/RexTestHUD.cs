@@ -375,6 +375,12 @@ namespace RexMagnum
                     weapon.color = d.color;
                 }
             }
+            if (PauseMenu.Open)
+            {
+                // paused: the subtitle and the notice wait (the voice clip is paused too, RexVoice.Freeze)
+                subtitleUntil += Time.unscaledDeltaTime;
+                noticeUntil += Time.unscaledDeltaTime;
+            }
             if (Time.unscaledTime > subtitleUntil) subtitle.text = "";
             if (Time.unscaledTime > noticeUntil) notice.text = "";
             prompt.text = UsePrompt();

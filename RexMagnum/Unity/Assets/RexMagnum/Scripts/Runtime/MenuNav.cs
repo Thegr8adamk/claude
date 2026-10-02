@@ -16,6 +16,16 @@ namespace RexMagnum
         static int dir, lastDir, frame = -1;
         static float nextRepeat;
         static int consumedFrame = -1;
+        static bool waitRelease;
+
+        /// <summary>A menu just opened: a direction still held from play (W to walk) is not a menu move. Moves start
+        /// again once nothing is held.</summary>
+        public static void Opened()
+        {
+            waitRelease = true;
+            dir = 0;
+            lastDir = 0;
+        }
 
         static void Poll()
         {
@@ -38,6 +48,12 @@ namespace RexMagnum
                 else if (G.dpad.right.isPressed || st.x > 0.6f) d = 4;
             }
             dir = 0;
+            if (waitRelease)
+            {
+                if (d == 0) waitRelease = false;
+                lastDir = d;
+                return;
+            }
             if (d != lastDir) { dir = d; nextRepeat = Time.unscaledTime + 0.4f; }
             else if (d != 0 && Time.unscaledTime > nextRepeat) { dir = d; nextRepeat = Time.unscaledTime + 0.09f; }
             lastDir = d;
@@ -69,7 +85,7 @@ namespace RexMagnum
         static int clickFrame = -1;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { clickSrc = null; clickFrame = -1; consumedFrame = -1; frame = -1; }   // editor with Domain Reload off
+        static void ResetStatics() { clickSrc = null; clickFrame = -1; consumedFrame = -1; frame = -1; waitRelease = false; }   // editor with Domain Reload off
 
         /// <summary>The menu click (Sfx ui_click), quiet, once per frame. 2D (at the listener) and it plays while the
         /// pause menu has AudioListener.pause on (ignoreListenerPause); audio does not follow Time.timeScale.</summary>

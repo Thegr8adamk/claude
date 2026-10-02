@@ -28,9 +28,13 @@ namespace RexMagnum
         const int PoolSize = 24;
         static readonly AudioSource[] pool = new AudioSource[PoolSize];
         static readonly float[] started = new float[PoolSize];
+        // each pool source's filters, cached (SetWorldFX runs every frame: no GetComponent per source per frame)
+        static readonly AudioLowPassFilter[] lowPass = new AudioLowPassFilter[PoolSize];
+        static readonly AudioReverbFilter[] reverb = new AudioReverbFilter[PoolSize];
         static Transform poolRoot;
 
-        static AudioSource Source()
+        /// <summary>The pool index of the source to use.</summary>
+        static int Source()
         {
             if (poolRoot == null)
             {
@@ -38,6 +42,8 @@ namespace RexMagnum
                 Object.DontDestroyOnLoad(root);
                 poolRoot = root.transform;
                 System.Array.Clear(pool, 0, PoolSize);
+                System.Array.Clear(lowPass, 0, PoolSize);
+                System.Array.Clear(reverb, 0, PoolSize);
             }
             int best = 0;
             for (int i = 0; i < PoolSize; i++)
@@ -56,6 +62,8 @@ namespace RexMagnum
                     var rv = go.AddComponent<AudioReverbFilter>();
                     rv.reverbPreset = AudioReverbPreset.Room;
                     rv.enabled = false;
+                    lowPass[i] = lp;
+                    reverb[i] = rv;
                     best = i;
                     break;
                 }
@@ -63,7 +71,7 @@ namespace RexMagnum
                 if (started[i] < started[best]) best = i;
             }
             started[best] = Time.unscaledTime;
-            return pool[best];
+            return best;
         }
 
         /// <summary>One-shot 3D sound. Pitch varies +-8% each time (the same hit twice in a row sounds less canned).
@@ -74,14 +82,15 @@ namespace RexMagnum
             var c = Get(name);
             if (c == null) return null;
             // own source instead of PlayClipAtPoint: that one has no pitch
-            var a = Source();
+            int i = Source();
+            var a = pool[i];
             a.Stop();
             a.transform.position = pos;
             a.clip = c;
             a.spatialBlend = 1f;
             a.volume = volume * AudioMix.Effects;
             a.pitch = pitch * Random.Range(0.92f, 1.08f);
-            Filter(a, true);
+            Filter(i, true);
             a.Play();
             return a;
         }
@@ -99,18 +108,20 @@ namespace RexMagnum
             reverbOn = roomReverb;
             // a short sound keeps its reverb for 1 s after it started (the tail is not cut off)
             for (int i = 0; i < PoolSize; i++)
-                if (pool[i] != null) Filter(pool[i], pool[i].isPlaying || Time.unscaledTime - started[i] < 1f);
+                if (pool[i] != null) Filter(i, pool[i].isPlaying || Time.unscaledTime - started[i] < 1f);
         }
 
-        static void Filter(AudioSource a, bool playing)
+        static void Filter(int i, bool playing)
         {
-            if (a.TryGetComponent(out AudioLowPassFilter lp))
+            var lp = lowPass[i];
+            if (lp != null)
             {
                 lp.cutoffFrequency = cutoff;
                 lp.enabled = cutoff < 21500f;
             }
             // reverb only on sources that play (an idle reverb filter still costs DSP time)
-            if (a.TryGetComponent(out AudioReverbFilter rv)) rv.enabled = reverbOn && playing;
+            var rv = reverb[i];
+            if (rv != null) rv.enabled = reverbOn && playing;
         }
     }
 }

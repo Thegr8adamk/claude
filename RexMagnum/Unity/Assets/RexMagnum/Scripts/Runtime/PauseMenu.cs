@@ -26,7 +26,8 @@ namespace RexMagnum
         readonly SettingsPanel panel = new SettingsPanel();
         readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
         static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS", "HELP" };
-        GUIStyle title, label, button, small, tabStyle;
+        GUIStyle title, header, label, button, small, tabStyle;
+        float ui = 1f;          // screen height / 1080 (section rules in the GUILayout tabs)
 
         void Start()
         {
@@ -40,6 +41,7 @@ namespace RexMagnum
         {
             if (Open)
             {
+                RexVoice.Freeze(Time.unscaledDeltaTime);      // voice lines, the duck and the subtitles wait while paused
                 if (confirmQuit)
                 {
                     // QUIT TO TITLE asks first: YES / NO (NO is chosen first)
@@ -100,7 +102,7 @@ namespace RexMagnum
             panel.CancelWait();
             Open = o;
             confirmQuit = false;
-            if (o) { openSince = Time.unscaledTime; tabSince = openSince; }
+            if (o) { openSince = Time.unscaledTime; tabSince = openSince; MenuNav.Opened(); }
             MenuNav.Click();
             if (!o) FreeThumbs();        // album pictures only live while the menu is open (phone memory)
             else { rexCached = null; nextObjective = 0f; }
@@ -161,7 +163,8 @@ namespace RexMagnum
         {
             // the shared menu look (built once per screen height, not per OnGUI event)
             MenuSkin.Use(s);
-            title = MenuSkin.Title; label = MenuSkin.Label; small = MenuSkin.Small; button = MenuSkin.Button; tabStyle = MenuSkin.Tab;
+            ui = s;
+            title = MenuSkin.Title; header = MenuSkin.Header; label = MenuSkin.Label; small = MenuSkin.Small; button = MenuSkin.Button; tabStyle = MenuSkin.Tab;
         }
 
         void OnGUI()
@@ -211,7 +214,7 @@ namespace RexMagnum
             switch (tab)
             {
                 case 0: MapTab(); break;
-                case 1: AlbumTab(s, area.width); break;
+                case 1: AlbumTab(s, area.width, area.height); break;
                 case 2: AccomplishmentsTab(); break;
                 case 4: HelpTab(s, area.width); break;
             }
@@ -312,26 +315,43 @@ namespace RexMagnum
             if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Side != null) GUILayout.Label("<color=#B8E6A0>" + GameGuide.Side + "</color>", label);
             GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
-            GUILayout.Space(10);
-            GUILayout.Label("ISLAND ZONES", title);
+            Section("ISLAND ZONES");
             foreach (var z in GameGuide.Zones)
                 GUILayout.Label($"{(GameGuide.Visited(z.id) ? "[x]" : "[ ]")}  {z.name}", label);
-            GUILayout.Space(20);
-            GUILayout.Label("BIG GOALS", title);
+            Section("BIG GOALS");
             GUILayout.Label($"{(FactoryCore.Stopped ? "[x]" : "[ ]")}  Stop the blob factory (ruins)", label);
             GUILayout.Label($"{(PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1 ? "[x]" : "[ ]")}  Pop King Glorp (ship)", label);
             GUILayout.Label($"Blobs popped: {Progress.Value("kills")}    Guests rescued: {Progress.Value("rescues")}    Photos: {Progress.Value("photos")}", small);
-            GUILayout.Space(20);
-            GUILayout.Label("CLUES", title);
+            Section("CLUES");
             var clues = Progress.Clues;
+            // the way to the boss is not overland (too steep): always said here once the factory is down
+            if (FactoryCore.Stopped && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1)
+                GUILayout.Label("- The cave tunnels go up to the ship: take the ship branch at the fork.", small);
             if (clues.Count == 0) GUILayout.Label("Rescue hiding guests: each one tells you a clue.", small);
             for (int i = clues.Count - 1; i >= 0; i--) GUILayout.Label("- " + clues[i], small);
+        }
+
+        /// <summary>A list section: space, a left-aligned gold header and a thin gold rule (the centred big title
+        /// stays for the page itself: PAUSED, the count, the device name).</summary>
+        void Section(string text)
+        {
+            GUILayout.Space(18 * ui);
+            GUILayout.Label(text, header);
+            var rule = GUILayoutUtility.GetRect(1f, 2f * ui, GUILayout.ExpandWidth(true));
+            if (Event.current.type == EventType.Repaint)
+            {
+                var old = GUI.color;
+                GUI.color = new Color(MenuSkin.Gold.r, MenuSkin.Gold.g, MenuSkin.Gold.b, 0.45f * old.a);
+                GUI.DrawTexture(new Rect(rule.x, rule.y, rule.width * 0.6f, rule.height), Texture2D.whiteTexture);
+                GUI.color = old;
+            }
+            GUILayout.Space(6 * ui);
         }
 
         void HelpTab(float s, float width)
         {
             var dev = RMInput.LastDevice;
-            GUILayout.Label(dev == RMInput.DeviceKind.Touch ? "TOUCH" : dev == RMInput.DeviceKind.Gamepad ? "CONTROLLER" : "KEYBOARD + MOUSE", title);
+            Section(dev == RMInput.DeviceKind.Touch ? "TOUCH" : dev == RMInput.DeviceKind.Gamepad ? "CONTROLLER" : "KEYBOARD + MOUSE");
             foreach (var c in GameGuide.Controls())
             {
                 GUILayout.BeginHorizontal();
@@ -343,32 +363,53 @@ namespace RexMagnum
             GUILayout.Label("Keys and buttons: Settings > CONTROLS.  The NEXT line and the compass show a goal; the MAP tab shows where you are.", small);
         }
 
-        void AlbumTab(float s, float width)
+        void AlbumTab(float s, float width, float viewH)
         {
             var photos = Progress.Photos;
             if (photos.Count == 0) { GUILayout.Label($"No photos yet. Press {Glyph.B("Photo")} near a blob or a guest.", label); return; }
             int cols = 3;
-            float cw = width / cols - 20;
+            float cw = width / cols - 20, th = cw * 9f / 16f;
+            // thumbnails load lazily: only rows near the view, at most 3 per frame (no hitch on a big album); grey until then
+            float rowH = th + 70f * s, rowTop = 0f;
             for (int i = photos.Count - 1; i >= 0; i -= cols)
             {
+                bool near = rowTop < scroll.y + viewH + rowH && rowTop + rowH > scroll.y - rowH;
                 GUILayout.BeginHorizontal();
                 for (int c = 0; c < cols && i - c >= 0; c++)
                 {
                     var p = photos[i - c];
                     GUILayout.BeginVertical(GUILayout.Width(cw));
-                    var t = Thumb(p.file);
-                    if (t != null) GUILayout.Box(t, GUILayout.Width(cw), GUILayout.Height(cw * 9f / 16f));
+                    var t = Thumb(p.file, near);
+                    var box = GUILayoutUtility.GetRect(cw, th, GUILayout.Width(cw), GUILayout.Height(th));
+                    if (Event.current.type == EventType.Repaint)
+                    {
+                        if (t != null) GUI.DrawTexture(box, t, ScaleMode.ScaleToFit);
+                        else
+                        {
+                            var old = GUI.color;
+                            GUI.color = new Color(0.3f, 0.3f, 0.32f, old.a);
+                            GUI.DrawTexture(box, Texture2D.whiteTexture);
+                            GUI.color = old;
+                        }
+                    }
                     GUILayout.Label(p.caption, small);
                     GUILayout.EndVertical();
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.Space(10);
+                rowTop += rowH;
             }
         }
 
-        Texture2D Thumb(string file)
+        int thumbFrame, thumbLoads;
+
+        Texture2D Thumb(string file, bool load)
         {
             if (thumbs.TryGetValue(file, out var t)) return t;
+            if (!load) return null;
+            if (thumbFrame != Time.frameCount) { thumbFrame = Time.frameCount; thumbLoads = 0; }
+            if (thumbLoads >= 3) return null;             // the rest load in the next frames
+            thumbLoads++;
             t = PhotoAlbum.LoadThumb(file);      // 384x216 thumb_<file> (made once from the full JPG for older photos)
             thumbs[file] = t;
             return t;
@@ -391,7 +432,7 @@ namespace RexMagnum
             GUILayout.Label($"{done} / {Progress.All.Length}", title);
             foreach (var a in Progress.All)
             {
-                if (a.group != group) { group = a.group; GUILayout.Space(10); GUILayout.Label(group.ToUpper(), title); }
+                if (a.group != group) { group = a.group; Section(group.ToUpper()); }
                 bool ok = Progress.IsUnlocked(a.id);
                 int v = Mathf.Min(Progress.Value(a.counter), a.need);
                 GUILayout.Label($"{(ok ? "[x]" : "[ ]")}  {a.name} — {a.desc}{(ok || a.need <= 1 ? "" : $"  ({v}/{a.need})")}", ok ? label : small);

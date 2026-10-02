@@ -59,7 +59,7 @@ namespace RexMagnum
             return s;
         }
 
-        /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "clubs", "cart", "cave", "factory",
+        /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "cart", "clubs", "cave", "factory",
         /// "glorp", "explore_&lt;zone&gt;", "free"): the HUD announces a new goal when it changes.</summary>
         public static string StepId;
         /// <summary>A warning line under the goal (the first night), or null.</summary>
@@ -69,9 +69,10 @@ namespace RexMagnum
 
         static float rescueSeen = -100f;
         static Vector3 rescueAt;
+        static bool rescueCalm;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; StepId = null; Warning = null; Side = null; }   // editor with Domain Reload off
+        static void ResetStatics() { rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null; }   // editor with Domain Reload off
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
         {
@@ -89,10 +90,10 @@ namespace RexMagnum
             id = "rescue";
             if (rescues < 3)
             {
-                if (NearestHidingGuest(rex, out target))
+                if (NearestHidingGuest(rex, out target, out bool calm))
                 {
-                    rescueSeen = Time.unscaledTime; rescueAt = target;
-                    return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first.";
+                    rescueSeen = Time.unscaledTime; rescueAt = target; rescueCalm = calm;
+                    return RescueText(rescues, calm);
                 }
                 // night: guests lock themselves in. The step stays (no NEW GOAL at dusk and dawn); the marker shows the next one
                 if (Guest.NightLockdown)
@@ -102,10 +103,14 @@ namespace RexMagnum
                 }
                 // a guest just out of reach (or walking home at dusk): keep the step a while, no goal flicker
                 if (Time.unscaledTime - rescueSeen < 20f)
-                { target = rescueAt; return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first."; }
+                { target = rescueAt; return RescueText(rescues, rescueCalm); }
             }
             return Rest(w, rex, out target, out hasTarget, out id);
         }
+
+        // a calm guest (no blob around) is rescued right away: "clear the blobs" would be wrong there
+        static string RescueText(int rescues, bool calm) =>
+            $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}." + (calm ? "" : " Clear the blobs first.");
 
         /// <summary>The steps after the pool and the first rescues.</summary>
         static string Rest(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
@@ -114,21 +119,22 @@ namespace RexMagnum
             hasTarget = true;
             id = "pistol";
             if (w != null && !w.Has(WeaponId.Pistol)) { target = Pistol; return "Get the chrome pistol in the casino lounge (hotel, ground floor)."; }
-            id = "clubs";
-            if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
+            // the cart first: the golf course is a long walk west, the cart waits by the pool
             id = "cart";
             if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0)
             {
-                if (NearestCart(rex, out target)) return $"Drive a golf cart (follow the marker to the nearest one). {Glyph.B("Use")}: get in.";
-                target = ProShop; return $"Drive a golf cart: pro shop, west. {Glyph.B("Use")}: get in.";
+                if (NearestCart(rex, out target)) return $"Drive the cart from the pool to the golf course (west). {Glyph.B("Use")}: get in.";
+                target = ProShop; return $"Drive a golf cart to the golf course: pro shop, west. {Glyph.B("Use")}: get in.";
             }
+            id = "clubs";
+            if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
             id = "cave";
             if (!FactoryCore.Stopped && !Visited("cave") && !Visited("ruins"))
             { target = Zones[6].at; return "The cave behind the waterfall (north-west) leads to the ruins."; }
             id = "factory";
             if (!FactoryCore.Stopped) { target = Factory; return "Stop the blob factory (jungle ruins, east)."; }
             id = "glorp";
-            if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) { target = Zones[7].at; return "Pop King Glorp (crashed ship, north)."; }
+            if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) return BossRoute(rex, out target);
             int zones = Progress.Value("zones");
             foreach (var z in Zones)
                 if (!Visited(z.id)) { id = "explore_" + z.id; target = z.at; return $"Explore: {z.name} ({zones}/{Zones.Length} zones)."; }
@@ -136,6 +142,39 @@ namespace RexMagnum
             id = "free";
             hasTarget = false;
             return Challenge();
+        }
+
+        /// <summary>The ship plateau is too steep to climb overland (~40 degrees: Rex slides back). The way up is the
+        /// cave tunnels' ship branch, so the marker leads there: the cave mouth (or the temple's back door from the
+        /// ruins), the ship branch's end inside the tunnels, the ship itself once Rex is in its zone.</summary>
+        static string BossRoute(Vector3 rex, out Vector3 target)
+        {
+            if (InZone(Zones[7], rex)) { target = Zones[7].at; return "Pop King Glorp (crashed ship)."; }
+            FindThings();
+            if (InTunnels(rex))
+            {
+                target = Door("ShipTunnel_DoorA", ShipBranchEnd);
+                return "Take the ship branch at the fork: it goes up to the crashed ship.";
+            }
+            if (InZone(Zones[5], rex) && DoorAt("RuinsTunnel_DoorB", out target))
+                return "Take the cave tunnels up to the crashed ship: the temple's back door leads in.";
+            target = Door("Cave_DoorA", Zones[6].at);
+            return "Take the cave tunnels (north-west) up to the crashed ship.";
+        }
+
+        // Island.json tunnels: ~40-60 m under the island between the cave mouth, the ruins and the ship
+        static readonly Vector3 ShipBranchEnd = new Vector3(-20f, -38f, 316f);
+        static bool InTunnels(Vector3 p) => p.y < -20f && p.x > -175f && p.x < 5f && p.z > 190f && p.z < 330f;
+
+        static Vector3 Door(string name, Vector3 fallback) => DoorAt(name, out Vector3 at) ? at : fallback;
+
+        static bool DoorAt(string name, out Vector3 at)
+        {
+            at = Vector3.zero;
+            if (doors == null) return false;
+            foreach (var d in doors)
+                if (d != null && d.name == name) { at = d.transform.position; return true; }
+            return false;
         }
 
         static readonly string[] PhotoKinds = { "Tourist", "Lifeguard", "Bouncer" };
@@ -166,6 +205,7 @@ namespace RexMagnum
         // golf carts and the elevator, found again every 10 s (zones can load later; a new scene after NEW GAME)
         static GolfCart[] carts;
         static Elevator[] lifts;
+        static ZoneDoor[] doors;
         static float nextFind;
 
         static void FindThings()
@@ -174,6 +214,7 @@ namespace RexMagnum
             nextFind = Time.unscaledTime + 10f;
             carts = Object.FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
             lifts = Object.FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+            doors = Object.FindObjectsByType<ZoneDoor>(FindObjectsSortMode.None);
         }
 
         static bool NearestCart(Vector3 from, out Vector3 at)
@@ -201,15 +242,16 @@ namespace RexMagnum
             return (a - rex).sqrMagnitude <= (b - rex).sqrMagnitude ? a : b;
         }
 
-        static bool NearestHidingGuest(Vector3 from, out Vector3 at)
+        static bool NearestHidingGuest(Vector3 from, out Vector3 at, out bool calm)
         {
             at = Vector3.zero;
+            calm = false;
             float best = float.MaxValue;
             foreach (var g in Guest.All)
             {
                 if (g == null || !g.CanRescue) continue;
                 float d = (g.transform.position - from).sqrMagnitude;
-                if (d < best) { best = d; at = g.transform.position; }
+                if (d < best) { best = d; at = g.transform.position; calm = g.IsCalm; }
             }
             return best < float.MaxValue;
         }

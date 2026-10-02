@@ -362,10 +362,24 @@ namespace RexMagnum
         public static bool Photo => Free && (TouchState.Down("Photo") || (KDown("Photo")) || (G != null && PB("Photo").wasPressedThisFrame));
         /// <summary>Hands down/up: tap toggles (default); with "hold" the hands stay down only while the key is held
         /// (the controller reads it as press and release events).</summary>
-        public static bool Hands => Free && (HandsHold
-            ? (KDown("Hands") || (K != null && KeyFor("Hands") != Key.None && K[KeyFor("Hands")].wasReleasedThisFrame) ||
-               (G != null && (PB("Hands").wasPressedThisFrame || PB("Hands").wasReleasedThisFrame)) || TouchState.Down("Hands") || TouchState.Up("Hands"))
-            : (TouchState.Down("Hands") || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame)));
+        public static bool Hands => HandsHold ? HandsHoldEvent()
+            : Free && (TouchState.Down("Hands") || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame));
+        // hold mode: press and release are kept in pairs. Only the press is gated (kill cam); the "up" event fires as
+        // soon as the key is no longer held, even if its release frame fell inside a kill cam, so the hands never
+        // stick down. Cached per frame: several readers (Rex, golf cart) see the same event.
+        static int handsFrame = -1;
+        static bool handsEvent, handsHoldDown;
+        static bool HandsHoldEvent()
+        {
+            if (handsFrame == Time.frameCount) return handsEvent;
+            handsFrame = Time.frameCount;
+            bool held = KHeld("Hands") || (G != null && PB("Hands").isPressed) || TouchState.Held("Hands");
+            bool pressed = Free && (KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame) || TouchState.Down("Hands"));
+            handsEvent = false;
+            if (!handsHoldDown && pressed) { handsHoldDown = true; handsEvent = true; }
+            else if (handsHoldDown && !held) { handsHoldDown = false; handsEvent = true; }
+            return handsEvent;
+        }
         public static bool Use => usedFrame != Time.frameCount && Free &&
                                   (TouchState.Down("Use") || (KDown("Use")) || (G != null && PB("Use").wasPressedThisFrame));
         static int usedFrame = -1;

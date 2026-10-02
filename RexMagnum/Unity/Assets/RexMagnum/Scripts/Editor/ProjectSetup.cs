@@ -53,19 +53,29 @@ namespace RexMagnum.EditorTools
                 QualitySettings.SetQualityLevel(level, false);   // keep the editor on the level it had
                 notes.AppendLine("- URP turned on.");
             }
-            var urp = (UniversalRenderPipelineAsset)GraphicsSettings.defaultRenderPipeline;
-            urp.supportsCameraDepthTexture = true;
-            // shadow defaults = Ultra tier (QualityAuto sets the real tier at start)
-            // (reflection helper: some of these setters are internal in URP 17)
-            RexMagnum.QualityAuto.SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", 4);
-            RexMagnum.QualityAuto.SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", 4096);
-            RexMagnum.QualityAuto.SetUrp(urp, "supportsMainLightShadows", "m_MainLightShadowsSupported", true);
-            RexMagnum.QualityAuto.SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
-            RexMagnum.QualityAuto.SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", true);
-            // box-projected interior reflection probes (room 304, lobby, corridors, tunnels) + soft blend between probes
-            RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
-            RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
-            EditorUtility.SetDirty(urp);
+            // every URP asset in use: the default and each quality level's own (the game renders with the level's
+            // asset when it has one: QualityAuto reads currentRenderPipeline)
+            var assets = new System.Collections.Generic.List<UniversalRenderPipelineAsset>
+                { (UniversalRenderPipelineAsset)GraphicsSettings.defaultRenderPipeline };
+            for (int q = 0; q < QualitySettings.names.Length; q++)
+                if (QualitySettings.GetRenderPipelineAssetAt(q) is UniversalRenderPipelineAsset qa && !assets.Contains(qa)) assets.Add(qa);
+            foreach (var urp in assets)
+            {
+                urp.supportsCameraDepthTexture = true;
+                // shadow defaults = Ultra tier (QualityAuto sets the real tier at start)
+                // (reflection helper: some of these setters are internal in URP 17)
+                RexMagnum.QualityAuto.SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", 4);
+                RexMagnum.QualityAuto.SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", 4096);
+                RexMagnum.QualityAuto.SetUrp(urp, "supportsMainLightShadows", "m_MainLightShadowsSupported", true);
+                RexMagnum.QualityAuto.SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
+                RexMagnum.QualityAuto.SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", true);
+                // box-projected interior reflection probes (room 304, lobby, corridors, tunnels) + soft blend between probes
+                RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
+                RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
+                // dithered LOD cross-fade (tree impostors fade in instead of popping); URP 14+ only, skipped before
+                RexMagnum.QualityAuto.SetUrp(urp, "enableLODCrossFade", "m_EnableLODCrossFade", true);
+                EditorUtility.SetDirty(urp);
+            }
             // 2. Linear colour space
             if (PlayerSettings.colorSpace != ColorSpace.Linear) { PlayerSettings.colorSpace = ColorSpace.Linear; notes.AppendLine("- Colour space set to Linear."); }
             // 3. Input System: active input handling must include the new Input System (0 old, 1 new, 2 both)
