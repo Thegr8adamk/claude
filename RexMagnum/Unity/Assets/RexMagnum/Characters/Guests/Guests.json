@@ -84,89 +84,6 @@
    ]
   },
   {
-   "name": "Lucy",
-   "fbx": "Lucy.fbx",
-   "voice": "lcMyyd2HUfFzxdCaC4Ta",
-   "security": false,
-   "materials": [
-    {
-     "name": "Lucy_Skin",
-     "baseMap": "Textures/Lucy_Skin_BC.png",
-     "normalMap": "Textures/Lucy_Skin_N.png",
-     "maskMap": "Textures/Lucy_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Lucy_Bottom",
-     "color": [
-      0.9200000166893005,
-      0.9200000166893005,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Lucy_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.3304975,
-      0.163266,
-      0.076864,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_HairCap",
-     "color": [
-      0.33049750328063965,
-      0.16326600313186646,
-      0.07686399668455124,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Lucy_Sole",
-     "color": [
-      0.8999999761581421,
-      0.8999999761581421,
-      0.8999999761581421,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Lucy_Top",
-     "color": [
-      0.10000000149011612,
-      0.550000011920929,
-      0.550000011920929,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Gerald",
    "fbx": "Gerald.fbx",
    "voice": "fGIZlgPQ75MMlvQ6WxgY",
@@ -243,89 +160,6 @@
       0.8500000238418579,
       0.800000011920929,
       0.6499999761581421,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
-   "name": "Justin",
-   "fbx": "Justin.fbx",
-   "voice": "fV5vDeUO8ghvK7ntjiVC",
-   "security": false,
-   "materials": [
-    {
-     "name": "Justin_Skin",
-     "baseMap": "Textures/Justin_Skin_BC.png",
-     "normalMap": "Textures/Justin_Skin_N.png",
-     "maskMap": "Textures/Justin_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Justin_Bottom",
-     "color": [
-      0.8500000238418579,
-      0.15000000596046448,
-      0.11999999731779099,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Justin_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.24196000000000004,
-      0.164256,
-      0.085024,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Justin_HairCap",
-     "color": [
-      0.24196000397205353,
-      0.1642560064792633,
-      0.08502399921417236,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Justin_Sole",
-     "color": [
-      0.10000000149011612,
-      0.10000000149011612,
-      0.10000000149011612,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Justin_Top",
-     "color": [
-      0.949999988079071,
-      0.949999988079071,
-      0.949999988079071,
       1
      ],
      "smoothness": 0.25
@@ -502,172 +336,6 @@
       0.00800000037997961,
       0.012000000104308128,
       0.04500000178813934,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
-   "name": "Dwayne",
-   "fbx": "Dwayne.fbx",
-   "voice": "MjEQaRiSe6jP1b0vagRU",
-   "security": false,
-   "materials": [
-    {
-     "name": "Dwayne_Skin",
-     "baseMap": "Textures/Dwayne_Skin_BC.png",
-     "normalMap": "Textures/Dwayne_Skin_N.png",
-     "maskMap": "Textures/Dwayne_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Dwayne_Bottom",
-     "color": [
-      0.05000000074505806,
-      0.25,
-      0.6000000238418579,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Dwayne_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.025300000000000007,
-      0.016080000000000004,
-      0.010120000000000002,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Dwayne_HairCap",
-     "color": [
-      0.025299999862909317,
-      0.01607999950647354,
-      0.010119999758899212,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Dwayne_Sole",
-     "color": [
-      0.05000000074505806,
-      0.05000000074505806,
-      0.05000000074505806,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Dwayne_Top",
-     "color": [
-      0.019999999552965164,
-      0.019999999552965164,
-      0.019999999552965164,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
-   "name": "Priya",
-   "fbx": "Priya.fbx",
-   "voice": "lcMyyd2HUfFzxdCaC4Ta",
-   "security": false,
-   "materials": [
-    {
-     "name": "Priya_Skin",
-     "baseMap": "Textures/Priya_Skin_BC.png",
-     "normalMap": "Textures/Priya_Skin_N.png",
-     "maskMap": "Textures/Priya_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Priya_Bottom",
-     "color": [
-      0.8999999761581421,
-      0.8999999761581421,
-      0.8799999952316284,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Priya_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.03135850000000001,
-      0.017415600000000003,
-      0.010422400000000002,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Priya_HairCap",
-     "color": [
-      0.0313584990799427,
-      0.017415599897503853,
-      0.010422400198876858,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Priya_Sole",
-     "color": [
-      0.6000000238418579,
-      0.3499999940395355,
-      0.15000000596046448,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Priya_Top",
-     "color": [
-      0.949999988079071,
-      0.699999988079071,
-      0.05000000074505806,
       1
      ],
      "smoothness": 0.25
@@ -1090,89 +758,6 @@
    ]
   },
   {
-   "name": "Chad",
-   "fbx": "Chad.fbx",
-   "voice": "fV5vDeUO8ghvK7ntjiVC",
-   "security": false,
-   "materials": [
-    {
-     "name": "Chad_Skin",
-     "baseMap": "Textures/Chad_Skin_BC.png",
-     "normalMap": "Textures/Chad_Skin_N.png",
-     "maskMap": "Textures/Chad_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Chad_Bottom",
-     "color": [
-      0.949999988079071,
-      0.75,
-      0.05000000074505806,
-      1
-     ],
-     "smoothness": 0.2
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Chad_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.2686625,
-      0.17930999999999997,
-      0.09223999999999999,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Chad_HairCap",
-     "color": [
-      0.2686625123023987,
-      0.17930999398231506,
-      0.09223999828100204,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Chad_Sole",
-     "color": [
-      0.20000000298023224,
-      0.20000000298023224,
-      0.20000000298023224,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Chad_Top",
-     "color": [
-      0.949999988079071,
-      0.3499999940395355,
-      0.550000011920929,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Doris",
    "fbx": "Doris.fbx",
    "voice": "lcMyyd2HUfFzxdCaC4Ta",
@@ -1329,79 +914,6 @@
    ]
   },
   {
-   "name": "Marge",
-   "fbx": "Marge.fbx",
-   "voice": "MnUw1cSnpiLoLhpd3Hqp",
-   "security": false,
-   "materials": [
-    {
-     "name": "Marge_Skin",
-     "baseMap": "Textures/Marge_Skin_BC.png",
-     "normalMap": "Textures/Marge_Skin_N.png",
-     "maskMap": "Textures/Marge_Skin_MS.png",
-     "color": [
-      1,
-      1,
-      1,
-      1
-     ]
-    },
-    {
-     "name": "Rex_Eye",
-     "color": [
-      0.800000011920929,
-      0.800000011920929,
-      0.800000011920929,
-      1
-     ],
-     "smoothness": 0.95
-    },
-    {
-     "name": "Marge_Hair",
-     "baseMap": "Textures/Hair_Strands.png",
-     "color": [
-      0.5417372500000001,
-      0.5231866000000001,
-      0.49659640000000005,
-      1
-     ],
-     "alphaClip": true,
-     "twoSided": true,
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_HairCap",
-     "color": [
-      0.5417372584342957,
-      0.5231866240501404,
-      0.49659639596939087,
-      1
-     ],
-     "smoothness": 0.45
-    },
-    {
-     "name": "Marge_Sole",
-     "color": [
-      0.8500000238418579,
-      0.8500000238418579,
-      0.8199999928474426,
-      1
-     ],
-     "smoothness": 0.3
-    },
-    {
-     "name": "Marge_Top",
-     "color": [
-      0.8500000238418579,
-      0.30000001192092896,
-      0.44999998807907104,
-      1
-     ],
-     "smoothness": 0.25
-    }
-   ]
-  },
-  {
    "name": "Heather",
    "fbx": "Heather.fbx",
    "voice": "MnUw1cSnpiLoLhpd3Hqp",
@@ -1475,6 +987,411 @@
    ]
   },
   {
+   "name": "Lucy",
+   "fbx": "Lucy.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Lucy_Skin",
+     "baseMap": "Textures/Lucy_Skin_BC.png",
+     "normalMap": "Textures/Lucy_Skin_N.png",
+     "maskMap": "Textures/Lucy_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Lucy_Bottom",
+     "color": [
+      0.9200000166893005,
+      0.9200000166893005,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Lucy_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.3304975,
+      0.163266,
+      0.076864,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_HairCap",
+     "color": [
+      0.33049750328063965,
+      0.16326600313186646,
+      0.07686399668455124,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Lucy_Sole",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Lucy_Top",
+     "color": [
+      0.10000000149011612,
+      0.550000011920929,
+      0.550000011920929,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Justin",
+   "fbx": "Justin.fbx",
+   "voice": "fV5vDeUO8ghvK7ntjiVC",
+   "security": false,
+   "materials": [
+    {
+     "name": "Justin_Skin",
+     "baseMap": "Textures/Justin_Skin_BC.png",
+     "normalMap": "Textures/Justin_Skin_N.png",
+     "maskMap": "Textures/Justin_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Justin_Bottom",
+     "color": [
+      0.8500000238418579,
+      0.15000000596046448,
+      0.11999999731779099,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Justin_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.24196000000000004,
+      0.164256,
+      0.085024,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Justin_HairCap",
+     "color": [
+      0.24196000397205353,
+      0.1642560064792633,
+      0.08502399921417236,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Justin_Sole",
+     "color": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.10000000149011612,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Justin_Top",
+     "color": [
+      0.949999988079071,
+      0.949999988079071,
+      0.949999988079071,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Marge",
+   "fbx": "Marge.fbx",
+   "voice": "MnUw1cSnpiLoLhpd3Hqp",
+   "security": false,
+   "materials": [
+    {
+     "name": "Marge_Skin",
+     "baseMap": "Textures/Marge_Skin_BC.png",
+     "normalMap": "Textures/Marge_Skin_N.png",
+     "maskMap": "Textures/Marge_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Marge_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.5417372500000001,
+      0.5231866000000001,
+      0.49659640000000005,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_HairCap",
+     "color": [
+      0.5417372584342957,
+      0.5231866240501404,
+      0.49659639596939087,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Marge_Sole",
+     "color": [
+      0.8500000238418579,
+      0.8500000238418579,
+      0.8199999928474426,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Marge_Top",
+     "color": [
+      0.8500000238418579,
+      0.30000001192092896,
+      0.44999998807907104,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Dwayne",
+   "fbx": "Dwayne.fbx",
+   "voice": "MjEQaRiSe6jP1b0vagRU",
+   "security": false,
+   "materials": [
+    {
+     "name": "Dwayne_Skin",
+     "baseMap": "Textures/Dwayne_Skin_BC.png",
+     "normalMap": "Textures/Dwayne_Skin_N.png",
+     "maskMap": "Textures/Dwayne_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Dwayne_Bottom",
+     "color": [
+      0.05000000074505806,
+      0.25,
+      0.6000000238418579,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Dwayne_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.025300000000000007,
+      0.016080000000000004,
+      0.010120000000000002,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Dwayne_HairCap",
+     "color": [
+      0.025299999862909317,
+      0.01607999950647354,
+      0.010119999758899212,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Dwayne_Sole",
+     "color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Dwayne_Top",
+     "color": [
+      0.019999999552965164,
+      0.019999999552965164,
+      0.019999999552965164,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Priya",
+   "fbx": "Priya.fbx",
+   "voice": "lcMyyd2HUfFzxdCaC4Ta",
+   "security": false,
+   "materials": [
+    {
+     "name": "Priya_Skin",
+     "baseMap": "Textures/Priya_Skin_BC.png",
+     "normalMap": "Textures/Priya_Skin_N.png",
+     "maskMap": "Textures/Priya_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Priya_Bottom",
+     "color": [
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8799999952316284,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Priya_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.03135850000000001,
+      0.017415600000000003,
+      0.010422400000000002,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Priya_HairCap",
+     "color": [
+      0.0313584990799427,
+      0.017415599897503853,
+      0.010422400198876858,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Priya_Sole",
+     "color": [
+      0.6000000238418579,
+      0.3499999940395355,
+      0.15000000596046448,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Priya_Top",
+     "color": [
+      0.949999988079071,
+      0.699999988079071,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
    "name": "Rosa",
    "fbx": "Rosa.fbx",
    "voice": "MnUw1cSnpiLoLhpd3Hqp",
@@ -1541,6 +1458,89 @@
       0.6000000238418579,
       0.019999999552965164,
       0.029999999329447746,
+      1
+     ],
+     "smoothness": 0.25
+    }
+   ]
+  },
+  {
+   "name": "Chad",
+   "fbx": "Chad.fbx",
+   "voice": "fV5vDeUO8ghvK7ntjiVC",
+   "security": false,
+   "materials": [
+    {
+     "name": "Chad_Skin",
+     "baseMap": "Textures/Chad_Skin_BC.png",
+     "normalMap": "Textures/Chad_Skin_N.png",
+     "maskMap": "Textures/Chad_Skin_MS.png",
+     "color": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "name": "Chad_Bottom",
+     "color": [
+      0.949999988079071,
+      0.75,
+      0.05000000074505806,
+      1
+     ],
+     "smoothness": 0.2
+    },
+    {
+     "name": "Rex_Eye",
+     "color": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      1
+     ],
+     "smoothness": 0.95
+    },
+    {
+     "name": "Chad_Hair",
+     "baseMap": "Textures/Hair_Strands.png",
+     "color": [
+      0.2686625,
+      0.17930999999999997,
+      0.09223999999999999,
+      1
+     ],
+     "alphaClip": true,
+     "twoSided": true,
+     "smoothness": 0.45
+    },
+    {
+     "name": "Chad_HairCap",
+     "color": [
+      0.2686625123023987,
+      0.17930999398231506,
+      0.09223999828100204,
+      1
+     ],
+     "smoothness": 0.45
+    },
+    {
+     "name": "Chad_Sole",
+     "color": [
+      0.20000000298023224,
+      0.20000000298023224,
+      0.20000000298023224,
+      1
+     ],
+     "smoothness": 0.3
+    },
+    {
+     "name": "Chad_Top",
+     "color": [
+      0.949999988079071,
+      0.3499999940395355,
+      0.550000011920929,
       1
      ],
      "smoothness": 0.25
