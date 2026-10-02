@@ -138,8 +138,8 @@ In Unity, **Rex Magnum → Build Rex + Test Scene** also builds the blobs (or us
 
 Claude can see your ElevenLabs flows, but it can't download the audio files. Download the **selected take** of each item from your flows. Rename it as shown, and put it in the folder shown. Unity finds the files by name. If a file is missing, the game runs without that sound.
 
-**In the game now (2026-10-02):** music `glorp_ballad`, `lounge_act`; sound effects `golf_swing`, `knife_stab`, `sniper`, `pistol`, `bottle_break`, `swordfish`, `harpoon`, `coconut`.
-**Still missing:** music `title_theme`, `day_resort`, `night_jungle`, `fight`, `elevator`; sound effects `blob_idle`, `blob_slide`, `blob_spit`, `blob_angry`, `blob_hit`, `blob_pop`, `towel_crack`; all voice lines. Upload new downloads to `RexMagnum/AudioInbox/` and Claude sorts them.
+**In the game now (2026-10-02):** all 7 music tracks and all 18 sound effects (8 sorted from your downloads, the rest made by Claude in ElevenLabs flow "Rex Magnum - missing sounds": https://elevenlabs.io/app/flows/QqS3RL5tJY1G6iIhtDEt). To swap one, replace the file with the same name.
+**Still missing:** all voice lines.
 
 **Music** → `Unity/Assets/RexMagnum/Resources/Music/`
 
