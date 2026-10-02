@@ -186,6 +186,10 @@ namespace RexMagnum
             }
         }
 
+        /// <summary>The pink brain: inside the upper body (sniper head shot, X-ray).</summary>
+        public Vector3 BrainPoint => transform.position + Vector3.up * HeightOf() * 0.62f;
+        public float BrainRadius => HeightOf() * 0.14f;
+
         float HeightOf() => kind == Kind.Tourist ? 1.25f : kind == Kind.Lifeguard ? 1.9f : kind == Kind.Bouncer ? (isHalf ? 1.1f : 2.15f) : 4.2f;
 
         public Color BaseColor() => baseColor;
@@ -341,7 +345,10 @@ namespace RexMagnum
                     half.ApplyKind();
                 }
                 if (lastKiller != null && lastKiller.GetComponent<RexController>() != null)
+                {
                     RexVoice.Say(lastKiller, "BouncerSplit", true);
+                    Progress.Add("bouncer_splits");
+                }
             }
             Destroy(gameObject, 0.15f);
         }

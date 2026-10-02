@@ -487,7 +487,7 @@ namespace RexMagnum.EditorTools
             string path = Scenes + "/RexTest.unity";
             EditorSceneManager.SaveScene(scene, path);
             var list = EditorBuildSettings.scenes.Where(s => s.path != path).ToList();
-            list.Insert(0, new EditorBuildSettingsScene(path, true));
+            list.Add(new EditorBuildSettingsScene(path, true));      // after the island: the .exe must start on Island
             EditorBuildSettings.scenes = list.ToArray();
         }
 

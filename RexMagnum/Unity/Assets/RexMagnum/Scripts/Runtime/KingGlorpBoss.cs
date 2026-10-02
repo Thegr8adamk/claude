@@ -51,6 +51,11 @@ namespace RexMagnum
                 MonoBehaviour host = rex != null ? rex.GetComponent<RexController>() : null;
                 (host != null ? host : this).StartCoroutine(Victory(by, transform.position));
             };
+            // voice first: RexVoice.SayLine plays on the first AudioSource (3D, voice volume), not on the music
+            var voice = gameObject.AddComponent<AudioSource>();
+            voice.spatialBlend = 1f;
+            voice.minDistance = 8f;
+            voice.maxDistance = 120f;
             music = gameObject.AddComponent<AudioSource>();
             music.clip = Resources.Load<AudioClip>("Music/glorp_ballad");
             music.loop = true;

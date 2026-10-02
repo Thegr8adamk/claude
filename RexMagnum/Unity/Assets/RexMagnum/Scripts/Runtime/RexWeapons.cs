@@ -301,7 +301,7 @@ namespace RexMagnum
                             blob.flingSpeed = Mathf.Clamp(Mathf.Sqrt(flat.magnitude * 9.81f), 8f, 20f);
                         }
                     }
-                    if (d.id == WeaponId.Towel && heavy) blob.Stun(2f);          // brief: wind-up snap stuns 2 s
+                    if (d.id == WeaponId.Towel && heavy) { blob.Stun(2f); Progress.Add("towel_stuns"); }          // brief: wind-up snap stuns 2 s
                 }
                 float dmg = (heavy ? d.holdDamage : d.tapDamage) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
                 h.Damage(dmg, col.ClosestPoint(c), gameObject);
@@ -320,6 +320,7 @@ namespace RexMagnum
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
                     Sfx.Play("bottle_break", c);
+                    Progress.Add("bottle_breaks");
                     owned.Remove(WeaponId.Bottle);
                     if (Has(WeaponId.BottleBroken)) Equip(WeaponId.BottleBroken);   // Give only equips a new weapon
                     else Give(WeaponId.BottleBroken);
@@ -359,11 +360,14 @@ namespace RexMagnum
                 if (h != null && !h.IsDead)
                 {
                     var blob = h.GetComponent<Blob>();
-                    bool brain = hit.collider.name.Contains("Brain");
+                    // brain: the shot line passes through the brain inside the jelly (the blob has one body collider)
+                    bool brain = blob != null && Vector3.Cross(ray.direction, blob.BrainPoint - ray.origin).magnitude < blob.BrainRadius;
+                    if (brain && d.id == WeaponId.Sniper) Progress.Add("sniper_brains");
                     h.Damage(d.tapDamage * (brain ? 2f : 1f), hit.point, gameObject);
                     if (h.IsDead)
                     {
                         KillLine(d, blob);
+                        if (d.id == WeaponId.Sniper && Vector3.Distance(from, hit.point) >= 150f) Progress.Add("sniper_long");
                         if (d.id == WeaponId.Sniper) KillCam.Show(h.transform, from, true);   // full bullet cam
                         else if (blob != null && Blob.LivingNear(transform.position, 30f) == 0) KillCam.Show(h.transform, from, true);
                     }

@@ -51,6 +51,7 @@ namespace RexMagnum
             Vector3 p = transform.position;
             float radius = 4f;
             bool killed = false;
+            int kills = 0;
             foreach (var col in Physics.OverlapSphere(p, radius, ~0, QueryTriggerInteraction.Ignore))
             {
                 var h = col.GetComponentInParent<Health>();
@@ -59,7 +60,7 @@ namespace RexMagnum
                 var blob = h.GetComponent<Blob>();
                 if (blob != null) blob.deathStyle = DeathStyle.Blast;
                 h.Damage(damage * Mathf.Clamp01(k + 0.2f) * (h.CompareTag("Player") ? 0.4f : 1f), p, owner);
-                if (h.IsDead && blob != null) killed = true;
+                if (h.IsDead && blob != null) { killed = true; kills++; }
             }
             for (int i = 0; i < 6; i++)                    // slime rain
                 SlimePuddle.Spawn(p + new Vector3(Random.Range(-3f, 3f), 0, Random.Range(-3f, 3f)), new Color(0.3f, 0.8f, 0.2f), 0.6f);
@@ -72,6 +73,7 @@ namespace RexMagnum
             flash.intensity = 8f;
             Destroy(flash.gameObject, 0.15f);
             if (killed) RexVoice.Say(owner, "Coconut");
+            if (kills >= 3) Progress.Add("coconut_multi");
             KillCam.CoconutDone(killed);
             Destroy(gameObject);
         }
