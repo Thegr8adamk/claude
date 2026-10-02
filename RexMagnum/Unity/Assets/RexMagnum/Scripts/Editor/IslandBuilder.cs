@@ -1350,7 +1350,9 @@ namespace RexMagnum.EditorTools
                 // drinks beside the charge station: heal before (or after) the factory fight
                 Vector3 side = Vector3.Cross(Vector3.up, outward).normalized;
                 DrinkStand("RuinsDrinks", GroundAt(at + side * 3f + Vector3.up * 0.5f), root);
-                // walk check: from the charge station through the factory door, 4 m into the hall
+                // the temple platform ends 2 m in front of the door with a bare 2 m wall over the ground: stone steps
+                RuinsSteps(door[0], outward, root);
+                // walk check: from the charge station through the factory door, 4 m into the hall (over the steps)
                 walkLegs.Add(("ruins / factory door", new[] { door[0] + outward * 8f, door[0], door[0] - outward * 4f }));
             }
             var go = new GameObject("FactoryCore");
@@ -1395,6 +1397,104 @@ namespace RexMagnum.EditorTools
                 sp.radius = 6f;
                 sp.maxAlive = 4;
             }
+        }
+
+        /// <summary>Steps up to the factory door (walk check, checked on Ruins.fbx and the RAW): the temple platform's top
+        /// (34.52) ends 2 m in front of the door (z 47) in a plain face down into the ground (32.4 - 32.6 there), and the
+        /// FBX has no stair: Rex met a 2 m wall. Finds the platform edge from the door (rays along the axis nearest to
+        /// outward: the platform is axis-aligned) and builds a 6 m wide flight of TempleStone steps (0.25 m rise, 0.4 m
+        /// tread: ~11 steps, ending ~4.4 m out, clear of the charge station 8 m out) down to the ground, a box collider
+        /// per step (stepOffset 0.35, NavMesh climb 0.4).</summary>
+        static void RuinsSteps(Vector3 door, Vector3 outward, Transform parent)
+        {
+            Physics.SyncTransforms();
+            var ruins = GameObject.Find("Island/Ruins");
+            var terr = UnityEngine.Object.FindAnyObjectByType<Terrain>();
+            if (ruins == null || terr == null) { Debug.LogWarning("[Rex Magnum] Ruins steps: Ruins or terrain missing, no steps."); return; }
+            float Ground(Vector3 p) => terr.SampleHeight(p) + terr.transform.position.y;
+            Vector3 dir = Mathf.Abs(outward.x) > Mathf.Abs(outward.z) ? new Vector3(Mathf.Sign(outward.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(outward.z));
+            Vector3 side = new Vector3(dir.z, 0f, -dir.x);
+            // the platform edge: the last point out from the door with Ruins floor within 0.15 m of the door's height
+            float floorY = door.y;
+            Vector3 edge = new Vector3(door.x, 0f, door.z);
+            bool found = false;
+            for (float d = 0f; d < 12f; d += 0.05f)
+            {
+                var p = door + dir * d;
+                if (!Physics.Raycast(new Vector3(p.x, door.y + 0.6f, p.z), Vector3.down, out RaycastHit fh, 1f, ~0, QueryTriggerInteraction.Ignore) ||
+                    !fh.collider.transform.IsChildOf(ruins.transform) || Mathf.Abs(fh.point.y - door.y) > 0.15f) { found = d > 0f; break; }
+                edge = new Vector3(p.x, 0f, p.z);
+                floorY = Mathf.Max(floorY, fh.point.y);
+            }
+            float drop = floorY - Ground(edge + dir * 0.3f);
+            if (!found || drop <= 0.3f) { Debug.Log($"[Rex Magnum] Ruins steps: none (edge found {found}, drop {drop:F2} m)."); return; }
+
+            const float Rise = 0.25f, Tread = 0.4f, HalfW = 3f, UvScale = 0.17f;    // UvScale: as the FBX (x A_TempleStone tiling)
+            var go = new GameObject("RuinsDoorSteps");
+            go.transform.SetParent(parent, false);
+            var verts = new List<Vector3>();
+            var nrms = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            void AddBox(Vector3 c, Vector3 s)
+            {
+                for (int ax = 0; ax < 3; ax++)
+                    for (int sg = -1; sg <= 1; sg += 2)
+                    {
+                        Vector3 nrm = Vector3.zero, u = Vector3.zero, v = Vector3.zero;
+                        nrm[ax] = sg; u[(ax + 1) % 3] = 1f; v[(ax + 2) % 3] = 1f;
+                        if (sg < 0) { var t = u; u = v; v = t; }            // Cross(u, v) = the outward normal: front faces out
+                        Vector3 fc = c + Vector3.Scale(nrm, s * 0.5f), du = Vector3.Scale(u, s * 0.5f), dv = Vector3.Scale(v, s * 0.5f);
+                        int i0 = verts.Count;
+                        foreach (var q in new[] { fc - du - dv, fc + du - dv, fc + du + dv, fc - du + dv })
+                        {
+                            verts.Add(q);
+                            nrms.Add(nrm);
+                            // world-projected: courses run level on the risers and the sides
+                            uvs.Add(ax == 1 ? new Vector2(q.x, q.z) * UvScale : new Vector2(ax == 0 ? q.z : q.x, q.y) * UvScale);
+                        }
+                        tris.AddRange(new[] { i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3 });
+                    }
+                var bc = go.AddComponent<BoxCollider>();
+                bc.center = c;
+                bc.size = s;
+            }
+            int steps = 0;
+            float lastTop = floorY;
+            Vector3 axisAbs = new Vector3(Mathf.Abs(dir.x), 0f, Mathf.Abs(dir.z)), sideAbs = new Vector3(Mathf.Abs(side.x), 0f, Mathf.Abs(side.z));
+            for (int k = 0; k < 40; k++)
+            {
+                float top = floorY - Rise * (k + 1);
+                Vector3 a = edge + dir * (Tread * k), b = edge + dir * (Tread * (k + 1));
+                float outerHi = float.MinValue, lo = float.MaxValue;
+                for (int si = -2; si <= 2; si++)
+                {
+                    Vector3 off = side * (HalfW * si / 2f);
+                    outerHi = Mathf.Max(outerHi, Ground(b + off));
+                    lo = Mathf.Min(lo, Mathf.Min(Ground(a + off), Ground(b + off)));
+                }
+                if (top <= outerHi) break;                              // the ground is up to this step: done
+                float bottom = lo - 0.4f;
+                AddBox((a + b) * 0.5f + Vector3.up * ((top + bottom) * 0.5f), axisAbs * Tread + sideAbs * (HalfW * 2f) + Vector3.up * (top - bottom));
+                steps++;
+                lastTop = top;
+            }
+            var mesh = new Mesh { name = "RuinsDoorSteps" };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(nrms);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            mesh.RecalculateTangents();
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var stone = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_TempleStone.mat");
+            if (stone == null)
+                stone = ruins.GetComponentsInChildren<MeshRenderer>(true).SelectMany(r => r.sharedMaterials)
+                    .FirstOrDefault(m => m != null && m.name.StartsWith("A_TempleStone"));
+            go.AddComponent<MeshRenderer>().sharedMaterial = stone;
+            GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.OccludeeStatic | StaticEditorFlags.BatchingStatic);
+            Debug.Log($"[Rex Magnum] Ruins steps: platform edge {edge.x:F1}, {edge.z:F1} (floor {floorY:F2}, {drop:F2} m over the ground): " +
+                      $"{steps} steps of {Rise:F2} m, {HalfW * 2f:F0} m wide, last top {lastTop:F2} at {Tread * steps:F1} m out.");
         }
 
         /// <summary>A hanging board at the cave fork, read when walking in from the cave mouth: which way to the ship and
@@ -2775,8 +2875,8 @@ namespace RexMagnum.EditorTools
             }
         }
 
-        /// <summary>Edit mode has no NavMesh bake: walk each path in 0.5 m steps the way Rex's capsule would (radius 0.32,
-        /// height 1.72, stepOffset 0.35). Per step a capsule sweep over the step height sees walls, glass, posts and
+        /// <summary>Edit mode has no NavMesh bake: walk each path in 0.25 m steps the way Rex's capsule would (radius 0.32,
+        /// height 1.72, stepOffset 0.35: RexBuilder's CharacterController; 0.5 m samples crossed two 0.25 m stair risers at once). Per step a capsule sweep over the step height sees walls, glass, posts and
         /// steep banks (a down ray alone walked through them), then a down ray from 0.9 m over the last ground point
         /// finds the next ground; warns for a block, a step over 0.35 m or a drop with no ground within 2 m.</summary>
         static void CheckWalk(string name, Vector3[] path)
@@ -2797,7 +2897,7 @@ namespace RexMagnum.EditorTools
             {
                 Vector3 a = path[s - 1], b = path[s];
                 a.y = b.y = 0f;
-                int n = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 0.5f));
+                int n = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 0.25f));
                 for (int k = 1; k <= n; k++)
                 {
                     var q = Vector3.Lerp(a, b, k / (float)n);
