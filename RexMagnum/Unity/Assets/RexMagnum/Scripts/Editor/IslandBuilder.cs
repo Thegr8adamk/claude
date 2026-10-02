@@ -2524,9 +2524,14 @@ namespace RexMagnum.EditorTools
                 var gm = new Mesh { name = meshName, indexFormat = IndexFormat.UInt32, vertices = verts, triangles = tris };
                 gm.RecalculateNormals();
                 gm.bounds = new Bounds(Vector3.zero, new Vector3(size, 10f, size));
-                AssetDatabase.DeleteAsset($"{Gen}/{meshName}.asset");
-                AssetDatabase.CreateAsset(gm, $"{Gen}/{meshName}.asset");
-                return gm;
+                // overwrite an existing asset in place (same GUID / file ID: scene and QualityAuto references stay valid)
+                string gp = $"{Gen}/{meshName}.asset";
+                var old = AssetDatabase.LoadAssetAtPath<Mesh>(gp);
+                if (old == null) { AssetDatabase.CreateAsset(gm, gp); return gm; }
+                EditorUtility.CopySerialized(gm, old);
+                EditorUtility.SetDirty(old);
+                UnityEngine.Object.DestroyImmediate(gm);
+                return old;
             }
             var mesh = Grid(4f, 40, "OceanGrid");
             Grid(8f, 24, "OceanGridCoarse");          // loaded by Build Island for QualityAuto (Low / phone Medium)
