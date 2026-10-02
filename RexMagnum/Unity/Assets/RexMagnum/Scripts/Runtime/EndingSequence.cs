@@ -147,7 +147,7 @@ namespace RexMagnum
         {
             var clip = Resources.Load<AudioClip>(path);
             if (clip == null) return 1.75f;
-            if (voice != null) voice.PlayOneShot(clip, AudioMix.Voice);
+            if (voice != null) { voice.PlayOneShot(clip, AudioMix.Voice); RexVoice.Speaking(clip.length); }
             return clip.length;
         }
 

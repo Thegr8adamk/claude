@@ -84,7 +84,7 @@ namespace RexMagnum
 
         void Update()
         {
-            if (music != null) music.volume = 0.6f * AudioMix.Music;
+            if (music != null) music.volume = 0.6f * AudioMix.Music * AudioMix.Duck;
             if (dead || rex == null) return;
             float d = Vector3.Distance(rex.position, transform.position);
             if (!started)

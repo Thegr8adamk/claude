@@ -24,6 +24,7 @@ namespace RexMagnum
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
+        float nightLevel;
 
         void Start()
         {
@@ -72,7 +73,7 @@ namespace RexMagnum
                 float pitch = Mathf.Lerp(2f, 75f, Mathf.Max(0f, elev));
                 // turn the sun in small steps: a tiny turn every frame makes all shadow edges crawl
                 var want = Quaternion.Euler(elev > 0 ? pitch : 30f, sunAzimuth + (timeOfDay - 0.5f) * 180f, 0f);
-                if (Quaternion.Angle(sun.transform.rotation, want) > 0.25f) sun.transform.rotation = want;
+                if (Quaternion.Angle(sun.transform.rotation, want) > 0.08f) sun.transform.rotation = want;
                 sun.color = sunColor.Evaluate(timeOfDay);
                 // low sun fades to moonlight strength by the horizon, so the switch to the high moon angle is not seen
                 sun.intensity = Mathf.Lerp(0.12f, baseSun, Mathf.Clamp01(elev * 3f));   // night: moonlight
@@ -92,7 +93,9 @@ namespace RexMagnum
             if (spawners != null)
                 foreach (var sp in spawners)
                     if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 1.8f, Night) * sp.factoryScale));
-            if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
+            // the slow fade keeps its own level; the voice duck (fast) is applied on top of it
+            nightLevel = Mathf.MoveTowards(nightLevel, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
+            if (nightMusic != null) nightMusic.volume = nightLevel * AudioMix.Duck;
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)
             {

@@ -331,7 +331,7 @@ namespace RexMagnum
         float Say(string line, int index = -1, bool crowd = false)
         {
             AudioClip clip = index >= 0 ? Resources.Load<AudioClip>($"Voice/Guests/{guestName}/answer_{index + 1:00}") : null;
-            if (clip != null) voice.PlayOneShot(clip, AudioMix.Voice);
+            if (clip != null) { voice.PlayOneShot(clip, AudioMix.Voice); RexVoice.Speaking(clip.length); }
             float length = clip != null ? clip.length : Mathf.Clamp(line.Length * 0.06f, 1.5f, 6f);
             string text = $"{guestName.ToUpper()}: {line}";
             if (crowd && RexVoice.SubtitleCrowd != null) RexVoice.SubtitleCrowd(text);
