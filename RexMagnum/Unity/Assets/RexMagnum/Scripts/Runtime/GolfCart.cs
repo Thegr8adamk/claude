@@ -140,7 +140,7 @@ namespace RexMagnum
             }
         }
 
-        // ---- CART HORN (bar defended): Taunt while driving honks. Blobs within 8 m in front are shoved back and
+        // ---- CART HORN (bar defended): Taunt while driving honks. Blobs within 8 m in front (in line of sight) are shoved back and
         // stunned 1.5 s (not King Glorp: Knockback and Stun refuse him). 6 s cooldown.
         public static bool HornUnlocked => Progress.Value(BarDefense.DoneKey) > 0;
         float nextHorn;
@@ -153,6 +153,8 @@ namespace RexMagnum
             if (Sfx.Get("cart_horn") != null) Sfx.Play("cart_horn", at + transform.forward * 1.5f, 1f, 1f);
             else Sfx.Play("blob_angry", at + transform.forward * 1.5f, 1f, 1.8f);     // no horn clip: a squeaky honk, pitched up
             RMInput.Rumble(0.3f, 0.5f, 0.15f);
+            RexWeapons.CrowdRing(this, at + transform.forward * 1.5f, 8f);     // the same ring as SUPER SNAP: crowd control reads alike
+            Vector3 hornAt = at + transform.forward * 1.5f + Vector3.up * 1.2f;
             int hit = 0;
             foreach (var b in Blob.All)
             {
@@ -160,6 +162,9 @@ namespace RexMagnum
                 Vector3 to = Vector3.ProjectOnPlane(b.transform.position - at, Vector3.up);
                 if (to.sqrMagnitude > 64f || Mathf.Abs(b.transform.position.y - at.y) > 3f) continue;
                 if (to.sqrMagnitude > 0.01f && Vector3.Angle(transform.forward, to) > 60f) continue;    // in front only
+                // not through walls: the first thing in the way is a blob / Rex (Health) or the cart itself
+                if (Physics.Linecast(hornAt, b.transform.position + Vector3.up * 0.6f, out RaycastHit block, ~0, QueryTriggerInteraction.Ignore) &&
+                    block.collider.GetComponentInParent<Health>() == null && !block.collider.transform.IsChildOf(transform)) continue;
                 b.Knockback(to.sqrMagnitude > 0.01f ? to.normalized : transform.forward, 3f);
                 b.Stun(1.5f);
                 hit++;

@@ -29,7 +29,11 @@ namespace RexMagnum
         Transform player;
         QualityAuto quality;
         MaterialPropertyBlock mpb;
-        bool on;
+        // _UsePlanar fades over FadeTime (a hard 1/0 switch popped the water at 40 m / on and off screen);
+        // the weight and texture last written to the renderers (written only when they change)
+        const float FadeTime = 0.2f;
+        float weight, shownWeight = -1f;
+        Texture shownTex;
         static readonly Plane[] frustum = new Plane[6];
         static readonly System.Collections.Generic.List<Renderer> shown = new System.Collections.Generic.List<Renderer>(), armsOff = new System.Collections.Generic.List<Renderer>();
         static readonly int PlanarId = Shader.PropertyToID("_PlanarRefl"), UseId = Shader.PropertyToID("_UsePlanar");
@@ -91,27 +95,48 @@ namespace RexMagnum
             reflCam.targetTexture = rt;
         }
 
-        void SetUse(bool use)
+        /// <summary>Writes _UsePlanar (and the texture) to the water renderers when either changed.</summary>
+        void Push(float w)
         {
-            if (use == on || water == null) return;
-            on = use;
+            if (water == null || mpb == null) return;
+            bool texChanged = w > 0f && shownTex != rt;
+            if (w == shownWeight && !texChanged) return;
+            shownWeight = w;
             foreach (var r in water)
             {
                 if (r == null) continue;
                 r.GetPropertyBlock(mpb);
-                mpb.SetFloat(UseId, use ? 1f : 0f);
-                if (use && rt != null) mpb.SetTexture(PlanarId, rt);
+                mpb.SetFloat(UseId, w);
+                if (w > 0f && rt != null) mpb.SetTexture(PlanarId, rt);
                 r.SetPropertyBlock(mpb);
             }
+            if (w > 0f) shownTex = rt;
         }
 
-        bool Wanted(Camera cam)
+        /// <summary>Probe only, at once (the planar texture would be wrong for this view).</summary>
+        void Off() { weight = 0f; Push(0f); }
+
+        /// <summary>One step of the fade toward planar on / off (unscaled: kill cam slow motion does not stall it).</summary>
+        void Fade(bool use)
+        {
+            weight = Mathf.MoveTowards(weight, use ? 1f : 0f, Time.unscaledDeltaTime / FadeTime);
+            Push(weight);
+        }
+
+        /// <summary>Planar reflection allowed at all for this view; when not, it goes off at once (another camera shows
+        /// the scene, VR, Low, phones, under water).</summary>
+        bool Allowed(Camera cam)
         {
             if (reflCam == null || VRMode.Active || Application.isMobilePlatform) return false;   // phones: a whole-hub render
             if (KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing) return false;
             if (quality != null && quality.Tier == QualityTier.Low) return false;
+            return cam.transform.position.y >= planeY + 0.05f;               // not under water / at the surface
+        }
+
+        /// <summary>Near the pool and the pool on screen (out of range / off screen fades out).</summary>
+        bool Wanted(Camera cam)
+        {
             if (player == null || pool.SqrDistance(player.position) > activeDistance * activeDistance) return false;
-            if (cam.transform.position.y < planeY + 0.05f) return false;     // under water / at the surface
             bool seen = false;
             foreach (var r in water) if (r != null && r.isVisible) { seen = true; break; }
             if (!seen) return false;
@@ -119,11 +144,11 @@ namespace RexMagnum
             return GeometryUtility.TestPlanesAABB(frustum, pool);
         }
 
-        void OnDisable() => SetUse(false);
+        void OnDisable() => Off();
 
         void OnDestroy()
         {
-            SetUse(false);
+            Off();
             if (rt != null) { rt.Release(); Destroy(rt); }
             if (reflCam != null) Destroy(reflCam.gameObject);
         }
@@ -132,14 +157,12 @@ namespace RexMagnum
         {
             var cam = Camera.main;
             if (cam == null || water == null) return;
-            if (!Wanted(cam)) { SetUse(false); return; }
-            // Medium: every 2nd frame (the water keeps last frame's texture); never in a frame a mirror rendered
-            // a stale texture would trail the camera (the water samples it in screen space): a frame a mirror rendered
-            // falls back to the probe instead
-            if (PlanarMirror.RenderedFrame == Time.frameCount) { SetUse(false); return; }
-            var oldRt = rt;
-            EnsureRT();
-            if (rt != oldRt) on = false;            // a new texture: hand it to the water again
+            if (!Allowed(cam)) { Off(); return; }
+            if (!Wanted(cam)) { Fade(false); return; }       // the last texture shows while it fades (0.2 s)
+            // never in a frame a mirror rendered: a stale texture would trail the camera (the water samples it in screen
+            // space), so that frame falls back to the probe (the fade weight is kept for the next frame)
+            if (PlanarMirror.RenderedFrame == Time.frameCount) { Push(0f); return; }
+            EnsureRT();                             // a new texture is handed to the water by Push
             Vector3 n = Vector3.up;
             Vector3 p = new Vector3(0f, planeY, 0f);
             float d = -planeY;
@@ -163,7 +186,7 @@ namespace RexMagnum
             Vector3 cn = m.MultiplyVector(n).normalized;
             reflCam.projectionMatrix = reflCam.CalculateObliqueMatrix(new Vector4(cn.x, cn.y, cn.z, -Vector3.Dot(cp, cn)));
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
-            if (!RenderPipeline.SupportsRenderRequest(reflCam, req)) { SetUse(false); return; }
+            if (!RenderPipeline.SupportsRenderRequest(reflCam, req)) { Off(); return; }
             // an island built before the Water layer: the water renderers off instead (their glass / leaves with them).
             // First person: the body is shadow-only and the arms float at the eye, so the reflection shows the body
             if (!waterLayered) foreach (var r in water) if (r != null) r.enabled = false;
@@ -181,7 +204,7 @@ namespace RexMagnum
             foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             foreach (var r in armsOff) r.enabled = true;
             if (!waterLayered) foreach (var r in water) if (r != null) r.enabled = true;
-            SetUse(true);
+            Fade(true);
         }
     }
 }

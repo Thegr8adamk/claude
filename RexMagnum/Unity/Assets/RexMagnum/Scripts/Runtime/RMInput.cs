@@ -306,7 +306,8 @@ namespace RexMagnum
         }
         public static bool Jump => Free && (TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame));
         // not while a menu / kill cam has the press: closing the pause menu with B or skipping the kill cam does not dodge
-        public static bool Dodge => !MenuNav.Consumed && Time.frameCount != ActionBlockedFrame && !KillCam.Active &&
+        // Free (like Jump): also the kill cam's grace frame, which is set one frame ahead (!= missed it on the closing frame)
+        public static bool Dodge => !MenuNav.Consumed && Free &&
                                     !PauseMenu.Open && !GameFlow.Busy &&
                                     (TouchState.Down("Dodge") || (KDown("Dodge")) || (G != null && PB("Dodge").wasPressedThisFrame));
 

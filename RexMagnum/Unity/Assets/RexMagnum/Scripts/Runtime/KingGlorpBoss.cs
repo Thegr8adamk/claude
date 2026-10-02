@@ -92,6 +92,7 @@ namespace RexMagnum
             music.loop = true;
             music.spatialBlend = 0f;
             music.volume = 0.6f * AudioMix.Music;
+            music.ignoreListenerPause = true;          // the ballad goes on quietly in the pause menu (Paused snapshot)
             if (PlayerPrefs.GetInt(SaveKey, 0) == 1) gameObject.SetActive(false);   // already beaten
             health.Damaged += OnDamaged;
         }

@@ -185,7 +185,7 @@ namespace RexMagnum
         static bool rescueCalm;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { SideHasTarget = false; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null;
+        static void ResetStatics() { abilitiesCache = null; abilitiesFrame = -10; SideHasTarget = false; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null;
                                      summaryLooked = false; summaryShown = null; summaryUntil = 0f; summarySeen[0] = summarySeen[1] = null; }   // editor with Domain Reload off
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
@@ -235,10 +235,14 @@ namespace RexMagnum
             if (w != null && !w.Has(WeaponId.Pistol)) { target = Pistol; return "Get the chrome pistol in the casino lounge (hotel, ground floor)."; }
             // the cart first: the golf course is a long walk west, the cart waits by the pool
             id = "cart";
-            if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0)
+            // walking there counts too: the step ends at the pro shop / with the clubs (the cart_m counter still ends it)
+            Vector3 toShop = ProShop - rex; toShop.y = 0f;
+            bool atGolf = (w != null && w.Has(WeaponId.GolfClub)) || Visited("golf") || toShop.sqrMagnitude < 30f * 30f;
+            if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0 && !atGolf)
             {
-                if (NearestCart(rex, out target)) return $"Drive the cart from the pool to the golf course (west). {Glyph.B("Use")}: get in.";
-                target = ProShop; return $"Drive a golf cart to the golf course: pro shop, west. {Glyph.B("Use")}: get in.";
+                const string cartText = "Drive the cart from the pool to the golf course (or walk: the clubs are at the pro shop).";
+                if (NearestCart(rex, out target)) return $"{cartText} {Glyph.B("Use")}: get in.";
+                target = ProShop; return cartText;
             }
             id = "clubs";
             if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
@@ -438,6 +442,22 @@ namespace RexMagnum
             return l;
         }
 
+        static List<(string name, bool on, string earn, string use)> abilitiesCache;
+        static int abilitiesFrame = -10;
+        static RMInput.DeviceKind abilitiesDev;
+        /// <summary>Abilities() for the menus' OnGUI (PauseMenu MAP / HELP, SettingsPanel HELP): built again when a menu
+        /// opens (not asked for over the last frames) or the device changes, not on every OnGUI call.</summary>
+        public static List<(string name, bool on, string earn, string use)> AbilitiesCached()
+        {
+            if (abilitiesCache == null || Time.frameCount - abilitiesFrame > 2 || abilitiesDev != RMInput.LastDevice)
+            {
+                abilitiesCache = Abilities();
+                abilitiesDev = RMInput.LastDevice;
+            }
+            abilitiesFrame = Time.frameCount;
+            return abilitiesCache;
+        }
+
         /// <summary>The 3 big-goal abilities for the MAP and HELP pages: name, unlocked, how to earn it, how to use it
         /// (the same gates as RexWeapons.SuperSnap, GolfCart.HornUnlocked, RexWeapons.CoconutPouch).</summary>
         public static List<(string name, bool on, string earn, string use)> Abilities()
@@ -446,7 +466,7 @@ namespace RexMagnum
             {
                 ("SUPER SNAP", RexWeapons.SuperSnap, "Stop the factory (ruins)",
                     $"Towel: hold {Glyph.B("Action")} for a heavy snap; it also stuns every blob within 3 m"),
-                ("CART HORN", GolfCart.HornUnlocked, "Defend the bar (walk into the hotel lounge bar with the pistol)",
+                ("CART HORN", GolfCart.HornUnlocked, "Defend the bar (stay at the hotel lounge bar with the pistol)",
                     $"Driving the golf cart: {Glyph.B("Taunt")} honks; blobs in front are pushed back and stunned"),
                 ("COCONUT POUCH", RexWeapons.CoconutPouch, "Win the cave siege (night event at the cave)",
                     "Always on: 3 more coconuts to carry and a shorter fuse"),

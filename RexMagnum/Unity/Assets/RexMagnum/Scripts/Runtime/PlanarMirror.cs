@@ -42,21 +42,41 @@ namespace RexMagnum
         static PlanarMirror nearest;
         QualityAuto quality;
         // VR: one mono render sampled in screen space is wrong in each eye (swims, double image): a plain shiny
-        // surface instead (reflection probe only), back to the real mirror when VR is off
+        // surface instead (reflection probe only), back to the real mirror when VR is off.
+        // The same shiny surface while the mirror does not render (not the nearest, out of range, off screen, before
+        // its first render): the screen-space texture is then another frame's view and slid with the camera
         Material mirrorMat, vrMat;
-        bool vrLook;
+        bool vrLook, showingMirror;
+        int idleFrames;
+        const int IdleSwap = 4;                        // frames without a render before the swap (no flicker at the edges)
 
+        void EnsureVRMat()
+        {
+            if (vrMat != null) return;
+            vrMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            vrMat.SetColor("_BaseColor", new Color(0.55f, 0.6f, 0.65f));
+            vrMat.SetFloat("_Metallic", 1f);
+            vrMat.SetFloat("_Smoothness", 0.95f);
+        }
+
+        void ShowMirror(bool on)
+        {
+            showingMirror = on;
+            if (!on) EnsureVRMat();
+            rend.sharedMaterial = on ? mirrorMat : vrMat;
+        }
+
+        /// <summary>VR on: the shiny surface; VR off: still the shiny surface until the mirror renders again.</summary>
         void SetVRLook(bool on)
         {
             vrLook = on;
-            if (on && vrMat == null)
-            {
-                vrMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                vrMat.SetColor("_BaseColor", new Color(0.55f, 0.6f, 0.65f));
-                vrMat.SetFloat("_Metallic", 1f);
-                vrMat.SetFloat("_Smoothness", 0.95f);
-            }
-            rend.sharedMaterial = on ? vrMat : mirrorMat;
+            ShowMirror(false);
+        }
+
+        /// <summary>A frame this mirror did not render: the shiny surface after IdleSwap such frames.</summary>
+        void Idle()
+        {
+            if (showingMirror && ++idleFrames >= IdleSwap) ShowMirror(false);
         }
 
         void Start()
@@ -79,7 +99,7 @@ namespace RexMagnum
             cd.antialiasing = AntialiasingMode.None;
             QualityAuto.UseAuxRenderer(cd);                // the renderer without SSAO, when ProjectSetup made it
             mirrorMat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
-            rend.material = mirrorMat;
+            ShowMirror(false);                             // the shiny surface until the first render (the RT is empty)
             EnsureRT();
             var rex = FindAnyObjectByType<RexController>();
             if (rex != null) player = rex.transform;
@@ -152,7 +172,7 @@ namespace RexMagnum
             if (vrLook) return;
             // a full scene render is costly: only the nearest mirror in front of the player and on screen
             Rank(cam);
-            if (nearest != this) return;
+            if (nearest != this) { Idle(); return; }
             EnsureRT();
             Vector3 n = transform.TransformDirection(localNormal).normalized;
             Vector3 p = transform.position;
@@ -176,7 +196,7 @@ namespace RexMagnum
             mirrorCam.projectionMatrix = mirrorCam.CalculateObliqueMatrix(plane);
             // Unity 6 / URP 17: render the mirror camera with a render request (synchronous)
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
-            if (!RenderPipeline.SupportsRenderRequest(mirrorCam, req)) return;
+            if (!RenderPipeline.SupportsRenderRequest(mirrorCam, req)) { Idle(); return; }
             rendering = true;
             RenderedFrame = Time.frameCount;
             // first person hides Rex's body (shadows only) and floats the arms at the eye: the mirror shows the body
@@ -194,6 +214,8 @@ namespace RexMagnum
             foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
             foreach (var r in armsOff) r.enabled = true;
             rendering = false;
+            idleFrames = 0;
+            if (!showingMirror) ShowMirror(true);          // the RT holds this frame's view now
         }
 
         static Vector4 CameraSpacePlane(Camera c, Vector3 pos, Vector3 normal)

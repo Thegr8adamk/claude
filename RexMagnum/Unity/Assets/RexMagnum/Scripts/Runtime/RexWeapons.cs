@@ -534,10 +534,50 @@ namespace RexMagnum
                 float a = i * Mathf.PI * 2f / 10f;
                 SlimeFX.Splat(at + new Vector3(Mathf.Cos(a) * 3f, 0.2f, Mathf.Sin(a) * 3f), Vector3.up, new Color(0.7f, 0.85f, 1f), 2);
             }
+            CrowdRing(this, at, 3f);
             RexTestHUD.Notice("SUPER SNAP", 0.8f);                          // (the accomplishment counts the swing's own stuns)
         }
         const float SnapStunCooldown = 6f;
         float nextSnapStun;
+
+        static Material crowdRingMat;
+
+        /// <summary>The crowd-control ring (SUPER SNAP, CART HORN): a pale ring on the ground that grows from Rex /
+        /// the cart to the move's reach in 0.4 s, so every crowd-control move reads alike.</summary>
+        public static void CrowdRing(MonoBehaviour host, Vector3 at, float radius)
+        {
+            if (host == null || !host.isActiveAndEnabled) return;
+            var go = new GameObject("CrowdRing");
+            var lr = go.AddComponent<LineRenderer>();
+            lr.loop = true;
+            lr.positionCount = 32;
+            lr.startWidth = lr.endWidth = 0.18f;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (crowdRingMat == null)          // one shared material
+            {
+                crowdRingMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
+                crowdRingMat.SetColor("_BaseColor", new Color(0.7f, 0.85f, 1f));
+            }
+            lr.sharedMaterial = crowdRingMat;
+            Destroy(go, 1f);                   // gone even if the host stops the coroutine (disabled mid-ring)
+            host.StartCoroutine(GrowRing(lr, at, radius));
+        }
+
+        static IEnumerator GrowRing(LineRenderer lr, Vector3 at, float radius)
+        {
+            for (float t = 0f; t < 0.4f && lr != null; t += Time.deltaTime)
+            {
+                float r = Mathf.Lerp(0.4f, radius, 1f - (1f - t / 0.4f) * (1f - t / 0.4f));   // fast out, easing in
+                for (int i = 0; i < 32; i++)
+                {
+                    float ang = i * Mathf.PI * 2f / 32f;
+                    lr.SetPosition(i, at + new Vector3(Mathf.Cos(ang) * r, 0.15f, Mathf.Sin(ang) * r));
+                }
+                lr.widthMultiplier = 1f - 0.6f * t / 0.4f;                                   // thins as it spreads
+                yield return null;
+            }
+            if (lr != null) Destroy(lr.gameObject);
+        }
 
         // ---------------------------------------------------------------- guns
 
@@ -644,6 +684,7 @@ namespace RexMagnum
             if (Time.unscaledTime < nextHintCheck) return;
             nextHintCheck = Time.unscaledTime + 1f;
             if (PauseMenu.Open || KillCam.Active) return;
+            TryPractice();
             string hintKey = null, hintText = null;
             if (SuperSnap && Has(WeaponId.Towel) && Progress.Value("hint_supersnap") == 0)
             { hintKey = "hint_supersnap"; hintText = $"SUPER SNAP: hold {Glyph.B("Action")} with the towel to stun every blob around you"; }
@@ -657,6 +698,63 @@ namespace RexMagnum
             Progress.Set(hintKey, 1);
             RexTestHUD.Notice(hintText, 6f);
             hintSince = -1f;
+            practiceKey = "practice_" + hintKey.Substring(5);       // hint_supersnap -> practice_supersnap
+            practiceAfter = Time.unscaledTime + 5f;                   // the hint is read first (one notice line)
+            practiceUntil = Time.unscaledTime + 50f;
+        }
+
+        // ---- practice moment: right after an unlock hint, 3 tourist blobs turn up 8-10 m around Rex to try the move
+        // on. Only when it is calm (on foot, or in the cart for the horn; no fight, event or tutorial; no blob within
+        // 25 m). Once per ability (saved flag "practice_..."); not calm within 45 s: no practice (the horn: on the next drive).
+        string practiceKey;
+        float practiceAfter, practiceUntil;
+
+        void TryPractice()
+        {
+            // the horn is unlocked at the bar (on foot): its practice waits for the next drive instead
+            if (practiceKey == null && GolfCart.Driven != null && GolfCart.HornUnlocked &&
+                Progress.Value("hint_carthorn") > 0 && Progress.Value("practice_carthorn") == 0)
+            { practiceKey = "practice_carthorn"; practiceAfter = Time.unscaledTime; practiceUntil = Time.unscaledTime + 50f; }
+            if (practiceKey == null || Time.unscaledTime < practiceAfter) return;
+            if (Time.unscaledTime > practiceUntil || Progress.Value(practiceKey) > 0) { practiceKey = null; return; }
+            bool horn = practiceKey == "practice_carthorn";
+            bool inCart = GolfCart.Driven != null;
+            if (horn != inCart || (!horn && (!controller.InputEnabled || controller.IsSwimming))) return;
+            if (practiceKey == "practice_coconutpouch" && !Has(WeaponId.Coconut)) return;     // nothing to throw yet
+            if (KingGlorpBoss.Fighting || GameGuide.EventRunning || GameFlow.TutorialActive || GameFlow.Busy) return;
+            if (Blob.AliveCount() + 3 > BlobSpawner.GlobalCap) return;
+            Vector3 rexAt = transform.position;
+            foreach (var other in Blob.All)
+                if (other != null && !other.IsDead && (other.transform.position - rexAt).sqrMagnitude < 25f * 25f) return;
+            Blob tourist = null;
+            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            {
+                if (sp.prefabs == null) continue;
+                foreach (var pf in sp.prefabs)
+                    if (pf != null && !pf.isHalf && pf.kind == Blob.Kind.Tourist) { tourist = pf; break; }
+                if (tourist != null) break;
+            }
+            if (tourist == null) { practiceKey = null; return; }
+            int made = 0;
+            float start = Random.Range(0f, 360f);
+            for (int tries = 0; tries < 12 && made < 3; tries++)
+            {
+                float ang = (start + tries * 120f + (tries / 3) * 40f) * Mathf.Deg2Rad;     // 3 around Rex, then shifted
+                float dist = Random.Range(8f, 10f);
+                Vector3 p = rexAt + new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
+                if (!UnityEngine.AI.NavMesh.SamplePosition(p, out UnityEngine.AI.NavMeshHit nh, 2f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                if (Mathf.Abs(nh.position.y - rexAt.y) > 3f) continue;                          // same floor
+                if (WaterVolume.Depth(nh.position + Vector3.up * 0.1f) > 0.2f) continue;        // not in the pool / sea
+                if ((nh.position - rexAt).sqrMagnitude < 7f * 7f) continue;
+                var b = Instantiate(tourist, nh.position, Quaternion.identity);
+                b.Alert(6f);
+                SlimeFX.Splat(nh.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 10);
+                made++;
+            }
+            if (made == 0) return;                      // nowhere to stand here: try again in a second
+            Progress.Set(practiceKey, 1);
+            practiceKey = null;
+            RexTestHUD.Notice("Try it out!", 3f);
         }
 
         void OnDestroy() { if (muzzleLight != null) Destroy(muzzleLight.gameObject); }

@@ -70,6 +70,14 @@ namespace RexMagnum.EditorTools
         [MenuItem("Rex Magnum/Build Island", priority = 3)]
         public static void Build()
         {
+            // in Play mode the build would edit the play copy of the scene (thrown away on Stop)
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                const string playMsg = "Stop Play mode first: Build Island in Play mode would only change the play copy of the scene.";
+                Debug.LogWarning("[Rex Magnum] " + playMsg);
+                if (!Application.isBatchMode) EditorUtility.DisplayDialog("Rex Magnum", playMsg, "OK");
+                return;
+            }
             if (!(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp))
                 throw new Exception("Rex Magnum needs URP (Project Settings > Graphics).");
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -2369,6 +2377,18 @@ namespace RexMagnum.EditorTools
                     if (fh.collider.transform.IsChildOf(bt)) floorY = Mathf.Max(floorY, fh.point.y);
                 bool slabFloor = floorY > bb.min.y + 0.2f;
                 float top = slabFloor ? floorY - 0.08f : floorY - 0.03f;
+                // tiki bar: the base estimate (lowest renderer) can sit under the dune at the side counters (the sand
+                // falls 3 m across it): the pad top is at least the ground at both counters (raise-only, never buried)
+                if (!slabFloor)
+                {
+                    float tcell = ti.size / (ti.res - 1);
+                    foreach (float counterX in new[] { bb.center.x - 3.1f, bb.center.x + 3.1f })
+                    {
+                        int tr = Mathf.Clamp(Mathf.RoundToInt((bb.center.z - 0.5f + ti.size / 2) / tcell), 0, ti.res - 1);
+                        int tc = Mathf.Clamp(Mathf.RoundToInt((counterX + ti.size / 2) / tcell), 0, ti.res - 1);
+                        top = Mathf.Max(top, ti.minH + hts[tr, tc] * (ti.maxH - ti.minH));
+                    }
+                }
                 // tiki bar: the whole footprint + 1.5 m (stools on the sea side), 1:2 back to the sand (the shore moves
                 // ~1.5 m). Dive shop: its sea-side door is 2 m from the water line (a pad there pushed the shore 5 -
                 // 10 m out to sea): only the land (north) side, a strip over the slab's back edge + 1 m, 1:2.5.

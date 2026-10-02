@@ -34,7 +34,7 @@ namespace RexMagnum
         State state = State.Title;
         float fade = 1f, fadeTarget;
         AudioSource music, fight;
-        float fightLevel, dayLevel = DayVolume;
+        float fightLevel, dayLevel = DayVolume, dayMix = 1f;
         Texture2D titleBg;
         int menuSel;
         bool inSettings;
@@ -44,7 +44,7 @@ namespace RexMagnum
         static readonly string[] MenuItems = { "PLAY", "NEW GAME", "SETTINGS", "HELP", "QUIT" };
         bool confirmNew;          // NEW GAME asks first: the save is cleared
         int confirmSel = 1;       // NO is chosen first
-        const float DayVolume = 0.35f, FightVolume = 0.55f;
+        const float DayVolume = 0.35f, FightVolume = 0.55f, HandoverTime = 1f;
         int hint;
         float hintTime;
         Vector3 titleOrbitCenter;
@@ -108,12 +108,14 @@ namespace RexMagnum
             music.loop = true;
             music.spatialBlend = 0f;
             music.volume = 0.7f * AudioMix.Music;
+            music.ignoreListenerPause = true;        // the pause menu's Paused snapshot plays the music quietly (not silence)
             // fight music (80s hair metal) fades in when 2+ living blobs are near Rex, day music ducks under it
             fight = gameObject.AddComponent<AudioSource>();
             fight.clip = Resources.Load<AudioClip>("Music/fight");
             fight.loop = true;
             fight.spatialBlend = 0f;
             fight.volume = 0f;
+            fight.ignoreListenerPause = true;
             if (titleCamera != null) titleOrbitCenter = titleCamera.transform.position;
             if (titleCamera != null && titleBg != null)
             {
@@ -469,7 +471,10 @@ namespace RexMagnum
             }
             else AudioMix.Combat = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;   // no fight clip: the snapshot still follows
             // without the fight clip the day music still follows night, the boss and the voice duck
-            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music * AudioMix.Duck
+            // the hand-over to the fight / night / boss music is a ~1 s crossfade (no cut when the boss starts)
+            float handover = KingGlorpBoss.Fighting ? 0f : (1f - DayNight.Night) * (1f - fightLevel / FightVolume);
+            dayMix = Mathf.MoveTowards(dayMix, handover, Time.unscaledDeltaTime / HandoverTime);
+            music.volume = dayLevel * dayMix * AudioMix.Music * AudioMix.Duck
                            * (1f - 0.8f * StingDuck);   // night jungle music takes over; the big goal sting ducks it
         }
 

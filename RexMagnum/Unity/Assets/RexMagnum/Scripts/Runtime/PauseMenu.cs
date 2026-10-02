@@ -389,7 +389,7 @@ namespace RexMagnum
         void AbilitiesSection()
         {
             Section("ABILITIES");
-            foreach (var ab in GameGuide.Abilities())
+            foreach (var ab in GameGuide.AbilitiesCached())
             {
                 GUILayout.Label(ab.on ? $"[x]  {ab.name}" : $"[ ]  {ab.name}  (locked: {ab.earn})", ab.on ? label : small);
                 GUILayout.Label("      " + ab.use, small);

@@ -82,6 +82,7 @@ namespace RexMagnum
             nightMusic.clip = Resources.Load<AudioClip>("Music/night_jungle");
             nightMusic.loop = true;
             nightMusic.volume = 0f;
+            nightMusic.ignoreListenerPause = true;     // heard quietly in the pause menu (the Paused snapshot's music bus)
             if (nightMusic.clip != null) nightMusic.Play();
         }
 
@@ -140,8 +141,9 @@ namespace RexMagnum
             // the slow fade keeps its own level; the voice duck (fast) is applied on top of it
             // King Glorp's fight: his power ballad plays, the night loop fades out in about a second (and back slowly after)
             bool boss = KingGlorpBoss.Fighting;
-            nightLevel = Mathf.MoveTowards(nightLevel, boss ? 0f : Night * 0.5f * AudioMix.Music, Time.deltaTime * (boss ? 0.5f : 0.1f));
-            if (nightMusic != null) nightMusic.volume = nightLevel * AudioMix.Duck;
+            // the music bus on top (not in the level): it follows the snapshots while paused (deltaTime 0 holds the level)
+            nightLevel = Mathf.MoveTowards(nightLevel, boss ? 0f : Night * 0.5f, Time.deltaTime * (boss ? 0.5f : 0.1f));
+            if (nightMusic != null) nightMusic.volume = nightLevel * AudioMix.Music * AudioMix.Duck;
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)
             {

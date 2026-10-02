@@ -23,7 +23,7 @@ namespace RexMagnum
         public bool isHalf;                       // bouncer half after a split
 
         /// <summary>Zone variants on the normal prefabs (no new art), set by BlobSpawner / NightSiege right after Instantiate:
-        ///  TempleGuardian (ruins, a tourist): grey stone shell, +60% health, light hits do 25% until a heavy hit cracks it
+        ///  TempleGuardian (ruins, a tourist): grey stone shell, +60% health, light hits do 25% until a heavy hit (or 3 gun hits in 2 s) cracks it
         ///  GlowSpitter (tunnels; the cave siege's 2nd wave; a lifeguard): keeps 8-12 m off and spits slime every 3 s,
         ///  low health; cornered (Rex within CorneredRange) it swipes instead</summary>
         public enum Variant { None, TempleGuardian, GlowSpitter }
@@ -63,6 +63,21 @@ namespace RexMagnum
             var d = w.Current;
             return !d.isGun && amount >= d.tapDamage * 1.75f;              // 1.75: a wet towel's tap (x1.5) is still light
         }
+
+        /// <summary>Guns crack it too: GunHitsToCrack gun hits within GunHitWindow s (one per frame: a shotgun's
+        /// pellets are one hit), so a gun-only player is never stuck at 25%.</summary>
+        bool GunVolley(GameObject attacker)
+        {
+            var w = attacker != null ? attacker.GetComponent<RexWeapons>() : null;
+            if (w == null || !w.Current.isGun || Time.frameCount == lastGunHitFrame) return false;
+            lastGunHitFrame = Time.frameCount;
+            if (Time.time - gunHitsSince > GunHitWindow) { gunHitsSince = Time.time; gunHits = 0; }
+            return ++gunHits >= GunHitsToCrack;
+        }
+        const int GunHitsToCrack = 3;
+        const float GunHitWindow = 2f;
+        int gunHits, lastGunHitFrame = -1;
+        float gunHitsSince = -10f;
 
         const float ShellScale = 0.25f;
         /// <summary>The stone shell is still on (GuardianCue's "HEAVY!" tag).</summary>
@@ -933,7 +948,7 @@ namespace RexMagnum
             if (variant == Variant.TempleGuardian && shellIntact && !health.IsDead)
             {
                 float raw = amount / ShellScale;
-                if (HeavyHit(raw, attacker)) { CrackShell(point); health.DamageSilent(raw - amount, attacker); }
+                if (HeavyHit(raw, attacker) || GunVolley(attacker)) { CrackShell(point); health.DamageSilent(raw - amount, attacker); }
                 else stoneHit = true;
             }
             // hit from far away (sniper): it comes for Rex instead of sitting still outside its sight range
@@ -1117,7 +1132,7 @@ namespace RexMagnum
                 if (Progress.Value(MetKey) == 0)
                 {
                     Progress.Set(MetKey, 1);
-                    RexTestHUD.Notice("Stone shell! Heavy hits crack it.", 4f);
+                    RexTestHUD.Notice("Stone shell! Heavy hits (or 3 quick shots) crack it.", 4f);
                 }
             }
             if (d2 > CueRange * CueRange) return;

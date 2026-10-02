@@ -193,7 +193,7 @@ namespace RexMagnum
                     Note("These follow the device you used last, and your own keys (CONTROLS page).");
                     foreach (var c in GameGuide.Controls()) Info(c.what, c.how);
                     Header("ABILITIES");
-                    foreach (var ab in GameGuide.Abilities())
+                    foreach (var ab in GameGuide.AbilitiesCached())
                     {
                         Info(ab.name, ab.on ? "UNLOCKED" : "LOCKED");      // the long lines as notes: they wrap
                         Note((ab.on ? "" : "To earn it: " + ab.earn + ".  ") + ab.use + ".");
