@@ -390,7 +390,7 @@ namespace RexMagnum
             lr.SetPosition(1, b);
             lr.startWidth = 0.015f;
             lr.endWidth = 0.004f;
-            lr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            lr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
             lr.material.SetColor("_BaseColor", new Color(1f, 0.85f, 0.5f));
             Destroy(go, 0.05f);
         }
@@ -403,7 +403,7 @@ namespace RexMagnum
             {
                 aimLine = new GameObject("CoconutAim").AddComponent<LineRenderer>();
                 aimLine.startWidth = aimLine.endWidth = 0.03f;
-                aimLine.material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                aimLine.material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
                 aimLine.material.SetColor("_BaseColor", new Color(1f, 0.6f, 0.2f));
             }
             aimLine.enabled = show;

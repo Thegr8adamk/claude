@@ -1527,11 +1527,6 @@
  ],
  "assets": [
   {
-   "name": "Hotel",
-   "fbx": "Buildings/Hotel.fbx",
-   "tris": 187476
-  },
-  {
    "name": "Room304",
    "fbx": "Buildings/Room304.fbx",
    "tris": 4808
@@ -1610,6 +1605,11 @@
    "name": "River",
    "fbx": "Buildings/River.fbx",
    "tris": 2994
+  },
+  {
+   "name": "Hotel",
+   "fbx": "Buildings/Hotel.fbx",
+   "tris": 186764
   }
  ],
  "vegetation": {

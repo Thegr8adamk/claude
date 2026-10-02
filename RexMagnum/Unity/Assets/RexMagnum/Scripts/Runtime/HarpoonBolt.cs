@@ -30,7 +30,7 @@ namespace RexMagnum
             h.owner = owner;
             h.rope = go.AddComponent<LineRenderer>();
             h.rope.startWidth = h.rope.endWidth = 0.006f;
-            h.rope.material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            h.rope.material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
             h.rope.material.SetColor("_BaseColor", new Color(0.85f, 0.8f, 0.65f));
         }
 

@@ -32,6 +32,22 @@ namespace RexMagnum.EditorTools
             PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.colorSpace = ColorSpace.Linear;
+            IncludeShader("Universal Render Pipeline/Unlit");
+        }
+
+        /// <summary>Shaders the game only finds by name (Shader.Find: aim line, harpoon rope) are left out of a build
+        /// unless a material uses them; add them to Graphics Settings > Always Included Shaders.</summary>
+        static void IncludeShader(string name)
+        {
+            var sh = Shader.Find(name);
+            if (sh == null) return;
+            var gs = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset")[0]);
+            var list = gs.FindProperty("m_AlwaysIncludedShaders");
+            for (int i = 0; i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == sh) return;
+            list.InsertArrayElementAtIndex(list.arraySize);
+            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = sh;
+            gs.ApplyModifiedProperties();
         }
 
         static void Report(BuildReport r, string path)
