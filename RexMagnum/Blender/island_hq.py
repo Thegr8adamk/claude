@@ -742,12 +742,12 @@ def waterfall_ruins_ship(height_at, river, structures=True):
     rx, ry = river
     bm = bmesh.new()
     prev = None
-    for k in range(0, len(rx) - 1, 2):
+    for k in range(0, len(rx) - 1):
         x, y = rx[k], ry[k]
         dx, dy = rx[k + 1] - x, ry[k + 1] - y
         L = math.hypot(dx, dy) or 1
         nx, ny = -dy / L * 8, dx / L * 8
-        z = max(height_at(x, y) + 0.8, 0.2)
+        z = max(height_at(x, y) + 0.25, 0.2)
         a = bm.verts.new((x - nx, y - ny, z))
         b = bm.verts.new((x + nx, y + ny, z))
         if prev:
@@ -838,8 +838,15 @@ def waterfall_ruins_ship(height_at, river, structures=True):
 def build(tree_scale=1.0, v2=False):
     leaf_textures()
     X, Y, h, river = I.heightmap()
-    ha = lambda x, y: float(h[int(np.clip((y + I.SIZE / 2) / I.SIZE * (h.shape[0] - 1), 0, h.shape[0] - 1)),
-                             int(np.clip((x + I.SIZE / 2) / I.SIZE * (h.shape[1] - 1), 0, h.shape[1] - 1))])
+    def ha(x, y):
+        """Bilinear terrain height (smooth: no steps between heightmap cells)."""
+        n = h.shape[0] - 1
+        fx = min(max((x + I.SIZE / 2) / I.SIZE * n, 0.0), n - 1e-6)
+        fy = min(max((y + I.SIZE / 2) / I.SIZE * n, 0.0), n - 1e-6)
+        ix, iy = int(fx), int(fy)
+        tx, ty = fx - ix, fy - iy
+        return float(h[iy, ix] * (1 - tx) * (1 - ty) + h[iy, ix + 1] * tx * (1 - ty) +
+                     h[iy + 1, ix] * (1 - tx) * ty + h[iy + 1, ix + 1] * tx * ty)
     build_terrain(h)
     build_ocean()
     coll("Protos", hide=True)

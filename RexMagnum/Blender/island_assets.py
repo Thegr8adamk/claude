@@ -2111,6 +2111,91 @@ def cave_tunnels(m):
     return k.c, markers
 
 
+# ------------------------------------------------------------------ jungle: small waterfalls on the slime river
+
+def jungle_fall_material():
+    """Opaque-ish white-green streaks (the island-wide falls shader is too thin for these small steps)."""
+    m, nt = _mat("A_JungleFall")
+    if nt is None:
+        return m
+    p = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    mp = nt.nodes.new("ShaderNodeMapping")
+    mp.inputs["Scale"].default_value = (6.0, 0.6, 1.0)
+    nt.links.new(tc.outputs["UV"], mp.inputs[0])
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 3.0
+    nz.inputs["Detail"].default_value = 8
+    nt.links.new(mp.outputs[0], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.35
+    ramp.color_ramp.elements[0].color = (0.25, 0.6, 0.2, 1)
+    ramp.color_ramp.elements[1].position = 0.65
+    ramp.color_ramp.elements[1].color = (0.92, 0.97, 0.9, 1)
+    nt.links.new(nz.outputs["Fac"], ramp.inputs[0])
+    nt.links.new(ramp.outputs[0], p.inputs["Base Color"])
+    p.inputs["Roughness"].default_value = 0.2
+    p.inputs["Emission Color"].default_value = (0.4, 0.9, 0.35, 1)
+    p.inputs["Emission Strength"].default_value = 0.15
+    b = nt.nodes.new("ShaderNodeBump")
+    b.inputs["Strength"].default_value = 0.5
+    nt.links.new(nz.outputs["Fac"], b.inputs["Height"])
+    nt.links.new(b.outputs[0], p.inputs["Normal"])
+    return m
+
+
+def jungle_falls(m, ha, river, picks=(10, 14, 18)):
+    """Small waterfalls (brief section 6: thick jungle, green slime river, small waterfalls): at steep river steps
+    a ledge of mossy wet boulders crosses the river; slime-green water falls over it into a foaming pool that sits
+    on the ground below."""
+    k = Kit("Asset_JungleFalls")
+    rx, ry = river
+    pts = [(float(rx[i]), float(ry[i])) for i in range(0, len(rx), 5)]
+    falls = jungle_fall_material()
+    rng = random.Random(77)
+    out = []
+    for n, i in enumerate(picks):
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        d = Vector((x1 - x0, y1 - y0, 0)).normalized()
+        side = Vector((-d.y, d.x, 0))
+        c = Vector((x0, y0, 0))
+        top = ha(c.x, c.y) + 0.25
+        pc = c + d * 4.0
+        pz = ha(pc.x, pc.y) + 0.1
+        drop = max(1.5, top - pz)
+        for j in range(9):
+            o = (j - 4) * 2.3 + rng.uniform(-0.3, 0.3)
+            p = c + side * o - d * 1.4            # ledge sits just upstream of the lip, so the water shows
+            hgt = 0.6 + (0.8 if abs(j - 4) > 2 else 0.0)
+            k.rock((p.x, p.y, top - hgt * 0.8), (rng.uniform(1.3, 1.9), rng.uniform(1.0, 1.3), hgt + drop * 0.35),
+                   m["wetrock"] if abs(j - 4) <= 2 else m["rock"], seed=900 + n * 20 + j, base="FallLedge", detail=3)
+        bm = bmesh.new()
+        uv = bm.loops.layers.uv.new("UVMap")
+        rows, segs, w = 12, 10, 8.0
+        grid = []
+        for r in range(rows + 1):
+            t = r / rows
+            row = []
+            for q in range(segs + 1):
+                u = q / segs
+                p = c + side * ((u - 0.5) * w) + d * (1.2 + 1.8 * t * t) + Vector((0, 0, top + 0.2 - (top + 0.2 - pz) * t))
+                row.append(bm.verts.new(p))
+            grid.append(row)
+        for r in range(rows):
+            for q in range(segs):
+                f = bm.faces.new((grid[r][q], grid[r][q + 1], grid[r + 1][q + 1], grid[r + 1][q]))
+                for lp, (a, b) in zip(f.loops, ((q, r), (q + 1, r), (q + 1, r + 1), (q, r + 1))):
+                    lp[uv].uv = (a / segs * 2.0, b / rows * 1.5)
+        k._ob("JungleFall", bm, falls, smooth=True)
+        k.disc((pc.x, pc.y, pz - 0.6), 5.0, 0.6, m["slimewater"], segs=28, base="FallPool")
+        for f_ in range(12):
+            q = pc + side * rng.uniform(-3.0, 3.0) + d * rng.uniform(-2.5, 0.0)
+            k.rock((q.x, q.y, pz + 0.02), (rng.uniform(0.6, 1.3), rng.uniform(0.5, 0.9), rng.uniform(0.12, 0.3)),
+                   m["foam"], seed=1200 + n * 20 + f_, base="WhiteWater", detail=2)
+        out.append((tuple(c), top, drop))
+    return k.c, out
+
+
 def build_all():
     m = M()
     weather_all(m)

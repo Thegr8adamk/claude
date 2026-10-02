@@ -62,6 +62,9 @@ def build(trees):
                     continue
             bpy.data.objects.remove(ob)
     waterfall_v2(ha, m)
+    import island as I_
+    _, _, _, river = I_.heightmap()
+    IA.jungle_falls(m, ha, river)
     gcol, gmk = IA.golf(m, ha)
     bpy.context.scene["golf_markers"] = json.dumps(gmk)
     cart = IA.golf_cart(m)
