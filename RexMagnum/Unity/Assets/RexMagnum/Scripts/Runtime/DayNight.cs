@@ -195,18 +195,13 @@ namespace RexMagnum
                 }
                 // the 2.4 km probe renders the whole island: it rendered once on awake (OnAwake), then again only when
                 // the day band changes (day / dawn-dusk / night, the same bands as InteriorProbes). It was every 30 s all
-                // day. ZoneStreamer shows every zone while a pass is in flight (it culls the far ones for the player's
-                // camera, and the probe would bake an island with holes); a pass is ~9 frames, a few times a day.
+                // day. ZoneStreamer keeps the lowest LOD of far zones, so the probe sees the
+                // whole island without re-showing every detail renderer (that was a hitch on phones).
                 int band = Night < 0.3f ? 0 : Night < 0.7f ? 1 : 2;
                 if (probeBand < 0) probeBand = band;
-                if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId)))
-                {
-                    probeId = -1;
-                    ZoneStreamer.HoldAll = false;
-                }
+                if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId))) probeId = -1;
                 if (islandProbe != null && islandProbe.isActiveAndEnabled && probeId < 0 && band != probeBand)
                 {
-                    ZoneStreamer.ShowAllNow();
                     probeId = islandProbe.RenderProbe();
                     probeBand = band;
                 }

@@ -182,8 +182,8 @@ namespace RexMagnum
                 if (k < upto) s.detailOn[k] = r.enabled;
                 r.enabled = false;
             }
-            for (int k = 0; k < s.lights.Length; k++)
-                if (s.lights[k] != null) { s.lightOn[k] = s.lights[k].enabled; s.lights[k].enabled = false; }
+            // zone lamps stay on: out of range they cost nothing (per-object light culling), and InteriorProbes' box
+            // probes (tunnels, ruins) render in any zone at load and at band changes: they must see the lamps lit
             for (int k = 0; k < s.ps.Length; k++)
                 if (s.ps[k] != null) { s.psOn[k] = s.ps[k].isPlaying; if (s.psOn[k]) s.ps[k].Pause(true); }
             s.hidden = true;
@@ -193,7 +193,6 @@ namespace RexMagnum
         void Show(State s, bool instant)
         {
             s.hidden = false;
-            for (int k = 0; k < s.lights.Length; k++) if (s.lights[k] != null && s.lightOn[k]) s.lights[k].enabled = true;
             for (int k = 0; k < s.ps.Length; k++) if (s.ps[k] != null && s.psOn[k]) s.ps[k].Play(true);
             s.pending = 0;          // still forced to the lowest LOD until every renderer is back (no holes)
             if (instant) Finish(s);
