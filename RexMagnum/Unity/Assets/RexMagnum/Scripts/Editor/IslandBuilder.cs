@@ -145,7 +145,7 @@ namespace RexMagnum.EditorTools
                 Factory(File.ReadAllText(json));
                 Tunnels(File.ReadAllText(json), terrain);
                 Boss(terrain);
-                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))   // lamps that switch on at dusk
+                foreach (var l in RMFind.All<Light>())   // lamps that switch on at dusk
                     if (l.type == LightType.Point && l.GetComponent<LightFlicker>() == null && !l.name.StartsWith("Cab") &&
                         l.transform.parent != null && l.transform.parent.name.StartsWith("Hotel_Gameplay") == false &&
                         !l.transform.parent.name.StartsWith("Room304") && !l.transform.parent.name.StartsWith("Tunnels") &&
@@ -2080,7 +2080,7 @@ namespace RexMagnum.EditorTools
             var go = new GameObject("ImpostorCapture");
             var cam = new GameObject("ImpostorCamera").AddComponent<Camera>();
             var rt = new RenderTexture(Res, Res, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None).Where(l => l.enabled).ToArray();
+            var lights = RMFind.All<Light>().Where(l => l.enabled).ToArray();
             bool fog = RenderSettings.fog;
             float wind = Shader.GetGlobalFloat("_RMWind");
             var probe = RenderSettings.ambientProbe;
@@ -3243,7 +3243,7 @@ namespace RexMagnum.EditorTools
                     "lightmaps (a lightmap keeps one brightness all day and night), the probes follow the sky. The sun and " +
                     "all lamps stay realtime.\n\nSave the scene when the bake is done.", "Bake", "Cancel")) return;
             // night-safe: no light may be baked (DayNight turns the sun and switches the lamps)
-            foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var l in RMFind.AllWithInactive<Light>())
                 { SetProp(l, "lightmapBakeType", "Realtime"); EditorUtility.SetDirty(l); }
             // buildings: contribute (they occlude the probes), receive from the probes. Empty or hidden renderers
             // (Room304_LOD1 has no triangles) stay out: the bake warned about them / they can not shade anything.

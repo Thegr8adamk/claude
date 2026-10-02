@@ -28,7 +28,7 @@ namespace RexMagnum
         /// <summary>A returning player: every stuck door stands open at once (no bang, no line, no tutorial wait).</summary>
         public static void OpenAll()
         {
-            foreach (var d in FindObjectsByType<StuckDoor>(FindObjectsSortMode.None))
+            foreach (var d in RMFind.All<StuckDoor>())
             {
                 if (d.open) continue;
                 d.open = true;

@@ -95,7 +95,7 @@ namespace RexMagnum
         /// blobs is a death loop.</summary>
         static bool NearActiveSpawner(Vector3 p)
         {
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 float r = sp.radius + 5f;
                 if (sp.isActiveAndEnabled && (sp.transform.position - p).sqrMagnitude < r * r) return true;

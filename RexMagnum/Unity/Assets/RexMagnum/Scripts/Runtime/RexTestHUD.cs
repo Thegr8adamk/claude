@@ -309,7 +309,7 @@ namespace RexMagnum
 
         void ShowLine(string line, float seconds)
         {
-            if (!AudioMix.Subtitles) return;        // Settings > Sound > Subtitles
+            if (!AudioMix.Subtitles) return;        // Settings > Captions (also Settings > Sound)
             subtitle.text = line;
             subtitleUntil = Time.unscaledTime + Mathf.Max(1.2f, seconds);
         }
@@ -393,7 +393,9 @@ namespace RexMagnum
                 subtitleUntil += Time.unscaledDeltaTime;
                 noticeUntil += Time.unscaledDeltaTime;
             }
-            if (Time.unscaledTime > subtitleUntil) subtitle.text = "";
+            if (Time.unscaledTime > subtitleUntil || !AudioMix.Subtitles) subtitle.text = "";   // captions off: gone at once
+            int capSize = AudioMix.CaptionSize;
+            if (subtitle.fontSize != capSize) subtitle.fontSize = capSize;
             if (Time.unscaledTime > noticeUntil) notice.text = "";
             prompt.text = UsePrompt();
             if (actions.weapons != null) scope.SetActive(actions.weapons.Scoped);
@@ -719,8 +721,8 @@ namespace RexMagnum
             {
                 // cached: found again every 10 s (zones can load later)
                 nextFind = Time.unscaledTime + 10f;
-                carts = FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
-                elevators = FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+                carts = RMFind.All<GolfCart>();
+                elevators = RMFind.All<Elevator>();
             }
             Vector3 p = rex.position;
             Guest near = null;

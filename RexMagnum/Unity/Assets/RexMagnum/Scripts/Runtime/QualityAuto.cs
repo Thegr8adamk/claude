@@ -77,7 +77,7 @@ namespace RexMagnum
             {
                 // lights made later (zones, set pieces) too: a new scan every few seconds
                 nextLightScan = Time.unscaledTime + 5f;
-                foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                foreach (var l in RMFind.All<Light>())
                     if (l.type != LightType.Directional && !builtShadow.ContainsKey(l) && l.shadows != LightShadows.None)
                         builtShadow[l] = l.shadows;
             }
@@ -358,14 +358,14 @@ namespace RexMagnum
             tierSmaa = smaa;
             tierMsaa = msaa[i] > 1;
             seenCams.Clear();                              // Update gives every live camera the new tier's AA
-            foreach (var cam in FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var cam in RMFind.AllWithInactive<Camera>())
             {
                 if (cam.targetTexture != null || !cam.TryGetComponent(out UniversalAdditionalCameraData cd)) continue;  // mirror / photo cameras keep theirs
                 cd.antialiasing = smaa ? AntialiasingMode.SubpixelMorphologicalAntiAliasing : AntialiasingMode.None;
                 cam.allowMSAA = msaa[i] > 1;
             }
             // reflection probes: 128 px cubemaps on Low (the island probe is 256), original size otherwise
-            foreach (var rp in FindObjectsByType<ReflectionProbe>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var rp in RMFind.AllWithInactive<ReflectionProbe>())
             {
                 if (!probeRes.TryGetValue(rp, out int baseRes)) probeRes[rp] = baseRes = rp.resolution;
                 rp.resolution = t == QualityTier.Low ? Mathf.Min(baseRes, 128) : baseRes;

@@ -28,7 +28,7 @@ namespace RexMagnum
         public static void Scan()
         {
             areas.Clear();
-            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            foreach (var r in RMFind.All<Renderer>())
             {
                 var mats = r.sharedMaterials;
                 var mesh = r.TryGetComponent<MeshFilter>(out var mf) ? mf.sharedMesh : null;

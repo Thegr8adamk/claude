@@ -14,6 +14,10 @@ namespace RexMagnum
         /// effects at 0% does not mute the menus.</summary>
         public static float UIVolume = 1f;
         public static bool Subtitles = true;
+        /// <summary>Caption (subtitle) text size in HUD pixels: Settings > Captions > Caption size.</summary>
+        public static int CaptionSize = 34;
+        public static readonly int[] CaptionSizes = { 28, 34, 42, 52 };
+        public static readonly string[] CaptionSizeNames = { "SMALL", "MEDIUM", "LARGE", "HUGE" };
 
         // bus order in the snapshot table: music, voice, effects, world, UI
         const int Buses = 5;
@@ -129,6 +133,7 @@ namespace RexMagnum
             EffectsVolume = PlayerPrefs.GetFloat("RexMagnum_SfxVol", 1f);
             UIVolume = PlayerPrefs.GetFloat("RexMagnum_UIVol", 1f);
             Subtitles = PlayerPrefs.GetInt("RexMagnum_Subtitles", 1) == 1;
+            CaptionSize = CaptionSizes[Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_CaptionSize", 1), 0, CaptionSizes.Length - 1)];
         }
     }
 
@@ -144,7 +149,7 @@ namespace RexMagnum
             Sfx.FollowBus();                                        // playing effects follow the blended bus
             if (Time.unscaledTime < nextListener) return;
             nextListener = Time.unscaledTime + 1f;
-            foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+            foreach (var l in RMFind.All<AudioListener>())
                 if (!Application.isMobilePlatform && l.isActiveAndEnabled && l.GetComponent<AudioLimiter>() == null) l.gameObject.AddComponent<AudioLimiter>();   // phones: no managed DSP on the audio thread
         }
     }

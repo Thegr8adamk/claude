@@ -192,7 +192,7 @@ namespace RexMagnum
             {
                 nextListener = now + 2f;      // the title camera and the player camera can each have a listener
                 listener = null;
-                foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+                foreach (var l in RMFind.All<AudioListener>())
                     if (l.isActiveAndEnabled) { listener = l; break; }
             }
             if (now > nextUnder)

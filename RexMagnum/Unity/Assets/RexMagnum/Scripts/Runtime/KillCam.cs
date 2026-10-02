@@ -243,7 +243,7 @@ namespace RexMagnum
         /// <summary>X-ray look: jelly becomes very clear so the pink brain shows.</summary>
         static void XRay(Vector3 at, bool on)
         {
-            foreach (var b in Object.FindObjectsByType<Blob>(FindObjectsSortMode.None))
+            foreach (var b in RMFind.All<Blob>())
             {
                 if (b.jellyRenderer == null || Vector3.Distance(b.transform.position, at) > 6f) continue;
                 var mpb = new MaterialPropertyBlock();

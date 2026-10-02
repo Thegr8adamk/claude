@@ -345,9 +345,9 @@ namespace RexMagnum
         {
             if (Time.unscaledTime < nextFind && carts != null && !HasDead(carts) && !HasDead(lifts) && !HasDead(doors)) return;
             nextFind = Time.unscaledTime + 10f;
-            carts = Object.FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
-            lifts = Object.FindObjectsByType<Elevator>(FindObjectsSortMode.None);
-            doors = Object.FindObjectsByType<ZoneDoor>(FindObjectsSortMode.None);
+            carts = RMFind.All<GolfCart>();
+            lifts = RMFind.All<Elevator>();
+            doors = RMFind.All<ZoneDoor>();
         }
 
         static bool NearestCart(Vector3 from, out Vector3 at)

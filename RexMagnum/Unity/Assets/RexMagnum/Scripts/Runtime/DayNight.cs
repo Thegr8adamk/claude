@@ -60,7 +60,7 @@ namespace RexMagnum
                 if (clouds.HasProperty("_Cover")) baseCover = clouds.GetFloat("_Cover");
             }
             quality = FindAnyObjectByType<QualityAuto>();
-            spawners = FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None);   // every zone, not only the first
+            spawners = RMFind.All<BlobSpawner>();   // every zone, not only the first
             foreach (var sp in spawners) if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;
             if (sunColor == null || sunColor.colorKeys.Length < 2)
             {

@@ -515,7 +515,7 @@ namespace RexMagnum
             travelOk = travelWhy == null;
             var best = new Dictionary<string, Vector3>();
             var bestD = new Dictionary<string, float>();
-            foreach (var cs in FindObjectsByType<ChargeStation>(FindObjectsSortMode.None))
+            foreach (var cs in RMFind.All<ChargeStation>())
             {
                 Vector3 p = cs.transform.position;
                 string zone = StopZone(p, out Vector3 mark);
@@ -557,7 +557,7 @@ namespace RexMagnum
                 Vector3 d = b.transform.position - at;
                 if (Mathf.Abs(d.y) < 6f && d.sqrMagnitude < 25f * 25f) return "blobs there";
             }
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 if (sp == null || !sp.isActiveAndEnabled || sp.prefabs == null || sp.prefabs.Length == 0) continue;
                 Vector3 f = sp.transform.position - at; f.y = 0f;

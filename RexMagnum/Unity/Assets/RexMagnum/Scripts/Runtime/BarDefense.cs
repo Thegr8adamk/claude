@@ -116,8 +116,8 @@ namespace RexMagnum
             if (carts == null || Time.unscaledTime > nextFind || System.Array.Exists(carts, c => c == null) || System.Array.Exists(elevators, e => e == null))
             {
                 nextFind = Time.unscaledTime + 10f;
-                carts = FindObjectsByType<GolfCart>(FindObjectsSortMode.None);
-                elevators = FindObjectsByType<Elevator>(FindObjectsSortMode.None);
+                carts = RMFind.All<GolfCart>();
+                elevators = RMFind.All<Elevator>();
             }
             foreach (var c in carts)
                 if (c != null && (c.transform.position - p).sqrMagnitude < r2) return true;
@@ -245,7 +245,7 @@ namespace RexMagnum
         bool FindPrefabs()
         {
             if (prefabs.Count > 0) return true;
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 if (sp.prefabs == null) continue;
                 foreach (var b in sp.prefabs)
@@ -368,7 +368,7 @@ namespace RexMagnum
                     if (g != null && g.TryGetComponent(out WeaponPickup wp) && wp.ammoOnly && wp.weapon == WeaponId.Pistol) { src = g; break; }
             bool fromWorld = false;
             if (src == null)
-                foreach (var wp in FindObjectsByType<WeaponPickup>(FindObjectsSortMode.None))
+                foreach (var wp in RMFind.All<WeaponPickup>())
                     if (wp.ammoOnly && wp.weapon == WeaponId.Pistol) { src = wp.gameObject; fromWorld = true; break; }
             if (src == null) return;
             var go = Instantiate(src, Center + new Vector3(0f, 1.0f, 1.9f), Quaternion.identity);   // on the counter top (its centre ~1.9 m +z; in the 2 m reach)

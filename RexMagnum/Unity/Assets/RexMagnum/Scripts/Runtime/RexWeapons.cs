@@ -765,7 +765,7 @@ namespace RexMagnum
             foreach (var other in Blob.All)
                 if (other != null && !other.IsDead && (other.transform.position - rexAt).sqrMagnitude < 25f * 25f) return;
             Blob tourist = null;
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 if (sp.prefabs == null) continue;
                 foreach (var pf in sp.prefabs)

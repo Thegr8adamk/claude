@@ -78,7 +78,7 @@ namespace RexMagnum
                 Progress.Add("taunts");
                 // Blobs that see it get angry and answer with a rude tentacle
                 bool answered = false;
-                foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
+                foreach (var b in RMFind.All<Blob>())
                     if (Vector3.Distance(b.transform.position, transform.position) < 30f) { if (b.Disguised) b.Reveal(); else b.OnTaunted(); answered = true; }
                 if (answered && Random.value < 0.5f) StartCoroutine(SayLater("TauntAnswer", 2.8f));   // after the rude tentacle
             }
@@ -88,14 +88,14 @@ namespace RexMagnum
                 if (face) face.Expression("Smile", 1.9f);
                 Blob nearest = null;
                 float best = 6f;
-                foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
+                foreach (var b in RMFind.All<Blob>())
                 {
                     float d = Vector3.Distance(b.transform.position, transform.position);
                     if (d < best) { best = d; nearest = b; }
                 }
                 // brief section 8: the nearest blob OR guest; a guest closer than any blob is the one in the photo
                 Guest guest = null;
-                foreach (var g in FindObjectsByType<Guest>(FindObjectsSortMode.None))
+                foreach (var g in RMFind.All<Guest>())
                 {
                     if (g.LockedIn) continue;                 // behind a locked door (hidden) for the night
                     float d = Vector3.Distance(g.transform.position, transform.position);

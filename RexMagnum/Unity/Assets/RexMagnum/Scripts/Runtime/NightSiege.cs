@@ -181,7 +181,7 @@ namespace RexMagnum
             if (mouthFound) return;
             ZoneDoor mouth = null;
             Transform outside = null;
-            foreach (var zd in FindObjectsByType<ZoneDoor>(FindObjectsSortMode.None))
+            foreach (var zd in RMFind.All<ZoneDoor>())
             {
                 if (zd == null) continue;
                 if (zd.name == "Cave_DoorA") mouth = zd;
@@ -260,7 +260,7 @@ namespace RexMagnum
         bool FindPrefabs()
         {
             if (prefabs.Count > 0) return true;
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 if (sp.prefabs == null) continue;
                 foreach (var b in sp.prefabs)

@@ -18,7 +18,7 @@ namespace RexMagnum
     /// </summary>
     public class SettingsPanel
     {
-        public static readonly string[] Pages = { "GRAPHICS", "CAMERA & VR", "SOUND", "CONTROLS", "HELP" };
+        public static readonly string[] Pages = { "DISPLAY", "CAMERA & VR", "SOUND", "CONTROLS", "HELP" };
         public const int HelpPage = 4;
         public int page;
         /// <summary>Set by the pause menu: close the menu so the player can drag the touch buttons.</summary>
@@ -108,6 +108,10 @@ namespace RexMagnum
                         Choice("Display", new[] { "WINDOW", "FULL SCREEN" }, () => PlayerPrefs.GetInt("RexMagnum_Fullscreen", 1),
                             v => { PlayerPrefs.SetInt("RexMagnum_Fullscreen", v); QualityAuto.ApplyDisplay(); });
                     Slider("Field of view", "RexMagnum_FOV", 65f, 55f, 95f, v => Mathf.RoundToInt(v) + "°");
+                    Header("CAPTIONS");
+                    Toggle("Captions (spoken lines as text)", "RexMagnum_Subtitles", 1);
+                    Choice("Caption size", AudioMix.CaptionSizeNames, () => PlayerPrefs.GetInt("RexMagnum_CaptionSize", 1),
+                        v => { PlayerPrefs.SetInt("RexMagnum_CaptionSize", v); ApplyAll(); });
                     break;
 
                 case 1:
@@ -140,7 +144,7 @@ namespace RexMagnum
                     Slider("Voices", "RexMagnum_VoiceVol", 1f, 0f, 1f, Pct);
                     Slider("Sound effects", "RexMagnum_SfxVol", 1f, 0f, 1f, Pct);
                     Slider("UI sounds", "RexMagnum_UIVol", 1f, 0f, 1f, Pct);
-                    Toggle("Subtitles", "RexMagnum_Subtitles", 1);
+                    Toggle("Captions (subtitles)", "RexMagnum_Subtitles", 1);
                     break;
 
                 case 3:

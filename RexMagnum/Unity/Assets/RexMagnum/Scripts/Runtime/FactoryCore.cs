@@ -63,7 +63,7 @@ namespace RexMagnum
             foreach (var c in GetComponents<Collider>()) c.enabled = false;   // saved as stopped: the core cannot be blown up again
             if (coreLight != null) coreLight.enabled = false;
             if (hallLights != null) foreach (var l in hallLights) if (l != null) l.intensity *= 0.2f;
-            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            foreach (var sp in RMFind.All<BlobSpawner>())
             {
                 if (sp.transform.parent == transform.parent) { sp.enabled = false; continue; }   // the factory's own spawner stops
                 if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;

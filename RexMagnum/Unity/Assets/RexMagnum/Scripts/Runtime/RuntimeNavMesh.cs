@@ -42,7 +42,7 @@ namespace RexMagnum
         /// agents would walk through it. A carving obstacle cuts it out instead, and goes off when the door opens.</summary>
         static void BlockStuckDoors(Bounds bounds)
         {
-            foreach (var door in FindObjectsByType<StuckDoor>(FindObjectsSortMode.None))
+            foreach (var door in RMFind.All<StuckDoor>())
             {
                 var dh = door.GetComponent<Health>();
                 if (dh == null || dh.IsDead || !bounds.Contains(door.transform.position)) continue;
@@ -75,7 +75,7 @@ namespace RexMagnum
             enabled = false;
             // agents that started before the mesh existed are not on it: put them on the nearest point
             var bounds = new Bounds(center, size);
-            foreach (var a in FindObjectsByType<NavMeshAgent>(FindObjectsSortMode.None))
+            foreach (var a in RMFind.All<NavMeshAgent>())
                 if (a.enabled && a.gameObject.activeInHierarchy && !a.isOnNavMesh && bounds.Contains(a.transform.position) &&
                     NavMesh.SamplePosition(a.transform.position, out NavMeshHit hit, 4f, NavMesh.AllAreas))
                     a.Warp(hit.position);
