@@ -275,6 +275,9 @@ namespace RexMagnum
                 if (!probeRes.TryGetValue(rp, out int baseRes)) probeRes[rp] = baseRes = rp.resolution;
                 rp.resolution = t == QualityTier.Low ? Mathf.Min(baseRes, 128) : baseRes;
             }
+            // cloud layer (RexMagnum/Clouds; off on Low): 5 + 3 noise octaves per sky pixel on desktop High / Ultra,
+            // 3 + 2 on Medium and phones (the finest octaves are sub-pixel at their render scale anyway)
+            Shader.SetGlobalFloat("_RMCloudOctaves", t >= QualityTier.High && !mobile ? 5f : 3f);
             QualitySettings.lodBias = lodBias[i];
             QualitySettings.anisotropicFiltering = t >= QualityTier.High ? AnisotropicFiltering.ForceEnable : AnisotropicFiltering.Enable;
             Application.targetFrameRate = Application.isMobilePlatform ? 30 : 60;

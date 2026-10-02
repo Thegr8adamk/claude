@@ -34,6 +34,7 @@ namespace RexMagnum
         BlobSpawner[] spawners;
         AudioSource nightMusic;
         float nightLevel;
+        bool skyDiscsOff;           // the sky's sun disc is off: the cloud layer draws sun + moon
 
         void Start()
         {
@@ -114,6 +115,12 @@ namespace RexMagnum
                 clouds.SetFloat("_Night", Night);
                 // the weather drifts: the coverage wanders slowly (a few changes per hour)
                 clouds.SetFloat("_Cover", Mathf.Clamp01(baseCover + (Mathf.PerlinNoise(Time.time * 0.002f, 3.1f) - 0.5f) * 0.4f));
+                // sun / moon discs: the true sun path (below the horizon at night, unlike the moonlight's fixed 30 deg
+                // light), the moon opposite. By day it matches the light, so the disc sits where the shadows point from.
+                float discPitch = elev > 0 ? Mathf.Lerp(2f, 75f, elev) : elev * 75f;
+                Vector3 sunDir = -(Quaternion.Euler(discPitch, sunAzimuth + (timeOfDay - 0.5f) * 180f, 0f) * Vector3.forward);
+                clouds.SetVector("_SunDir", sunDir);
+                clouds.SetVector("_MoonDir", -sunDir);
             }
             if (sky != null && sky.HasProperty("_GroundColor")) sky.SetColor("_GroundColor", Color.Lerp(MoonGround, baseGround, day));
             if (Time.time > nextLights) { nextLights = Time.time + 0.5f; NightLights(Night > 0.3f); }
@@ -154,6 +161,20 @@ namespace RexMagnum
                 {
                     bool cloudsOn = quality == null || quality.Tier != QualityTier.Low;
                     if (cloudDome.enabled != cloudsOn) cloudDome.enabled = cloudsOn;
+                    // the cloud layer draws the sun + moon discs: the Procedural sky's own sun disc goes off then (it
+                    // followed the night light: a sun-like disc in the moonlight's place); without clouds it stays
+                    bool discs = cloudsOn && clouds != null && clouds.HasProperty("_Discs");
+                    if (discs != skyDiscsOff)
+                    {
+                        skyDiscsOff = discs;
+                        if (clouds != null && clouds.HasProperty("_Discs")) clouds.SetFloat("_Discs", discs ? 1f : 0f);
+                        if (sky != null && sky.HasProperty("_SunDisk"))
+                        {
+                            sky.SetFloat("_SunDisk", discs ? 0f : 2f);     // None / High Quality (as built)
+                            foreach (var kw in new[] { "_SUNDISK_NONE", "_SUNDISK_SIMPLE", "_SUNDISK_HIGH_QUALITY" }) sky.DisableKeyword(kw);
+                            sky.EnableKeyword(discs ? "_SUNDISK_NONE" : "_SUNDISK_HIGH_QUALITY");
+                        }
+                    }
                 }
                 if (islandProbe == null)
                 {
@@ -194,6 +215,11 @@ namespace RexMagnum
             probeOpen = null;
             var baked = lp.bakedProbes;                  // a copy: the original data stays with the scene
             if (baked == null || baked.Length == 0) return;
+#if UNITY_EDITOR
+            // in the Editor these probes are the scene's LightingData asset itself: keep the baked values once and put
+            // them back on play-mode exit (OnDestroy), or the scaled SH of the last frame stayed in the asset for good
+            if (probeOrig == null || probeAsset != lp) { probeOrig = baked; probeAsset = lp; }
+#endif
             var lum = new float[baked.Length];
             for (int i = 0; i < baked.Length; i++) lum[i] = L0(baked[i]);
             var sorted = (float[])lum.Clone();
@@ -220,6 +246,19 @@ namespace RexMagnum
             for (int i = 0; i < probeLive.Length; i++) probeLive[i] = amb * probeOpen[i];
             lp.bakedProbes = probeLive;
         }
+
+#if UNITY_EDITOR
+        SphericalHarmonicsL2[] probeOrig;
+        LightProbes probeAsset;
+
+        void OnDestroy()
+        {
+            // only when it is still the same data (a zone scene that added probes made a new set: nothing to undo then)
+            if (probeOrig != null && probeAsset != null && probeAsset == LightmapSettings.lightProbes && probeAsset.count == probeOrig.Length)
+                probeAsset.bakedProbes = probeOrig;
+            probeOrig = null;
+        }
+#endif
 
         float envAmbient = -1f, envExposure = -1f, nextLights;
         Color envSun = new Color(-1f, -1f, -1f);

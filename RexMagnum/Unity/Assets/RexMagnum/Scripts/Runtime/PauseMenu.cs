@@ -13,6 +13,8 @@ namespace RexMagnum
     /// Help (the controls of the device used last).
     /// Controller: LT / RT or keys 1-5 change the tab, Up / Down scroll the lists, B / Menu resume,
     /// Y / key T: QUIT TO TITLE (asks first, saves, loads the scene again). Settings are saved in PlayerPrefs.
+    /// MAP: FAST TRAVEL to the cart charge stations and the cave mouth in visited zones (Up / Down + OK, or click),
+    /// only with no blob within 25 m and not in an event, the boss fight or the tutorial.
     /// Ultrawide: the panel stops at ~1.9 x the screen height.
     /// </summary>
     public class PauseMenu : MonoBehaviour
@@ -66,8 +68,18 @@ namespace RexMagnum
                 if (tab != 3 && g != null)
                     scroll.y += -g.leftStick.ReadValue().y * 900f * Time.unscaledDeltaTime;   // scroll the lists with the stick
                 // arrows / W S / D-pad scroll the long lists (accomplishments, album, map info); the scroll view clamps the end
-                if (tab != 3 && MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 140f * Screen.height / 1080f);
-                if (tab != 3 && MenuNav.Down) scroll.y += 140f * Screen.height / 1080f;
+                if (tab == 0 && travelOk && travel.Count > 0)
+                {
+                    // MAP with fast travel: Up / Down pick a TRAVEL button, OK goes (the stick still scrolls)
+                    if (MenuNav.Up) { travelSel = (travelSel + travel.Count - 1) % travel.Count; MenuNav.Click(); }
+                    if (MenuNav.Down) { travelSel = (travelSel + 1) % travel.Count; MenuNav.Click(); }
+                    if (MenuNav.Ok) { MenuNav.Consume(); pendingTravel = travelSel; }
+                }
+                else
+                {
+                    if (tab != 3 && MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 140f * Screen.height / 1080f);
+                    if (tab != 3 && MenuNav.Down) scroll.y += 140f * Screen.height / 1080f;
+                }
                 if (tab != 3 && (MenuNav.Left || MenuNav.PagePrev)) SetTab(tab - 1);
                 if (tab != 3 && (MenuNav.Right || MenuNav.PageNext)) SetTab(tab + 1);
                 // controller Y / key T: QUIT TO TITLE (asks first)
@@ -75,7 +87,7 @@ namespace RexMagnum
                 if (RMInput.Pause && !panel.Waiting && !MenuNav.Consumed) SetOpen(false);
                 return;
             }
-            if (GameFlow.Busy) return;
+            if (GameFlow.Busy || traveling) return;
             if (RMInput.Pause) SetOpen(true);
         }
 
@@ -87,6 +99,7 @@ namespace RexMagnum
         {
             // a tab clicked in OnGUI changes here, between GUI passes (changing it mid-event breaks the IMGUI layout)
             if (pendingTab >= 0) { SetTab(pendingTab); pendingTab = -1; }
+            if (pendingTravel >= 0) { int go = pendingTravel; pendingTravel = -1; StartTravel(go); }
         }
 
         void SetTab(int t)
@@ -106,6 +119,8 @@ namespace RexMagnum
             MenuNav.Click();
             if (!o) FreeThumbs();        // album pictures only live while the menu is open (phone memory)
             else { rexCached = null; nextObjective = 0f; }
+            statsCache = null;           // the stats list is built once per opening (not per OnGUI call)
+            if (o) { GameFlow.FlushPlayTime(); BuildTravel(); }      // the play time in the stats is up to date
             if (o) scaleBefore = Time.timeScale;
             // back to the kill cam's slow motion only while it still runs (else normal speed: no slow motion left behind)
             Time.timeScale = o ? 0f : (KillCam.Active && scaleBefore > 0f ? scaleBefore : 1f);
@@ -130,6 +145,7 @@ namespace RexMagnum
         {
             int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
             RexLife.SaveQuitSpot();         // where Rex stands (calm spots only); before SetOpen: its PlayerPrefs.Save writes it
+            GameFlow.FlushPlayTime();       // the unsaved play seconds (SetOpen's Progress.Flush writes them)
             SetOpen(false);                 // saves (Progress.Flush, PlayerPrefs.Save), sound back on
             Time.timeScale = 1f;            // no kill cam slow motion carried over
             if (scene < 0) return;          // scene not in the build list (editor test scene): just resume
@@ -170,6 +186,14 @@ namespace RexMagnum
 
         void OnGUI()
         {
+            if (travelFade > 0.001f && !PhotoAlbum.Capturing)
+            {
+                // fast travel: the screen fades to black and back (the menu is closed by then)
+                GUI.depth = -100;
+                GUI.color = new Color(0, 0, 0, travelFade);
+                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+            }
             if (!Open) return;
             GUI.depth = -100;            // on top of every other OnGUI (ending bars, door fade, boss bar, toasts)
             float w = Screen.width, h = Screen.height, s = h / 1080f;
@@ -316,6 +340,7 @@ namespace RexMagnum
             if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Side != null) GUILayout.Label("<color=#B8E6A0>" + GameGuide.Side + "</color>", label);
             GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
+            TravelSection();
             Section("ISLAND ZONES");
             foreach (var z in GameGuide.Zones)
                 GUILayout.Label($"{(GameGuide.Visited(z.id) ? "[x]" : "[ ]")}  {z.name}", label);
@@ -425,6 +450,176 @@ namespace RexMagnum
 
         void OnDestroy() => FreeThumbs();
 
+        List<(string what, string value)> statsCache;
+
+        // ------------------------------------------------------------ fast travel (MAP tab)
+
+        struct TravelSpot { public string name; public Vector3 at; public float yaw; }
+        readonly List<TravelSpot> travel = new List<TravelSpot>();
+        bool travelOk, traveling;
+        string travelWhy;
+        int travelSel, pendingTravel = -1;
+        float travelFade;
+
+        /// <summary>The fast travel stops when the menu opens (nothing moves while paused): per visited zone the cart
+        /// charge station nearest its landmark (pool deck, pro shop, factory door), and the cave mouth (the cave door's
+        /// outside exit). Each stop is a free spot ~3 m beside the station, on the ground, clear of the parked cart.</summary>
+        void BuildTravel()
+        {
+            travel.Clear();
+            travelSel = 0;
+            pendingTravel = -1;
+            travelWhy = TravelBlock(FindAnyObjectByType<RexController>());
+            travelOk = travelWhy == null;
+            var best = new Dictionary<string, Vector3>();
+            var bestD = new Dictionary<string, float>();
+            foreach (var cs in FindObjectsByType<ChargeStation>(FindObjectsSortMode.None))
+            {
+                Vector3 p = cs.transform.position;
+                string zone = StopZone(p, out Vector3 mark);
+                if (!GameGuide.Visited(zone)) continue;
+                Vector3 f = p - mark; f.y = 0f;
+                if (bestD.TryGetValue(zone, out float d) && d <= f.sqrMagnitude) continue;
+                best[zone] = p; bestD[zone] = f.sqrMagnitude;
+            }
+            foreach (var z in GameGuide.Zones)       // the map's zone order (resort first)
+                if (best.TryGetValue(z.id, out Vector3 station))
+                {
+                    Vector3 at = FreeSpot(station, out float yaw);
+                    travel.Add(new TravelSpot { name = StopName(z.id), at = at, yaw = yaw });
+                }
+            if (GameGuide.Visited("cave"))
+            {
+                var ex = GameObject.Find("Cave_ExitA");        // outside the cave door, facing away from it (IslandBuilder.DoorPair)
+                if (ex != null) travel.Add(new TravelSpot { name = "Cave mouth (north-west)", at = ex.transform.position, yaw = ex.transform.eulerAngles.y });
+            }
+        }
+
+        /// <summary>Why fast travel is off right now, or null.</summary>
+        static string TravelBlock(RexController rex)
+        {
+            if (rex == null) return "No fast travel here.";
+            var hp = rex.GetComponent<Health>();
+            if (hp != null && hp.IsDead) return "No fast travel now.";
+            if (GameFlow.Busy || GameFlow.TutorialActive) return "Fast travel opens after the room tutorial.";
+            if (KingGlorpBoss.Fighting || EndingSequence.Playing) return "No fast travel during the boss fight.";
+            if (GameGuide.EventRunning) return "No fast travel during an event. Finish it first.";
+            if (GolfCart.Driven != null) return "Get out of the golf cart to fast travel.";
+            if (Blob.LivingNear(rex.transform.position, 25f) > 0) return "Blobs nearby: no fast travel with a blob within 25 m.";
+            return null;
+        }
+
+        /// <summary>The zone a charge station belongs to (nearest zone centre; the resort's hotel / pool / beach count as
+        /// the pool) and the landmark its stop should be nearest.</summary>
+        static string StopZone(Vector3 p, out Vector3 mark)
+        {
+            var zones = GameGuide.Zones;
+            int near = 0;
+            float nd = float.MaxValue;
+            for (int i = 0; i < zones.Length; i++)
+            {
+                Vector3 f = p - zones[i].at; f.y = 0f;
+                if (f.sqrMagnitude < nd) { nd = f.sqrMagnitude; near = i; }
+            }
+            string id = zones[near].id;
+            if (id == "hotel" || id == "beach") id = "pool";
+            mark = id == "pool" ? zones[1].at : id == "golf" ? GameGuide.ProShop : id == "ruins" ? GameGuide.Factory : zones[near].at;
+            return id;
+        }
+
+        static string StopName(string zone)
+        {
+            switch (zone)
+            {
+                case "pool": return "Resort: pool deck";
+                case "golf": return "Golf course: pro shop";
+                case "ruins": return "Jungle ruins: factory door";
+            }
+            foreach (var z in GameGuide.Zones) if (z.id == zone) return z.name;
+            return zone;
+        }
+
+        /// <summary>A spot ~3 m around a charge station on the ground at its height, with room for Rex (not in the
+        /// parked cart or a wall); Rex faces the station. Else just on it.</summary>
+        static Vector3 FreeSpot(Vector3 station, out float yaw)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 dir = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.back;
+                Vector3 p = station + dir * 3f;
+                if (!Physics.Raycast(p + Vector3.up * 4f, Vector3.down, out RaycastHit hit, 10f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                p = hit.point + Vector3.up * 0.1f;
+                if (Mathf.Abs(p.y - station.y) > 1.5f) continue;          // a ledge, a roof, a ditch
+                if (Physics.CheckCapsule(p + Vector3.up * 0.5f, p + Vector3.up * 1.6f, 0.4f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                yaw = Quaternion.LookRotation(-dir).eulerAngles.y;
+                return p;
+            }
+            yaw = 0f;
+            return station + Vector3.up * 0.1f;
+        }
+
+        /// <summary>MAP tab: the FAST TRAVEL buttons (mouse, or Up / Down + OK), or why it is off.</summary>
+        void TravelSection()
+        {
+            Section("FAST TRAVEL");
+            if (travel.Count == 0) { GUILayout.Label("Find the golf cart charge stations (resort, golf course, ruins) and the cave: you can travel there from here.", small); return; }
+            if (!travelOk) GUILayout.Label("<color=#FF9C80>" + travelWhy + "</color>", small);
+            for (int i = 0; i < travel.Count; i++)
+            {
+                var r = GUILayoutUtility.GetRect(10f, 54f * ui, GUILayout.ExpandWidth(true));
+                bool hover = travelOk && r.Contains(Event.current.mousePosition);
+                if (hover && travelSel != i && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) travelSel = i;
+                if (Event.current.type == EventType.Repaint)
+                {
+                    var old = GUI.color;
+                    if (!travelOk) GUI.color = new Color(old.r, old.g, old.b, old.a * 0.45f);      // greyed: not now
+                    button.Draw(r, "TRAVEL:  " + travel[i].name, hover, false, travelOk && travelSel == i && MenuNav.PadOrKeys, false);
+                    GUI.color = old;
+                }
+                if (travelOk && Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
+                {
+                    Event.current.Use();
+                    MenuNav.Click();
+                    pendingTravel = i;      // in LateUpdate: closing the menu mid-layout breaks IMGUI
+                }
+                GUILayout.Space(4 * ui);
+            }
+        }
+
+        void StartTravel(int i)
+        {
+            if (i < 0 || i >= travel.Count || !travelOk || traveling || !Open) return;
+            var rex = FindAnyObjectByType<RexController>();
+            if (rex == null) return;
+            var spot = travel[i];
+            SetOpen(false);
+            StartCoroutine(Travel(rex, spot));
+        }
+
+        /// <summary>Short fade out, Rex moved (Teleport turns the CharacterController off while he moves), the camera
+        /// behind him, 2 s untouchable from the arrival, fade in. Unscaled time: a kill cam's slow motion does not stretch it.</summary>
+        System.Collections.IEnumerator Travel(RexController rex, TravelSpot spot)
+        {
+            traveling = true;
+            var hp = rex.GetComponent<Health>();
+            if (hp != null) hp.Invulnerable(2f);
+            rex.InputEnabled = false;
+            for (float t = 0f; t < 1f; t += Time.unscaledDeltaTime / 0.3f) { travelFade = t; yield return null; }
+            travelFade = 1f;
+            if (rex != null)
+            {
+                rex.Teleport(spot.at, spot.yaw);
+                if (rex.cameraRig != null) rex.cameraRig.SetYaw(spot.yaw);
+                if (hp != null) hp.Invulnerable(2f);
+            }
+            yield return new WaitForSecondsRealtime(0.15f);
+            for (float t = 1f; t > 0f; t -= Time.unscaledDeltaTime / 0.4f) { travelFade = t; yield return null; }
+            travelFade = 0f;
+            // input back as the menu's resume gives it (not at the cart's wheel, not in the ending)
+            if (rex != null && GolfCart.Driven == null && !Open && !EndingSequence.Playing) rex.InputEnabled = true;
+            traveling = false;
+        }
+
         void AccomplishmentsTab()
         {
             string group = null;
@@ -433,7 +628,8 @@ namespace RexMagnum
             GUILayout.Label($"{done} / {Progress.All.Length}", title);
             // the run in numbers first (the same list as the card after the ending)
             Section("STATS");
-            foreach (var st in Progress.Stats())
+            if (statsCache == null) statsCache = Progress.Stats();
+            foreach (var st in statsCache)
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(st.what, label, GUILayout.Width(300 * ui));

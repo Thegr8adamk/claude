@@ -1926,6 +1926,7 @@ namespace RexMagnum.EditorTools
                     int i = (r * res + c) * 2;
                     hts[r, c] = (bytes[i] | (bytes[i + 1] << 8)) / 65535f;
                 }
+            var walk = ShapePoolAccess(hts, ti, data, parent);      // ramp + deck rim (the buildings are placed already)
             td.SetHeights(0, 0, hts);
 
             // layers
@@ -1953,6 +1954,10 @@ namespace RexMagnum.EditorTools
             var s1 = LoadPng($"{Dir}/{ti.splat[1]}", out _, out _);
             int nl = layers.Count;
             var alpha = new float[ar, ar, nl];
+            // wet sand at the water line: the darker T_WetSand layer takes over the dry sand up to ~0.6 m above the
+            // sea (y 0). The splat had a soft 0.2 - 0.9 m blend that read as one flat tone at the 1 m splat texels.
+            // The existing layer, not a new tinted copy: a 9th layer would add a third terrain pass.
+            int iSand = ti.layers.ToList().FindIndex(ln => ln.name == "T_Sand"), iWet = ti.layers.ToList().FindIndex(ln => ln.name == "T_WetSand");
             for (int z = 0; z < ar; z++)
                 for (int x = 0; x < ar; x++)
                 {
@@ -1964,6 +1969,15 @@ namespace RexMagnum.EditorTools
                     float sum = 0f;
                     for (int k = 0; k < nl; k++) sum += w[k];
                     for (int k = 0; k < nl; k++) alpha[z, x, k] = sum > 0 ? w[k] / sum : (k == 0 ? 1f : 0f);
+                    if (iSand >= 0 && iWet >= 0 && iSand < nl && iWet < nl)
+                    {
+                        int hr = Mathf.Min(res - 1, z * (res - 1) / (ar - 1)), hc = Mathf.Min(res - 1, x * (res - 1) / (ar - 1));
+                        float hw = ti.minH + hts[hr, hc] * (ti.maxH - ti.minH);
+                        float wet = hw < -1f ? 0f : 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.65f, hw));
+                        float moved = alpha[z, x, iSand] * wet * 0.9f;
+                        alpha[z, x, iSand] -= moved;
+                        alpha[z, x, iWet] += moved;
+                    }
                 }
             td.SetAlphamaps(0, 0, alpha);
 
@@ -2058,7 +2072,168 @@ namespace RexMagnum.EditorTools
             var tc = go.GetComponent<TerrainCollider>();
             tc.terrainData = td;
             go.isStatic = true;
+            CheckWalk(walk);
             return t;
+        }
+
+        /// <summary>Pool deck access (review: the deck was cut off for Rex and the agents). The lobby slab is ~3.48, the
+        /// ground at the pool doors ~3.0 - 3.1 and the deck top 4.18 with a 0.4 m tile face and open space under its edge
+        /// all round: no step <= stepOffset 0.35 / NavMesh climb 0.4 anywhere. Raises the terrain (never lowers it,
+        /// except in the ramp band): a ramp from the lobby doors up to the deck edge, and a rim around the deck's outer
+        /// edge up to (deck top - 0.08), blending out over 4 m. Deck cells are found by short rays onto the PoolArea
+        /// collision (the ground has no collider yet), so the basin, bar and tower are left alone. Returns the
+        /// lobby -> deck -> off-deck path for CheckWalk (null when something is missing).</summary>
+        static Vector3[] ShapePoolAccess(float[,] hts, TerrainInfo ti, Data data, Transform world)
+        {
+            var poolT = world.Find("PoolArea");
+            var hotelT = world.Find("Hotel");
+            if (poolT == null || data.pool == null || data.pool.Length < 3 || data.hotel == null || data.hotel.poolDoors == null ||
+                data.hotel.poolDoors.Length < 3)
+            { Debug.LogWarning("[Rex Magnum] Pool access: PoolArea / pool / hotel doors missing, terrain not shaped."); return null; }
+            Physics.SyncTransforms();
+            Bounds BoundsOf(Transform bt)
+            {
+                var brs = bt.GetComponentsInChildren<Renderer>().Where(br => br.enabled).ToArray();
+                if (brs.Length == 0) return new Bounds(bt.position, Vector3.zero);
+                var bb = brs[0].bounds;
+                foreach (var br in brs) bb.Encapsulate(br.bounds);
+                return bb;
+            }
+            Bounds pb = BoundsOf(poolT);
+            Bounds hb = hotelT != null ? BoundsOf(hotelT) : new Bounds(U(40f, -300f, 3.48f), new Vector3(90f, 1f, 22f));
+            float deckTop = data.pool[2];
+            float slab = data.hotel.poolDoors[2];
+            Vector3 door = U(data.hotel.poolDoors);
+            int res = ti.res;
+            float cell = ti.size / (res - 1), range = ti.maxH - ti.minH;
+            int Idx(float wv) => Mathf.Clamp(Mathf.RoundToInt((wv + ti.size / 2) / cell), 0, res - 1);
+            float Wpos(int iv) => iv * cell - ti.size / 2;
+            float Get(int rr, int cc) => ti.minH + hts[rr, cc] * range;
+            void Put(int rr, int cc, float hv) => hts[rr, cc] = Mathf.Clamp01((hv - ti.minH) / range);
+            float doorBefore = Get(Idx(door.z + 1f), Idx(door.x));
+
+            // 1 = deck top (a PoolArea hit within 0.2 m of it), 2 = other PoolArea geometry (basin, bar, tower), 0 = open
+            int c0 = Idx(pb.min.x - 6f), c1 = Idx(pb.max.x + 6f), r0 = Idx(Mathf.Min(pb.min.z, door.z) - 6f), r1 = Idx(pb.max.z + 6f);
+            int nc = c1 - c0 + 1, nr = r1 - r0 + 1;
+            var kind = new byte[nr, nc];
+            var rayHits = new RaycastHit[16];
+            float deckMinX = float.MaxValue, deckMaxX = float.MinValue, deckMinZ = float.MaxValue;
+            int deckCells = 0;
+            for (int rr = 0; rr < nr; rr++)
+                for (int cc = 0; cc < nc; cc++)
+                {
+                    // from just above the deck: under the umbrellas, so the deck itself is the first PoolArea face
+                    var from = new Vector3(Wpos(c0 + cc), deckTop + 0.6f, Wpos(r0 + rr));
+                    int n = Physics.RaycastNonAlloc(from, Vector3.down, rayHits, 6f, ~0, QueryTriggerInteraction.Ignore);
+                    for (int k = 0; k < n; k++)
+                    {
+                        if (!rayHits[k].collider.transform.IsChildOf(poolT)) continue;
+                        if (Mathf.Abs(rayHits[k].point.y - deckTop) < 0.2f) { kind[rr, cc] = 1; break; }
+                        kind[rr, cc] = 2;
+                    }
+                    if (kind[rr, cc] != 1) continue;
+                    deckCells++;
+                    deckMinX = Mathf.Min(deckMinX, from.x); deckMaxX = Mathf.Max(deckMaxX, from.x); deckMinZ = Mathf.Min(deckMinZ, from.z);
+                }
+            Debug.Log($"[Rex Magnum] Pool access: PoolArea bounds {pb.min:F1} .. {pb.max:F1}, Hotel bounds {hb.min:F1} .. {hb.max:F1}, " +
+                      $"deck top {deckTop:F2}, lobby slab {slab:F2}, {deckCells} deck cells (x {deckMinX:F1} .. {deckMaxX:F1}, south edge z {deckMinZ:F1}).");
+            if (deckCells < 20) { Debug.LogWarning("[Rex Magnum] Pool access: deck not found by the rays (no PoolArea collision?), terrain not shaped."); return null; }
+
+            // rim: open ground within 4 m of the deck rises to (deck top - 0.08), smoothly back to the ground; deck cells at
+            // the outer edge (under the tiles, hidden) go up too, so the ground meets the deck edge itself, not 1 m out
+            const float RimWidth = 4f;
+            float rimTop = deckTop - 0.08f;
+            int reach = Mathf.CeilToInt(RimWidth / cell);
+            int raised = 0;
+            for (int rr = 0; rr < nr; rr++)
+                for (int cc = 0; cc < nc; cc++)
+                {
+                    if (kind[rr, cc] == 2) continue;
+                    float wx = Wpos(c0 + cc), wz = Wpos(r0 + rr);
+                    if (wx > hb.min.x && wx < hb.max.x && wz > hb.min.z && wz < hb.max.z) continue;   // under the hotel
+                    float best = float.MaxValue;
+                    for (int dr = -reach; dr <= reach; dr++)
+                        for (int dc = -reach; dc <= reach; dc++)
+                        {
+                            int rq = rr + dr, cq = cc + dc;
+                            if (rq < 0 || cq < 0 || rq >= nr || cq >= nc) continue;
+                            if (kind[rq, cq] != (kind[rr, cc] == 1 ? (byte)0 : (byte)1)) continue;
+                            best = Mathf.Min(best, Mathf.Sqrt(dr * dr + dc * dc) * cell);
+                        }
+                    float hv = Get(r0 + rr, c0 + cc), want;
+                    if (kind[rr, cc] == 1) { if (best > 1.5f) continue; want = rimTop; }            // deck edge cell
+                    else { if (best > RimWidth) continue; want = Mathf.Lerp(rimTop, hv, Mathf.SmoothStep(0f, 1f, best / RimWidth)); }
+                    if (want > hv) { Put(r0 + rr, c0 + cc, want); raised++; }
+                }
+
+            // ramp: lobby doors -> deck south edge (x = doors +- 3 m, blending out over 2 more), from just under the slab
+            // to just under the deck top; 1.5 m under the lobby floor too, so the ground meets the slab at the threshold
+            float deckZ = deckMinZ;
+            for (int rr = Idx(door.z) - r0; rr < nr; rr++)          // the deck edge in front of the doors
+                if (rr >= 0 && kind[rr, Mathf.Clamp(Idx(door.x) - c0, 0, nc - 1)] == 1) { deckZ = Wpos(r0 + rr); break; }
+            float rampLo = slab - 0.03f, rampHi = deckTop - 0.06f;
+            for (int rr = Idx(door.z - 1.5f); rr <= Idx(deckZ); rr++)
+                for (int cc = Idx(door.x - 5f); cc <= Idx(door.x + 5f); cc++)
+                {
+                    float wz = Wpos(rr), wx = Wpos(cc);
+                    float want = Mathf.Lerp(rampLo, rampHi, Mathf.InverseLerp(door.z, deckZ, wz));
+                    float side = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(3f, 5f, Mathf.Abs(wx - door.x)));
+                    Put(rr, cc, Mathf.Lerp(Get(rr, cc), want, side));
+                }
+            float doorAfter = Get(Idx(door.z + 1f), Idx(door.x));
+            Debug.Log($"[Rex Magnum] Pool access: rim raised {raised} cells to {rimTop:F2}; ramp z {door.z:F1} .. {deckZ:F1} " +
+                      $"({rampLo:F2} -> {rampHi:F2}, slope {(rampHi - rampLo) / Mathf.Max(0.5f, deckZ - door.z) * 100f:F0}%); " +
+                      $"ground at the doors {doorBefore:F2} -> {doorAfter:F2} (slab {slab:F2}).");
+            if (Mathf.Abs(doorAfter - slab) > 0.3f) Debug.LogWarning($"[Rex Magnum] Pool access: ground at the lobby doors is {doorAfter - slab:F2} m from the slab.");
+
+            // walk check path: inside the lobby, out of the doors, up onto the deck, along it and off both outer sides
+            float alongZ = deckZ + 2f;
+            return new[]
+            {
+                new Vector3(door.x, slab, door.z - 4f), new Vector3(door.x, slab, door.z), new Vector3(door.x, deckTop, alongZ),
+                new Vector3(deckMinX - 6f, deckTop, alongZ), new Vector3(door.x, deckTop, alongZ), new Vector3(deckMaxX + 6f, deckTop, alongZ)
+            };
+        }
+
+        /// <summary>Edit mode has no NavMesh bake: walk the path in 0.5 m steps with down rays from 0.9 m over the
+        /// last ground point and warn for any step over Rex's stepOffset (0.35 m). A wall or a lounger in the way is
+        /// reported the same way (it is a block for Rex too).</summary>
+        static void CheckWalk(Vector3[] path)
+        {
+            if (path == null || path.Length < 2) return;
+            Physics.SyncTransforms();
+            float y = path[0].y;
+            if (Physics.Raycast(path[0] + Vector3.up * 0.9f, Vector3.down, out RaycastHit h0, 3f, ~0, QueryTriggerInteraction.Ignore)) y = h0.point.y;
+            int steps = 0, bad = 0;
+            float worst = 0f;
+            for (int s = 1; s < path.Length; s++)
+            {
+                Vector3 a = path[s - 1], b = path[s];
+                a.y = b.y = 0f;
+                int n = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 0.5f));
+                for (int k = 1; k <= n; k++)
+                {
+                    var q = Vector3.Lerp(a, b, k / (float)n);
+                    steps++;
+                    if (!Physics.Raycast(new Vector3(q.x, y + 0.9f, q.z), Vector3.down, out RaycastHit hit, 3f, ~0, QueryTriggerInteraction.Ignore))
+                    {
+                        bad++;
+                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check: no ground (drop > 2 m) at {q.x:F1}, {q.z:F1} (leg {s}).");
+                        continue;
+                    }
+                    float dy = hit.point.y - y;
+                    worst = Mathf.Max(worst, Mathf.Abs(dy));
+                    if (Mathf.Abs(dy) > 0.35f)
+                    {
+                        bad++;
+                        if (bad <= 8) Debug.LogWarning($"[Rex Magnum] Walk check: {dy:+0.00;-0.00} m step at {q.x:F1}, {hit.point.y:F2}, {q.z:F1} " +
+                                                       $"(leg {s}, {hit.collider.name}).");
+                    }
+                    y = hit.point.y;
+                }
+            }
+            if (bad == 0) Debug.Log($"[Rex Magnum] Walk check lobby -> pool deck -> off the deck (W + E): {steps} steps, all <= 0.35 m (worst {worst:F2}).");
+            else Debug.LogWarning($"[Rex Magnum] Walk check lobby -> pool deck: {bad} of {steps} steps over 0.35 m or without ground.");
         }
 
         // ---------------------------------------------------------------- ocean, sky, light, post
@@ -2344,16 +2519,26 @@ namespace RexMagnum.EditorTools
                     }
             }
             finally { AssetDatabase.StopAssetEditing(); }
-            // buildings: LOD0 in the lightmap, lower LODs and moving parts on probes / SH as before
+            // buildings: every LOD (LOD0 / 1 / 2) in the lightmap, moving parts and see-through parts on probes / SH.
+            // Only LOD0 used to be lightmapped: it showed the flat bake ambient (fixed AO fill), the lower LODs the
+            // live probes (DayNight.ScaleProbes) -> a brightness jump at every LOD switch. Now all levels show the same
+            // bake; the lower LODs at a lower lightmap resolution (they are only seen from far away).
             foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
             {
                 var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
                 if ((flags & StaticEditorFlags.OccluderStatic) == 0) continue;
                 GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.ContributeGI);
-                SetProp(r, "receiveGI", r.name.EndsWith("_LOD0") ? "Lightmaps" : "LightProbes");
+                int lodLevel = r.name.EndsWith("_LOD0") ? 0 : r.name.EndsWith("_LOD1") ? 1 : r.name.EndsWith("_LOD2") ? 2 : -1;
+                SetProp(r, "receiveGI", lodLevel >= 0 ? "Lightmaps" : "LightProbes");
+                if (lodLevel > 0)
+                {
+                    var rso = new SerializedObject(r);
+                    var sp = rso.FindProperty("m_ScaleInLightmap");
+                    if (sp != null) { sp.floatValue = lodLevel == 1 ? 0.5f : 0.25f; rso.ApplyModifiedPropertiesWithoutUndo(); }
+                }
                 // the glass split (SplitSeeThrough) made copies in Generated/: they missed the FBX's lightmap UVs
                 var mf = r.GetComponent<MeshFilter>();
-                if (r.name.EndsWith("_LOD0") && mf != null && mf.sharedMesh != null && AssetDatabase.GetAssetPath(mf.sharedMesh).StartsWith(Gen))
+                if (lodLevel >= 0 && mf != null && mf.sharedMesh != null && AssetDatabase.GetAssetPath(mf.sharedMesh).StartsWith(Gen))
                 {
                     // the split parts are saved non-readable (no CPU copy in the build): readable while we unwrap
                     var mso = new SerializedObject(mf.sharedMesh);
