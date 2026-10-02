@@ -31,7 +31,7 @@ namespace RexMagnum
                     // whose whole bounds are far taller than the water
                     var b = mesh != null && i < mesh.subMeshCount ? WorldBounds(mesh.GetSubMesh(i).bounds, r.localToWorldMatrix) : r.bounds;
                     bool ocean = b.size.x > 1000f || b.size.z > 1000f;
-                    if (!ocean && b.size.y > 2.5f) continue;            // sloped river / falls: not swimmable as a box
+                    if (!ocean && b.size.y > 2f) continue;            // sloped river / falls: not swimmable as a box
                     // ocean: waves move symmetric around sea level; a pool or plunge pool: the top of the water
                     areas.Add(new Area { b = b, surface = ocean ? b.center.y : b.max.y, slime = IsSlime(m) });
                 }
@@ -69,6 +69,11 @@ namespace RexMagnum
                 slime = a.slime;
             }
             if (surfaceY == float.MinValue) return false;
+            // the water box can hold dry ground (between two pools, a pool edge): real water only where the ground
+            // under this point is below the surface
+            if (Physics.Raycast(new Vector3(p.x, surfaceY + 0.05f, p.z), Vector3.down, out RaycastHit g, 3f, ~0, QueryTriggerInteraction.Ignore)
+                && g.collider.attachedRigidbody == null && g.collider.GetComponentInParent<CharacterController>() == null
+                && g.collider.GetComponentInParent<Health>() == null && g.point.y > surfaceY - 0.3f) return false;   // a swimmer or a blob is not ground
             return !Roofed(p, surfaceY);
         }
 

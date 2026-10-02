@@ -135,6 +135,7 @@ namespace RexMagnum
         public bool Locked => Time.time < lockedUntil;
 
         float faceAimUntil;
+        bool wasGrounded;
         public void FaceAimFor(float seconds) => faceAimUntil = Mathf.Max(faceAimUntil, Time.time + seconds);
 
         CharacterController cc;
@@ -193,6 +194,8 @@ namespace RexMagnum
                         SetTrigger(JumpHash);
                     }
                 }
+                else if (wasGrounded && velocity.y < -2f) velocity.y = -2f;   // ran off a ledge: start the fall gently
+                wasGrounded = cc.isGrounded;
                 velocity.y += gravity * dt;
             }
             cc.Move(velocity * dt);

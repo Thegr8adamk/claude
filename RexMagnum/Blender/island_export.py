@@ -53,6 +53,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
+REBUILD_ONLY = {"CaveTunnels"}     # assets only `--rebuild` makes; a full export keeps them
 ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_RiverRocks", "Asset_Bridges", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
@@ -840,7 +841,9 @@ def main():
             if key in old:
                 data[key] = old[key]
         have = {x["name"] for x in data["assets"]}
-        data["assets"] += [x for x in old.get("assets", []) if x["name"] not in have]
+        data["assets"] += [x for x in old.get("assets", []) if x["name"] in REBUILD_ONLY and x["name"] not in have]
+        have = {x["name"] for x in data["materials"]}
+        data["materials"] += [x for x in old.get("materials", []) if x["name"] not in have]   # their materials too
     with open(old_path, "w") as f:
         json.dump(data, f, indent=1)
     print(f"[Export] done: {len(assets)} buildings, {len(protos)} plant types, {len(inst) // 6} plants, "
