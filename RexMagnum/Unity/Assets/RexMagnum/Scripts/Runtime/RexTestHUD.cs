@@ -527,7 +527,11 @@ namespace RexMagnum
             }
             // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
             if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
-            if (side != null && layoutTouch) side = side == GameGuide.BarSide ? "Side: blobs head for the lounge bar!" : "Side: sniper rifle on the hotel roof.";
+            // touch: the known side lines shortened (an event summary stays as it is)
+            if (side != null && layoutTouch)
+                side = side == GameGuide.BarSide ? "Side: blobs head for the lounge bar!"
+                     : side == GameGuide.SniperSide ? "Side: sniper rifle on the hotel roof."
+                     : side == GameGuide.CaveSide ? "Night: defend the cave mouth (NW)!" : side;
             // built only when one of the parts changed (twice a second otherwise: small garbage, but none needed)
             if (objective != shownObjective || warning != shownWarning || side != shownSide)
             {
@@ -581,7 +585,9 @@ namespace RexMagnum
             Notice((goalShown == null ? "GOAL: " : "NEW GOAL: ") + objective, 4f);
             goalShown = step;
             goalPending = null;
-            Sfx.PlayUI("ui_click", 0.22f, 0.8f);       // soft and low: a cue, not a menu click
+            // the soft goal chime (Resources/Sfx/goal_chime) when it is in the build, else the low click: a cue, not a menu click
+            if (Sfx.Get("goal_chime") != null) Sfx.PlayUI("goal_chime", 0.45f);
+            else Sfx.PlayUI("ui_click", 0.22f, 0.8f);
         }
 
         /// <summary>Diamond + distance over the goal while it is in front of the camera (not too close, not in the scope).</summary>
