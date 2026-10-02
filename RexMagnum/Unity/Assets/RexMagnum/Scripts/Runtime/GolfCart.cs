@@ -16,9 +16,13 @@ namespace RexMagnum
         public float maxSpeed = 9f, accel = 5f, turnRate = 70f;
         public float battery = 100f;
         public static GolfCart Driven { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Driven = null;      // editor with Domain Reload off
         static readonly System.Collections.Generic.List<Transform> chargers = new System.Collections.Generic.List<Transform>();
         Rigidbody rb;
         RexController rex;
+        Health rexHealth;
         RexCameraRig rig;
         float speed, nextUse, nextLine;
         bool lights;
@@ -32,6 +36,7 @@ namespace RexMagnum
             rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rex = FindAnyObjectByType<RexController>();
+            if (rex != null) rexHealth = rex.GetComponent<Health>();
             rig = FindAnyObjectByType<RexCameraRig>();
             SetLights(false);
         }
@@ -46,10 +51,12 @@ namespace RexMagnum
         {
             if (rex == null) return;
             bool driving = Driven == this;
-            if (RMInput.Use && Time.time > nextUse)
+            // Rex died at the wheel: get out, so the respawn in room 304 is not pulled back to the seat
+            if (driving && rexHealth != null && rexHealth.IsDead) { Exit(); return; }
+            if (RMInput.Use && Time.time > nextUse && !PauseMenu.Open && !GameFlow.Busy)
             {
                 if (driving) { Exit(); nextUse = Time.time + 0.5f; }
-                else if (Driven == null && Vector3.Distance(rex.transform.position, transform.position) < 3f)
+                else if (Driven == null && rex.InputEnabled && Vector3.Distance(rex.transform.position, transform.position) < 3f)
                 { Enter(); nextUse = Time.time + 0.5f; }
             }
             if (!driving) return;
@@ -105,6 +112,9 @@ namespace RexMagnum
                 RexVoice.Say(rex.gameObject, "CartPush", true);
             }
         }
+
+        // the cart is unloaded or destroyed while Rex drives: give him back his controller (and free Driven)
+        void OnDisable() { if (Driven == this) { if (rex != null) Exit(); else Driven = null; } }
 
         void Enter()
         {

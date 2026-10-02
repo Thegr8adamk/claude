@@ -36,7 +36,7 @@ namespace RexMagnum
             bool near = new Vector2(dp.x, dp.z).magnitude < radius && dp.y > -1f && dp.y < 2.2f;
             if (near) Nearby = this;
             else if (Nearby == this) Nearby = null;
-            if (near && RMInput.Use)
+            if (near && RMInput.Use && !PauseMenu.Open && !GameFlow.Busy)   // not from the pause menu or the title
             {
                 var w = p.GetComponent<RexWeapons>();
                 if (w == null) return;

@@ -121,6 +121,9 @@ namespace RexMagnum
 
         public void Revive() => lockedUntil = 0f;
 
+        /// <summary>Dead (or on the floor after a slip): no attacks.</summary>
+        public bool Locked => Time.time < lockedUntil;
+
         float faceAimUntil;
         public void FaceAimFor(float seconds) => faceAimUntil = Mathf.Max(faceAimUntil, Time.time + seconds);
 

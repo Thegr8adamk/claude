@@ -54,6 +54,9 @@ namespace RexMagnum
 
         public static bool Busy { get; private set; }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Busy = false;      // editor with Domain Reload off
+
         void Start()
         {
             Busy = !skipTitle;
@@ -204,6 +207,8 @@ namespace RexMagnum
             {
                 rex.Revive();
                 rex.Teleport(wakePoint.position, wakePoint.eulerAngles.y);
+                var wrig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
+                if (wrig) wrig.SetYaw(wakePoint.eulerAngles.y);
                 if (rex.bodyAnimator) rex.bodyAnimator.Play("Locomotion", 0, 0f);
                 if (rex.armsAnimator && rex.armsAnimator.gameObject.activeInHierarchy) rex.armsAnimator.Play("Locomotion", 0, 0f);
             }

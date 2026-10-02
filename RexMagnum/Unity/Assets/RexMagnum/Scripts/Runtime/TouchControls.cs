@@ -10,6 +10,7 @@ namespace RexMagnum
     /// near), Taunt / Photo / Hands / Weapon / Camera along the top, Pause in the top corner. Landscape.
     /// Hidden when a controller is connected.
     /// </summary>
+    [DefaultExecutionOrder(-50)]     // fill TouchState before the scripts that read it this frame
     public class TouchControls : MonoBehaviour
     {
         public float lookSpeed = 0.12f;          // degrees per pixel
@@ -108,7 +109,9 @@ namespace RexMagnum
             opacity = PlayerPrefs.GetFloat("RexMagnum_TouchOpacity", 0.45f);
             if (EditMode) { TouchState.Active = false; EditUpdate(); return; }
             var ts = Touchscreen.current;
-            TouchState.Active = ts != null && Gamepad.current == null;
+            // a Windows laptop with a touch screen has a Touchscreen too: show the buttons only after a first touch there
+            TouchState.Active = ts != null && Gamepad.current == null &&
+                                (Application.isMobilePlatform || TouchState.Active || ts.primaryTouch.press.isPressed);
             TouchState.AnyTap = false;
             if (!TouchState.Active) return;
             var held = new System.Collections.Generic.HashSet<string>();

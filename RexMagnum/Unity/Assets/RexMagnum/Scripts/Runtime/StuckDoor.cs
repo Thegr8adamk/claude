@@ -19,6 +19,7 @@ namespace RexMagnum
         void Awake()
         {
             health = GetComponent<Health>();
+            AnyOpen = false;            // static: do not keep last play session's open door (domain reload off)
             health.Damaged += (a, p, by) => { if (!open) StartCoroutine(Shake()); };
             health.Died += by => { if (!open) StartCoroutine(Open(by)); };
         }

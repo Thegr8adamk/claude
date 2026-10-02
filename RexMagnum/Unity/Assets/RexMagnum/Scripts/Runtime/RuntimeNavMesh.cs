@@ -20,6 +20,7 @@ namespace RexMagnum
                 new List<NavMeshBuildMarkup>(), sources);
             sources.RemoveAll(s => s.component != null &&
                                    (s.component.GetComponentInParent<Health>() != null ||
+                                    s.component.GetComponentInParent<NavMeshAgent>() != null ||      // guests: no hole where they stand
                                     (s.component is Collider c && c.isTrigger)));
             var settings = NavMesh.GetSettingsByID(0);
             settings.agentRadius = 0.5f;

@@ -62,7 +62,7 @@ namespace RexMagnum
             else if (!near && Nearby == this) Nearby = null;
             LastDist = dist;
             // only the closest food reacts, and a weapon / ammo pickup in reach goes first
-            if (Nearby != this || WeaponPickup.Nearby != null || !RMInput.Use) return;
+            if (Nearby != this || WeaponPickup.Nearby != null || !RMInput.Use || PauseMenu.Open || GameFlow.Busy) return;
             var h = rex.GetComponent<Health>();
             if (h == null || h.IsDead || h.Fraction >= 1f) return;         // full: keep it for later
             RMInput.ConsumeUse();

@@ -30,6 +30,7 @@ namespace RexMagnum
         void Update()
         {
             if (!controller.InputEnabled) return;
+            if (controller.Locked) { controller.FaceAim = false; return; }   // dead or slipped: no punch, taunt, photo
             bool busy = Time.time < busyUntil;
 
             if (RMInput.Hands)

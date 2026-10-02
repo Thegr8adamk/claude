@@ -60,6 +60,7 @@ namespace RexMagnum
         void Dead(bool instant)
         {
             if (coreRenderer != null) coreRenderer.gameObject.SetActive(false);
+            foreach (var c in GetComponents<Collider>()) c.enabled = false;   // saved as stopped: the core cannot be blown up again
             if (coreLight != null) coreLight.enabled = false;
             if (hallLights != null) foreach (var l in hallLights) if (l != null) l.intensity *= 0.2f;
             foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))

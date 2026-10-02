@@ -14,6 +14,9 @@ namespace RexMagnum
     public class PauseMenu : MonoBehaviour
     {
         public static bool Open { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Open = false;      // editor with Domain Reload off
         int tab;
         Vector2 scroll;
         readonly SettingsPanel panel = new SettingsPanel();

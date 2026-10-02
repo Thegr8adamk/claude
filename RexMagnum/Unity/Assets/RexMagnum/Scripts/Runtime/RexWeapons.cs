@@ -142,6 +142,8 @@ namespace RexMagnum
             towelShownWet = false;
             if (heldBody) Destroy(heldBody);
             if (heldArms) Destroy(heldArms);
+            bodyWeaponHidden = false;
+            if (aimLine) aimLine.enabled = false;
             var prefab = prefabs != null && (int)id < prefabs.Length ? prefabs[(int)id] : null;
             if (prefab == null) return;
             heldBody = Attach(prefab, controller.bodyAnimator);
@@ -195,6 +197,27 @@ namespace RexMagnum
             bool on = drawT > 0.01f;
             if (heldBody) { heldBody.SetActive(on); heldBody.transform.localScale = bodyScale * Mathf.Max(0.01f, k); }
             if (heldArms) { heldArms.SetActive(on); heldArms.transform.localScale = armsScale * Mathf.Max(0.01f, k); }
+            // first person: the body's copy of the weapon only casts a shadow (the arms hold the one you see)
+            bool hide = cameraRig != null && (cameraRig.Mode == RexCameraRig.CameraMode.FirstPerson || Scoped);
+            if (heldBody && hide != bodyWeaponHidden)
+            {
+                bodyWeaponHidden = hide;
+                foreach (var r in heldBody.GetComponentsInChildren<Renderer>(true))
+                    r.shadowCastingMode = hide ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
+            }
+        }
+        bool bodyWeaponHidden;
+
+        /// <summary>The arms are hidden in third person, so their hand bone may not be found when a weapon is taken
+        /// then: put the weapon in the arms' hand when they show.</summary>
+        void AttachArmsIfMissing()
+        {
+            if (heldArms || controller.armsAnimator == null || !controller.armsAnimator.isActiveAndEnabled) return;
+            var prefab = prefabs != null && (int)current < prefabs.Length ? prefabs[(int)current] : null;
+            if (prefab == null) return;
+            heldArms = Attach(prefab, controller.armsAnimator);
+            armsScale = heldArms ? heldArms.transform.localScale : Vector3.one;
+            towelShownWet = false;                             // tint the new copy too
         }
 
         // ---------------------------------------------------------------- input
@@ -208,12 +231,14 @@ namespace RexMagnum
             if (wheel != null && wheel.IsOpen) { Aiming = Scoped = false; return; }   // choosing a weapon: no attacks
             if (RMInput.NextWeapon) Cycle(1);
             if (RMInput.PrevWeapon) Cycle(-1);
+            AttachArmsIfMissing();
             UpdateVisibility();
             UpdateTowel();
             var d = Current;
-            Aiming = !controller.HandsDown && d.isGun && RMInput.Aim;
+            Aiming = !controller.HandsDown && !controller.Locked && d.isGun && RMInput.Aim;
             Scoped = Aiming && current == WeaponId.Sniper;
-            if (controller.HandsDown) return;
+            if (aimLine && aimLine.enabled && (controller.HandsDown || controller.Locked)) aimLine.enabled = false;
+            if (controller.HandsDown || controller.Locked) { pressTime = -1f; return; }   // dead or slipped: no attacks
             bool busy = Time.time < busyUntil || Time.time < PhotoAlbum.PoseUntil;   // no attacks during a photo
 
             if (d.grip == Grip.Throw)
@@ -296,7 +321,8 @@ namespace RexMagnum
                 {
                     Sfx.Play("bottle_break", c);
                     owned.Remove(WeaponId.Bottle);
-                    Give(WeaponId.BottleBroken);
+                    if (Has(WeaponId.BottleBroken)) Equip(WeaponId.BottleBroken);   // Give only equips a new weapon
+                    else Give(WeaponId.BottleBroken);
                     SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
                 }
                 break;
@@ -416,8 +442,9 @@ namespace RexMagnum
             controller.FaceAimFor(0.6f);
             busyUntil = Time.time + 0.7f;
             var prefab = prefabs[(int)WeaponId.Coconut];
-            CoconutBomb.Throw(prefab, transform.position + Vector3.up * 1.6f + transform.forward * 0.4f,
-                ThrowVelocity(longThrow), WeaponDef.Get(WeaponId.Coconut).tapDamage, gameObject);
+            Vector3 v = ThrowVelocity(longThrow);           // starts on the side Rex throws to (he may still face the other way)
+            CoconutBomb.Throw(prefab, transform.position + Vector3.up * 1.6f + Vector3.ProjectOnPlane(v, Vector3.up).normalized * 0.4f,
+                v, WeaponDef.Get(WeaponId.Coconut).tapDamage, gameObject);
             if (aimLine) aimLine.enabled = false;
         }
     }

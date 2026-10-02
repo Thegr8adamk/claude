@@ -79,6 +79,8 @@ namespace RexMagnum
                     target = current + 1 < floorHeights.Length ? current + 1 : 0;
                 else if (Vector3.Distance(rex.transform.position, landingDoors[NearestFloor(rex.transform.position.y)].position) < 3f)
                     target = NearestFloor(rex.transform.position.y);
+                // a new target starts the ride now (else 'current' jumps to it and Arrived runs at the start floor)
+                moving = Mathf.Abs(cab.position.y - floorHeights[target]) > 0.01f;
             }
             if (moving)
             {

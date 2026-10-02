@@ -13,7 +13,7 @@ namespace RexMagnum
         float t;
         Camera cam;
         RexController rex;
-        bool slipped, heroed, hadInput;
+        bool slipped, heroed;
         int lastCall = -1;
 
         static readonly string[] Marty =
@@ -33,7 +33,13 @@ namespace RexMagnum
         void Start()
         {
             rex = FindAnyObjectByType<RexController>();
-            if (rex != null) { hadInput = rex.InputEnabled; rex.InputEnabled = false; }
+            if (rex != null)
+            {
+                rex.InputEnabled = false;
+                // Rex cannot move in the cutscene: blobs still near him stop for its length (about 26 s)
+                foreach (var b in Blob.All)
+                    if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) b.Stun(30f);
+            }
             var main = Camera.main;
             cam = new GameObject("EndingCam").AddComponent<Camera>();
             if (main != null) { cam.CopyFrom(main); cam.depth = main.depth + 20f; }
@@ -43,11 +49,13 @@ namespace RexMagnum
         void OnDestroy()
         {
             if (cam != null) Destroy(cam.gameObject);
-            if (rex != null) rex.InputEnabled = hadInput;     // still off if he was at the golf cart's wheel
+            // still off if he is at the golf cart's wheel or the pause menu is open (either may change during the ending)
+            if (rex != null) rex.InputEnabled = GolfCart.Driven == null && !PauseMenu.Open;
         }
 
         void Update()
         {
+            if (PauseMenu.Open) return;      // wait behind the pause menu (it runs on unscaled time; keys there must not skip it)
             t += Time.unscaledDeltaTime;
             if (t > 3f && RMInput.AnyKey && t < 22f) t = 22f;                 // skip to "I'm back."
             if (rex == null) { if (t > 26f) Destroy(gameObject); return; }

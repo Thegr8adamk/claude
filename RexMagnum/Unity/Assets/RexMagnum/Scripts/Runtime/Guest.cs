@@ -87,6 +87,13 @@ namespace RexMagnum
                     RexVoice.Subtitle?.Invoke(guestName.ToUpper() + " (behind a locked door): " + LockedLines[Random.Range(0, LockedLines.Length)]);
                 }
             }
+            // rescue: checked every frame (a button press lasts one frame)
+            if (state == State.Hiding && !lockedIn && rexDist < 3f && agent.isOnNavMesh && RMInput.Use &&
+                WeaponPickup.Nearby == null && FoodPickup.Nearby == null)
+            {
+                NearestBlob(out float safeDist);
+                if (safeDist > panicRadius * 1.5f) Rescue();
+            }
             if (Time.time < nextThink || !agent.isOnNavMesh) return;
             nextThink = Time.time + 0.4f;
             NearestBlob(out float blobDist);
@@ -107,9 +114,8 @@ namespace RexMagnum
             {
                 case State.Idle:
                 case State.Hiding:
-                    if (!security && blobDist < panicRadius) Panic();
-                    else if (state == State.Hiding && blobDist > panicRadius * 1.5f && rexDist < 3f && WeaponPickup.Nearby == null && FoodPickup.Nearby == null && RMInput.Use)
-                        Rescue();
+                    // already hiding: stay put (panicking again only picks the same spot and screams every 0.8 s)
+                    if (!security && state == State.Idle && blobDist < panicRadius) Panic();
                     break;
                 case State.Panic:
                     if (!agent.pathPending && agent.remainingDistance < 0.6f) { state = State.Hiding; agent.speed = 1.4f; }

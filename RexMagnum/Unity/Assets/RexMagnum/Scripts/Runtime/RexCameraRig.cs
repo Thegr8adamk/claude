@@ -45,6 +45,8 @@ namespace RexMagnum
 
         public CameraMode Mode { get; private set; } = CameraMode.ThirdPerson;
         public float Yaw { get; private set; }
+        /// <summary>Teleports (wake-up, respawn): the view turns with Rex.</summary>
+        public void SetYaw(float yaw) { Yaw = yaw; Pitch = 0f; }
         public float Pitch { get; private set; }
         public bool IsAiming { get; private set; }
         public bool InputEnabled { get; set; } = true;
@@ -102,6 +104,10 @@ namespace RexMagnum
             foreach (var (r, mode) in saved)
                 if (r != null) r.shadowCastingMode = fp ? ShadowCastingMode.ShadowsOnly : mode;
             if (fpArms != null) fpArms.SetActive(fp);
+            // the arms' animator starts fresh when shown: give it the hands down/up state again
+            var rc = target != null ? target.GetComponent<RexController>() : null;
+            if (fp && rc != null && rc.armsAnimator != null && rc.armsAnimator.isActiveAndEnabled)
+                rc.armsAnimator.SetBool("HandsDown", rc.HandsDown);
             if (instant) blend = fp ? 1f : 0f;
         }
 

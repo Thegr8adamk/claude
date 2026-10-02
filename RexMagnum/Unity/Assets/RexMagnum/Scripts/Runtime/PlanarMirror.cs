@@ -30,6 +30,7 @@ namespace RexMagnum
         RenderTexture rt;
         Renderer rend;
         static bool rendering;
+        static readonly System.Collections.Generic.List<Renderer> shown = new System.Collections.Generic.List<Renderer>(), armsOff = new System.Collections.Generic.List<Renderer>();
         Transform player;
         float nextLine;
 
@@ -56,7 +57,7 @@ namespace RexMagnum
 
         void Update()
         {
-            if (player == null || !RMInput.Taunt || Time.time < nextLine) return;
+            if (player == null || !RMInput.Taunt || Time.time < nextLine || PauseMenu.Open || GameFlow.Busy) return;
             if (Vector3.Distance(player.position, transform.position) < 3f)
             {
                 nextLine = Time.time + 4f;
@@ -87,9 +88,20 @@ namespace RexMagnum
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(mirrorCam, req)) return;
             rendering = true;
+            // first person hides Rex's body (shadows only) and floats the arms at the eye: the mirror shows the body
+            shown.Clear(); armsOff.Clear();
+            if (player != null)
+                foreach (var r in player.GetComponentsInChildren<Renderer>())
+                    if (r.shadowCastingMode == ShadowCastingMode.ShadowsOnly) { shown.Add(r); r.shadowCastingMode = ShadowCastingMode.On; }
+            var rig = cam.GetComponent<RexCameraRig>();
+            if (rig != null && rig.fpArms != null && rig.fpArms.activeInHierarchy)
+                foreach (var r in rig.fpArms.GetComponentsInChildren<Renderer>())
+                    if (r.enabled) { armsOff.Add(r); r.enabled = false; }
             GL.invertCulling = true;
             RenderPipeline.SubmitRenderRequest(mirrorCam, req);
             GL.invertCulling = false;
+            foreach (var r in shown) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+            foreach (var r in armsOff) r.enabled = true;
             rendering = false;
         }
 

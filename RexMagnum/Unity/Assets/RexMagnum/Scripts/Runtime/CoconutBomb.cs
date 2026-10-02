@@ -30,6 +30,8 @@ namespace RexMagnum
             rb.angularVelocity = Random.insideUnitSphere * 8f;
             var mat = new PhysicsMaterial { bounciness = 0.35f, dynamicFriction = 0.6f };
             sc.material = mat;
+            // thrown from inside Rex's capsule reach: it must not bounce off Rex himself
+            if (owner != null && owner.TryGetComponent(out CharacterController occ)) Physics.IgnoreCollision(sc, occ);
             var b = go.AddComponent<CoconutBomb>();
             b.damage = damage;
             b.owner = owner;

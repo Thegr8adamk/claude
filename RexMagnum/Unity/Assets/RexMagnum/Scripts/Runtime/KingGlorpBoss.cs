@@ -83,6 +83,14 @@ namespace RexMagnum
                 Say(GlorpLines[0]);
                 RexVoice.Say(rex.gameObject, "Glorp", true);
             }
+            else if (d > 90f)
+            {
+                // Rex died (woke in room 304) or ran away: stop the ballad and the boss bar until he comes back
+                started = false;
+                Fighting = false;
+                music.Stop();
+                return;
+            }
             int p = health.Fraction > 0.66f ? 1 : health.Fraction > 0.33f ? 2 : 3;
             if (p != phase) { phase = p; StartCoroutine(PhaseChange()); }
             if (Time.time > nextAbsorb) { nextAbsorb = Time.time + (phase == 3 ? 12f : 18f); StartCoroutine(Absorb()); }
@@ -198,6 +206,7 @@ namespace RexMagnum
             // an expanding slime ring along the ground: Rex must jump it (grounded inside the ring band = hit)
             var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(ring.GetComponent<Collider>());
+            Destroy(ring, 3f);          // the coroutine stops if Glorp pops mid-wave: do not leave the ring behind
             ring.transform.position = transform.position + Vector3.up * 0.05f;
             var mr = ring.GetComponent<Renderer>();
             mr.material.color = new Color(1f, 0.85f, 0.2f);
@@ -215,7 +224,7 @@ namespace RexMagnum
                 }
                 yield return null;
             }
-            Destroy(ring);
+            if (ring != null) Destroy(ring);
         }
 
         IEnumerator Victory(GameObject by, Vector3 at)

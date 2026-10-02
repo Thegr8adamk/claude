@@ -14,6 +14,7 @@ namespace RexMagnum
         static Transform coconut;
         Camera cam;
         bool running;
+        public static bool Active => inst != null && inst.running;
 
         public static int Setting
         {
@@ -46,6 +47,10 @@ namespace RexMagnum
         }
 
         static bool riding, rideKilled;
+
+        // editor with Domain Reload off: statics from the last play must not carry over
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { riding = rideKilled = false; inst = null; coconut = null; }
 
         /// <summary>Coconut (brief: camera rides the coconut, slime rain): ride it in slow motion when blobs are near.</summary>
         public static void WatchCoconut(Transform t)
@@ -81,7 +86,7 @@ namespace RexMagnum
             var rb = c.GetComponent<Rigidbody>();
             Vector3 last = c.position, dir = Vector3.forward;
             float t = 0f;
-            while (c != null && t < 4f)
+            while (c != null && t < 6.5f)          // the 3 s fuse is 6 s at half speed: stay on it until the blast
             {
                 t += Time.unscaledDeltaTime;
                 Vector3 v = rb != null ? rb.linearVelocity : Vector3.zero;
@@ -145,7 +150,7 @@ namespace RexMagnum
                 }
                 cam.transform.position = pos;
                 cam.transform.LookAt(target);
-                if (t > 0.3f && RMInput.AnyKey) break;     // skippable
+                if (t > 0.3f && RMInput.AnyKey) { RMInput.ActionBlockedFrame = Time.frameCount; break; }     // skippable
                 yield return null;
             }
             if (Time.timeScale > 0f) Time.timeScale = 1f;   // not while the pause menu holds it at 0 (its key also skips the cam)

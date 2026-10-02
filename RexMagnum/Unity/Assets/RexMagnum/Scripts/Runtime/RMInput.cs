@@ -251,8 +251,10 @@ namespace RexMagnum
             }
         }
         public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame);
-        public static bool ActionDown => TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
-                                         (G != null && ActTrig.wasPressedThisFrame);
+        /// <summary>The kill cam is on screen, or was skipped this frame: the skip click does not also attack.</summary>
+        public static int ActionBlockedFrame = -1;
+        public static bool ActionDown => !KillCam.Active && Time.frameCount != ActionBlockedFrame && (TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
+                                         (G != null && ActTrig.wasPressedThisFrame));
         public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
         public static bool ActionUp => TouchState.Up("Action") || (M != null && M.leftButton.wasReleasedThisFrame) ||
                                        (G != null && ActTrig.wasReleasedThisFrame);
@@ -301,6 +303,9 @@ namespace RexMagnum
         public static Vector2 WheelStick => G == null ? Vector2.zero : LookStick;
         /// <summary>The weapon wheel is open: the camera must not turn.</summary>
         public static bool LookBlocked;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { LookBlocked = false; ActionBlockedFrame = -1; }      // editor with Domain Reload off
         public static bool NextWeapon => (TouchState.Up("Weapon") && TouchState.HeldFor("Weapon") < WheelHoldTime) || (KDown("NextWeapon")) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
                                          (G != null && NextBtn.wasPressedThisFrame);
         public static bool PrevWeapon => (KDown("PrevWeapon")) || (M != null && M.scroll.ReadValue().y > 0.1f) ||

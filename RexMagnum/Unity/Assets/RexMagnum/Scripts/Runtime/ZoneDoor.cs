@@ -18,6 +18,9 @@ namespace RexMagnum
 
         void Reset() { GetComponent<BoxCollider>().isTrigger = true; }
 
+        // statics: Time.time starts at 0 again each play session (domain reload off would keep the old values)
+        void Awake() { busyUntil = 0f; fade = 0f; }
+
         void OnTriggerEnter(Collider other)
         {
             var rex = other.GetComponentInParent<RexController>();
