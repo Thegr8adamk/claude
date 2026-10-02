@@ -124,6 +124,7 @@ namespace RexMagnum
                 if (agent.isOnNavMesh) agent.isStopped = true;
                 return;
             }
+            if (Disguised) { Wander(); return; }
             float dist = Vector3.Distance(transform.position, rex.position);
             if (dist > sightRange && !IsAngry)
             {
@@ -177,6 +178,29 @@ namespace RexMagnum
         }
 
         // ---------------------------------------------------------------- reactions
+
+        /// <summary>Disguise variant (brief section 4): wanders slowly and does not attack until found out.</summary>
+        public bool Disguised { get; set; }
+        float nextWander;
+
+        void Wander()
+        {
+            if (!agent.isOnNavMesh) return;
+            agent.isStopped = false;
+            agent.speed = speed * 0.5f * DayNight.BlobSpeed;
+            if (Time.time < nextWander) return;
+            nextWander = Time.time + Random.Range(4f, 8f);
+            Vector3 p = transform.position + Random.insideUnitSphere * 6f;
+            if (NavMesh.SamplePosition(p, out NavMeshHit hit, 3f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
+        }
+
+        /// <summary>Found out: drop the act, answer with the rude tentacle and charge.</summary>
+        public void Reveal()
+        {
+            if (!Disguised) return;
+            Disguised = false;
+            OnTaunted();
+        }
 
         /// <summary>Rex's taunt: answer with the rude tentacle, then get angry and charge.</summary>
         public void OnTaunted()

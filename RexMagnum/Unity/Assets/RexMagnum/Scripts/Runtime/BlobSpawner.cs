@@ -10,6 +10,7 @@ namespace RexMagnum
         public int maxAlive = 4;
         public float radius = 14f;
         public float interval = 6f;
+        [Range(0f, 1f)] public float disguiseChance = 0.15f;   // tourist blobs in a dress + sun hat
         float next;
 
         void Update()
@@ -24,7 +25,10 @@ namespace RexMagnum
             Vector2 c = Random.insideUnitCircle.normalized * radius;
             Vector3 p = transform.position + new Vector3(c.x, 0, c.y);
             if (NavMesh.SamplePosition(p, out NavMeshHit hit, 4f, NavMesh.AllAreas))
-                Instantiate(prefabs[Random.Range(0, prefabs.Length)], hit.position, Quaternion.identity);
+            {
+                var b = Instantiate(prefabs[Random.Range(0, prefabs.Length)], hit.position, Quaternion.identity);
+                if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
+            }
         }
     }
 }
