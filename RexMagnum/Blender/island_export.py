@@ -316,6 +316,17 @@ def splat_maps(h):
     rock = np.maximum(smooth(-up, -0.82, -0.62), smooth(zj, 125, 150))
     W = mix(rock, 4)
     W = mix(rock * smooth(fine, 0.55, 0.7), 5)           # moss on rock
+    # slime river channel: dark wet mud at the water's edge, mossy banks above it (no sand inside the jungle)
+    X, Y = np.meshgrid(np.linspace(-I.SIZE / 2, I.SIZE / 2, res), np.linspace(-I.SIZE / 2, I.SIZE / 2, res))
+    _, _, _, (rx, ry) = I.heightmap()
+    d = np.full(h.shape, 1e9)
+    for x, y in zip(rx[::2], ry[::2]):
+        x0, x1 = int(max((x - 20 + I.SIZE / 2) / cell, 0)), int(min((x + 20 + I.SIZE / 2) / cell, res - 1)) + 1
+        y0, y1 = int(max((y - 20 + I.SIZE / 2) / cell, 0)), int(min((y + 20 + I.SIZE / 2) / cell, res - 1)) + 1
+        d[y0:y1, x0:x1] = np.minimum(d[y0:y1, x0:x1], np.hypot(X[y0:y1, x0:x1] - x, Y[y0:y1, x0:x1] - y))
+    inland = smooth(h, 1.5, 3.0)
+    W = mix((1 - smooth(d, 16.0, 19.0)) * inland, 5)      # mossy banks
+    W = mix((1 - smooth(d, 10.0, 12.5)) * inland, 1)      # wet mud at the edge
     W /= W.sum(-1, keepdims=True)
     return W
 
