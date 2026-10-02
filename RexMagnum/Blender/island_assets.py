@@ -1661,7 +1661,7 @@ def ruins(m):
             a = rng.uniform(0, math.tau)
             k.cyl((x, y, 0.55), (x + math.cos(a) * 4, y + math.sin(a) * 4, 0.55), 0.55, m["stone"], segs=12, base="FallenColumn")
     # vines hanging from the ledges
-    vine = principled("A_Vine", (0.08, 0.25, 0.05), 0.7)
+    vine = principled("A_Vine", (0.035, 0.1, 0.022), 0.75)
     for i in range(40):
         t = rng.randrange(6)
         s = 40 - t * 6
@@ -1716,8 +1716,8 @@ def cave(m):
     bo.use_self = True
     rm = mass.modifiers.new("Remesh", "REMESH")
     rm.mode = "VOXEL"
-    rm.voxel_size = 0.25
-    for nm, size, strength in (("Crag", 3.0, 0.75), ("Chip", 0.8, 0.22)):
+    rm.voxel_size = 0.16
+    for nm, size, strength in (("Crag", 3.0, 0.42), ("Chip", 0.8, 0.14), ("Grit", 0.3, 0.05)):
         tx = bpy.data.textures.get("T_" + nm) or bpy.data.textures.new("T_" + nm, "VORONOI")
         tx.noise_scale = size
         tx.distance_metric = "DISTANCE"
@@ -1755,6 +1755,30 @@ def cave(m):
     for i in range(8):   # rocks around the pool
         a = i / 8 * math.tau
         k.rock((math.cos(a) * 6.5, -3.2 + math.sin(a) * 3.5, 0), (1.2, 1.0, 0.7), m["wetrock"], seed=80 + i)
+    # fallen rubble at the foot of the rock face (broken-off stones, half buried)
+    for i in range(16):
+        x = rng.choice((-1, 1)) * rng.uniform(4.5, 13)
+        k.rock((x, rng.uniform(-2.5, 1.5), 0.1), (rng.uniform(0.5, 1.4), rng.uniform(0.4, 1.1), rng.uniform(0.3, 0.8)),
+               m["rock"], seed=120 + i, boxy=rng.random() < 0.5, base="Rubble", detail=2)
+    # jungle vines hanging over the cave lip, beside the waterfall curtain
+    # (each point is snapped onto the rock surface, so the vines lie on the stone instead of floating)
+    from mathutils.bvhtree import BVHTree
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = BVHTree.FromObject(mass, dg)
+    vine = principled("A_Vine", (0.035, 0.1, 0.022), 0.75)
+    for i in range(30):
+        x = rng.choice((-1, 1)) * rng.uniform(3.4, 10.0)
+        top = rng.uniform(7.5, 11.0)
+        L = rng.uniform(2.0, 6.5)
+        pts = []
+        for j in range(9):
+            z = top - L * j / 8
+            hit = tree.ray_cast(Vector((x + 0.1 * math.sin(j * 1.7 + i), -12.0, z)), Vector((0, 1, 0)), 30.0)
+            if hit[0] is None:
+                break
+            pts.append(tuple(hit[0] - Vector((0, 0.06, 0))))
+        if len(pts) >= 3:
+            k.tube(pts, rng.uniform(0.035, 0.07), vine, segs=6, base="Vine")
     return k.c
 
 
