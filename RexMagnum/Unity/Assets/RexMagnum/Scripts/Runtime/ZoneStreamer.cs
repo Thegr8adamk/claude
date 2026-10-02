@@ -118,6 +118,8 @@ namespace RexMagnum
                 var z = zones[i];
                 var s = st[i] = new State();
                 var detail = new System.Collections.Generic.List<Renderer>();
+                var detailSet = new System.Collections.Generic.HashSet<Renderer>();   // membership in O(1): thousands of split parts
+                var lowSet = new System.Collections.Generic.HashSet<Renderer>();
                 var groups = new System.Collections.Generic.List<LODGroup>();
                 var ps = new System.Collections.Generic.List<ParticleSystem>();
                 var low = new System.Collections.Generic.List<Renderer>();
@@ -139,16 +141,16 @@ namespace RexMagnum
                             groups.Add(g);
                             for (int l = 0; l < lods.Length - 1; l++)
                                 foreach (var r in lods[l].renderers)
-                                    if (r != null && r.enabled && !detail.Contains(r)) detail.Add(r);
+                                    if (r != null && r.enabled && detailSet.Add(r)) detail.Add(r);
                             foreach (var r in lods[lods.Length - 1].renderers)
-                                if (r != null && r.enabled && !low.Contains(r)) low.Add(r);
+                                if (r != null && r.enabled && lowSet.Add(r)) low.Add(r);
                         }
                         ps.AddRange(root.GetComponentsInChildren<ParticleSystem>(true));
                     }
                 if (!any) s.b = new Bounds(Vector3.zero, Vector3.one * 1e6f);    // nothing to measure: never culled
                 s.detail = detail.ToArray();
                 s.detailOn = new bool[s.detail.Length];
-                low.RemoveAll(r => detail.Contains(r));          // shared with a higher level: the detail pass owns it
+                low.RemoveAll(r => detailSet.Contains(r));          // shared with a higher level: the detail pass owns it
                 s.low = low.ToArray();
                 s.lowOn = new bool[s.low.Length];
                 s.groups = groups.ToArray();

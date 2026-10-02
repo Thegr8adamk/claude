@@ -205,6 +205,11 @@ namespace RexMagnum
                     probeId = -1;
                     ZoneStreamer.KeepLowAll(false);
                 }
+                if (probeWaitSince >= 0f && (islandProbe == null || !islandProbe.isActiveAndEnabled))
+                {
+                    probeWaitSince = -1f;                     // the wait was abandoned: far zones may cull again
+                    ZoneStreamer.KeepLowAll(false);
+                }
                 if (islandProbe != null && islandProbe.isActiveAndEnabled && probeId < 0 && band != probeBand)
                 {
                     // very far zones are fully culled: bring their lowest LOD back (sliced) for this pass, wait at most 2 s
