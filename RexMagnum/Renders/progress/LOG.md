@@ -56,3 +56,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 12:30 | Code review of today's game code: 9 fixes (ending never started after King Glorp, shirt lost its colour, first thrown chair hit the blob, kill cam unpaused the pause menu, FP arms blocked the selfie, photos of locked-in guests, input restore after the ending, harpoon-pinned blobs stuck off the NavMesh, spawner fields) | (code only) |
 | 2026-10-02 12:40 | Voice lines complete: the last 5 made after the owner added credits. All 155 lines, 7 music tracks and 18 sound effects are in the game | (audio) |
 | 2026-10-02 13:40 | Cart road + bridge in the full jungle (view through the trees) | 2026-10-02_1340_road_bridge_jungle.png |
+| 2026-10-02 14:00 | 26 more voice lines: Rex's 15 flirt takes, King Glorp's 6 boss lines (his own voice), the ending call (Marty + Rex) and 'I'm back.' | (audio) |
