@@ -181,7 +181,7 @@ namespace RexMagnum
             {
                 Vector3 target = rex.position + Vector3.up * 1.2f;
                 SlimeProjectile.Launch(mouth, target, damage, gameObject, BaseColor(),
-                    kind == Kind.Lifeguard ? throwPrefab : null);
+                    kind == Kind.Lifeguard ? (throwPrefab != null ? throwPrefab : ThrowProps.Random01()) : null);
             }
         }
 

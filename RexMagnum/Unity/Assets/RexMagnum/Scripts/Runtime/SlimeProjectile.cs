@@ -14,7 +14,7 @@ namespace RexMagnum
         public static void Launch(Vector3 from, Vector3 to, float damage, GameObject owner, Color color, GameObject model = null)
         {
             GameObject go;
-            if (model != null) go = Instantiate(model, from, Random.rotation);
+            if (model != null) { go = Instantiate(model, from, Random.rotation); go.SetActive(true); }
             else
             {
                 go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
