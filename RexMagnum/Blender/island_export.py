@@ -796,8 +796,15 @@ def rebuild_assets(names, res):
             for ob in coll.all_objects:
                 if ob.parent is None:
                     ob.matrix_world = T @ ob.matrix_world
+        elif n == "PoolArea":        # same placement as build_island_v2: pool deck at least 0.3 m above the hotel base
+            from mathutils import Matrix
+            T = Matrix.Translation((40, -255, max(ha(40, -255), hb) + 0.3))
+            for ob in coll.all_objects:
+                if ob.parent is None:
+                    ob.matrix_world = T @ ob.matrix_world
         else:
-            print(f"[Export] note: {n} is exported at the origin; use the full export for placed zones", flush=True)
+            # never export a placed zone at the origin: IslandBuilder puts buildings at their FBX coordinates
+            raise SystemExit(f"[Export] {n}: no placement in --rebuild; add one (see build_island_v2.build) or use the full export")
     mats_used = set()
     rows = export_assets(mats_used, [f"Asset_{n}" for n in names])
     path = os.path.join(OUT, "Island.json")
