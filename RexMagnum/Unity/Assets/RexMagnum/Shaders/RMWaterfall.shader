@@ -1,5 +1,5 @@
 // Rex Magnum - falling water: streak texture scrolls down (UV v), white aerated water with soft alpha,
-// small light wrap so it is not flat, fog. Two-sided.
+// lit by the main light (soft N.L) + ambient SH so it is not flat, fog. Two-sided.
 Shader "RexMagnum/Waterfall"
 {
     Properties
@@ -33,13 +33,16 @@ Shader "RexMagnum/Waterfall"
                 float _Speed, _Flow, _Opacity, _Glow;
             CBUFFER_END
             struct A { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 normalWS : TEXCOORD1; float fog : TEXCOORD2; UNITY_VERTEX_OUTPUT_STEREO };
+            struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 normalWS : TEXCOORD1; float fog : TEXCOORD2;
+                       float3 positionWS : TEXCOORD3; UNITY_VERTEX_INPUT_INSTANCE_ID UNITY_VERTEX_OUTPUT_STEREO };
             V vert(A i)
             {
                 V o;
                 UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_TRANSFER_INSTANCE_ID(i, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);   // single-pass instanced VR
-                o.positionCS = TransformObjectToHClip(i.positionOS.xyz);
+                o.positionWS = TransformObjectToWorld(i.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.uv = i.uv;
                 o.normalWS = TransformObjectToWorldNormal(i.normalOS);
                 o.fog = ComputeFogFactor(o.positionCS.z);
@@ -47,13 +50,19 @@ Shader "RexMagnum/Waterfall"
             }
             half4 frag(V i) : SV_Target
             {
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);   // right eye's matrices / textures in single-pass instanced VR
                 float s = _Time.y * _Speed * _Flow;
                 float4 a = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, float2(i.uv.x, i.uv.y * 0.5 - s));
                 float4 b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, float2(i.uv.x * 1.3 + 0.21, i.uv.y * 0.8 - s * 1.4));
                 float m = saturate(a.a * 0.6 + b.a * 0.6);
                 Light L = GetMainLight();
-                float wrap = saturate(abs(dot(normalize(i.normalWS), L.direction)) * 0.5 + 0.5);
-                float3 rgb = _Color.rgb * (L.color * wrap + _Glow) * lerp(0.75, 1.05, m);
+                // two-sided: the normal of the side we look at; aerated water scatters, so N.L is softened (not black)
+                float3 n = normalize(i.normalWS);
+                n = dot(n, GetWorldSpaceViewDir(i.positionWS)) < 0 ? -n : n;
+                float ndl = saturate(dot(n, L.direction)) * 0.7 + 0.3;
+                float3 ambient = SampleSH(n);                // sky / probe light: dark at night, blue under a clear sky
+                float3 rgb = _Color.rgb * (L.color * L.distanceAttenuation * ndl + ambient + _Glow) * lerp(0.75, 1.05, m);
                 rgb = MixFog(rgb, i.fog);
                 return half4(rgb, m * _Opacity);
             }

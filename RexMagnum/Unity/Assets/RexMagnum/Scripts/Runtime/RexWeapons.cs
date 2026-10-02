@@ -297,6 +297,7 @@ namespace RexMagnum
             }
             else tapCount = 0;
             StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo));
+            if (heavy) Sfx.Play("swing", transform.position, 0.45f, 0.55f);   // charge: a low rising hum as the wind-up starts
             if (heavy && cameraRig != null) cameraRig.FovPush(4f);   // wind-up cue: the view leans in before the big hit
             // a whoosh on every swing: the towel and golf club have their own sound, the rest a plain swing
             // (lower and louder for a heavy attack)
@@ -326,6 +327,28 @@ namespace RexMagnum
                 best = dist; turn = a; found = true;
             }
             if (found) cameraRig.NudgeYaw(Mathf.Clamp(turn, -25f, 25f));
+        }
+
+        /// <summary>No wall / door between the two points: the first thing on the line must have Health (the target or
+        /// another blob in the group).</summary>
+        static bool MeleeLineClear(Vector3 from, Vector3 to) =>
+            !Physics.Linecast(from, to, out RaycastHit block, ~0, QueryTriggerInteraction.Ignore) ||
+            block.collider.GetComponentInParent<Health>() != null;
+
+        /// <summary>Hit-confirm per weapon class (existing clips, own pitch): blunt = a low thud, blade = a high
+        /// slice, gun = a short bright tick. Played once per swing / shot that hits a blob.</summary>
+        public static void HitConfirm(WeaponId id, Vector3 at)
+        {
+            switch (id)
+            {
+                case WeaponId.Knife: case WeaponId.BottleBroken: case WeaponId.Swordfish:
+                    Sfx.Play("knife_stab", at, 0.45f, 1.35f); break;
+                case WeaponId.Pistol: case WeaponId.Sniper: case WeaponId.Harpoon:
+                    Sfx.Play("bottle_clink", at, 0.35f, 1.8f); break;
+                case WeaponId.Coconut: break;          // the blast is its own confirm
+                default:                               // fists, bottle, towel, golf club
+                    Sfx.Play("blob_hit", at, 0.7f, 0.7f); break;
+            }
         }
 
         /// <summary>A hit lands: the game freezes for a moment (real time; heavy 60 ms, light 25 ms). Skipped while the
@@ -363,8 +386,10 @@ namespace RexMagnum
                 if (flat.sqrMagnitude > 0.36f && Vector3.Angle(transform.forward, flat) > arc) continue;   // behind / beside (touching counts)
                 // no hits through walls / doors: the first thing on the line from the chest must be something with Health
                 // (this target, or another blob in the group)
-                if (Physics.Linecast(chest, hp, out RaycastHit block, ~0, QueryTriggerInteraction.Ignore) &&
-                    block.collider.GetComponentInParent<Health>() == null) continue;
+                // Two lines (to the closest point, and from a bit higher to the body centre raised 0.4 m): a stair edge
+                // or a low step clips the first one, so the hit counts if either line is clear.
+                if (!MeleeLineClear(chest, hp) &&
+                    !MeleeLineClear(chest + Vector3.up * 0.3f, col.bounds.center + Vector3.up * 0.4f)) continue;
                 struck.Add(h);
                 var blob = h.GetComponent<Blob>();
                 if (blob != null)
@@ -381,7 +406,8 @@ namespace RexMagnum
                             blob.flingSpeed = Mathf.Clamp(Mathf.Sqrt(fly.magnitude * 9.81f), 8f, 20f);
                         }
                     }
-                    if (d.id == WeaponId.Towel && heavy) { blob.Stun(2f); Progress.Add("towel_stuns"); }          // brief: wind-up snap stuns 2 s
+                    // brief: wind-up snap stuns 2 s (not King Glorp: a towel chain would stun-lock the boss)
+                    if (d.id == WeaponId.Towel && heavy && blob.GetComponent<KingGlorpBoss>() == null) { blob.Stun(2f); Progress.Add("towel_stuns"); }
                 }
                 float dmg = (heavy ? d.holdDamage : d.tapDamage * (combo ? 2f : 1f)) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
                 h.Damage(dmg, hp, gameObject);
@@ -407,6 +433,7 @@ namespace RexMagnum
             if (combo && anyBlob) RexTestHUD.Notice("COMBO", 0.7f);
             if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
             if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
+            if (anyBlob) HitConfirm(d.id, c);
             if (anyBlob)          // light hits get a smaller kick too (the jab should not feel like air); a cleave a bit more
             {
                 if (cameraRig != null) cameraRig.Shake((hard ? 0.18f : 0.06f) * (struck.Count > 1 ? 1.3f : 1f));
@@ -469,7 +496,7 @@ namespace RexMagnum
                     bool brain = blob != null && Vector3.Cross(ray.direction, blob.BrainPoint - ray.origin).magnitude < blob.BrainRadius;
                     if (brain && d.id == WeaponId.Sniper) Progress.Add("sniper_brains");
                     h.Damage(d.tapDamage * (brain ? 2f : 1f), hit.point, gameObject);
-                    if (blob != null) RexTestHUD.HitMarker();
+                    if (blob != null) { RexTestHUD.HitMarker(); HitConfirm(d.id, transform.position); }   // at Rex: heard at any range
                     if (h.IsDead)
                     {
                         bool longShot = d.id == WeaponId.Sniper && Vector3.Distance(from, hit.point) >= 150f;

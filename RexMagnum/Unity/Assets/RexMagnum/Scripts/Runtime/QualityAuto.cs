@@ -241,7 +241,8 @@ namespace RexMagnum
                 urp.shadowDistance = shadowDist[i];
                 SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", cascades[i]);
                 SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", shadowRes[i]);
-                SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", t == QualityTier.Ultra);
+                // soft (filtered) shadow edges from High up, and Medium on desktop: hard 1-tap edges looked jagged
+                SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", t >= QualityTier.High || (t == QualityTier.Medium && !mobile));
                 // lamp / torch / tunnel-lamp shadows (point + spot) only on Ultra: they are the expensive ones
                 SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t == QualityTier.Ultra);
                 urp.msaaSampleCount = msaa[i];

@@ -10,7 +10,7 @@ namespace RexMagnum
     public class RexLife : MonoBehaviour
     {
         /// <summary>Low health (under 25 %): Rex limps (animator bool Hurt) when no blob is within 15 m; in a fight he
-        /// only slows (walk 3, run ~4 m/s) so he can still get away. Checked on damage and twice a second.</summary>
+        /// only slows (walk 3, run 5 m/s) so he can still get away. Checked on damage and twice a second.</summary>
         void UpdateLimp()
         {
             if (ctrl == null || health == null) return;
@@ -62,11 +62,66 @@ namespace RexMagnum
             checkpointPos = transform.position;
             checkpointYaw = transform.eulerAngles.y;
             RexTestHUD.Notice("CHECKPOINT", 1.2f);
+            // kept across sessions: GameFlow wakes a returning player here ("x,y,z,yaw", invariant culture)
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            PlayerPrefs.SetString(SavedCheckpointKey, string.Format(ic, "{0:0.###},{1:0.###},{2:0.###},{3:0.#}",
+                checkpointPos.x, checkpointPos.y, checkpointPos.z, checkpointYaw));
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>PlayerPrefs key of the last far checkpoint (cave, ruins, ship, boss): "x,y,z,yaw".</summary>
+        public const string SavedCheckpointKey = "rm_cp";
+        /// <summary>NEW GAME: forget the saved checkpoint.</summary>
+        public static void ClearSavedCheckpoint()
+        {
+            if (!PlayerPrefs.HasKey(SavedCheckpointKey)) return;
+            PlayerPrefs.DeleteKey(SavedCheckpointKey);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>The saved checkpoint, if any (parsed with the invariant culture).</summary>
+        public static bool TryLoadSavedCheckpoint(out Vector3 pos, out float yaw)
+        {
+            pos = Vector3.zero; yaw = 0f;
+            var parts = PlayerPrefs.GetString(SavedCheckpointKey, "").Split(',');
+            if (parts.Length != 4) return false;
+            var ic = System.Globalization.CultureInfo.InvariantCulture;
+            var f = new float[4];
+            for (int i = 0; i < 4; i++)
+                if (!float.TryParse(parts[i], System.Globalization.NumberStyles.Float, ic, out f[i])) return false;
+            pos = new Vector3(f[0], f[1], f[2]); yaw = f[3];
+            return true;
+        }
+
+        // ---- big-goal reward: max health 100 + 25 per big goal done (factory stopped, King Glorp popped)
+        int bigGoals = -1;
+        float nextGoalCheck;
+
+        void UpdateMaxHealth()
+        {
+            int n = (FactoryCore.Stopped ? 1 : 0) + (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) == 1 ? 1 : 0);
+            if (n == bigGoals) return;
+            bool rose = bigGoals >= 0 && n > bigGoals;
+            bigGoals = n;
+            float oldMax = health.maxHealth, max = 100f + 25f * n;
+            health.maxHealth = max;
+            if (max > oldMax) health.Heal(max - oldMax);          // the new headroom comes filled (Heal clamps, not when dead)
+            else if (health.Current > max) health.Heal(0f);       // Heal clamps Current down to the lower max
+            if (rose) RexTestHUD.Notice("MAX HEALTH UP!", 2f);
+        }
+
+        void Start()
+        {
+            UpdateMaxHealth();
+            // a returning player: a death near the saved checkpoint wakes there too (not only in this session)
+            if (!hasCheckpoint && TryLoadSavedCheckpoint(out Vector3 cp, out float cpYaw))
+            { hasCheckpoint = true; checkpointPos = cp; checkpointYaw = cpYaw; }
         }
 
         void Update()
         {
             if (Time.time > nextCheckpointCheck) { nextCheckpointCheck = Time.time + 0.5f; UpdateCheckpoint(); }
+            if (Time.time > nextGoalCheck) { nextGoalCheck = Time.time + 1f; UpdateMaxHealth(); }    // two PlayerPrefs reads a second
             if (lowSaid && health.Fraction > 0.5f) lowSaid = false;
             // slow regen out of the fight: +2 HP/s after 6 s without damage and no living blob within 15 m
             // (food still matters in a fight; a long walk does not leave Rex at 10 HP). Blob check twice a second.
@@ -113,6 +168,7 @@ namespace RexMagnum
             ctrl.Revive();
             health.Invulnerable(2f);                   // respawn grace: a blob waiting at the checkpoint gets no free hit
             RexVoice.Say(gameObject, "Respawn", true);
+            UpdateLimp();                              // full health again: the limp / hurt-in-fight flags clear now
         }
     }
 }

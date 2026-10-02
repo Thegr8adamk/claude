@@ -40,6 +40,20 @@ namespace RexMagnum
             LastDamageTime = Time.time;
             Current = Mathf.Max(0f, Current - amount);
             Damaged?.Invoke(amount, point, attacker);
+            if (Current <= 0f && !IsDead)                       // a Damaged handler may already have killed it (DamageSilent)
+            {
+                IsDead = true;
+                Died?.Invoke(attacker);
+            }
+        }
+
+        /// <summary>Takes health without the Damaged event (no second hit flash / sound / reaction): an extra on top
+        /// of a hit that already reacted, like King Glorp's dizzy bonus. A kill still runs Died, once.</summary>
+        public void DamageSilent(float amount, GameObject attacker = null)
+        {
+            if (IsDead || amount <= 0f) return;
+            LastDamageTime = Time.time;
+            Current = Mathf.Max(0f, Current - amount);
             if (Current <= 0f)
             {
                 IsDead = true;

@@ -61,12 +61,15 @@ namespace RexMagnum
                 transform.position = hit.point;
                 var hp = hit.collider.GetComponentInParent<Health>();
                 var blob = hit.collider.GetComponentInParent<Blob>();
+                // King Glorp: damage only (no pin, wall slide or rope: a harpoon chain would stun-lock the boss)
+                bool boss = blob != null && blob.GetComponent<KingGlorpBoss>() != null;
                 if (hp != null && !hp.IsDead)
                 {
-                    if (blob != null) { blob.deathStyle = DeathStyle.Pinned; blob.Pin(3f); }
+                    if (blob != null && !boss) { blob.deathStyle = DeathStyle.Pinned; blob.Pin(3f); }
                     if (blob != null) blob.creditWeapon = WeaponId.Harpoon;
                     hp.Damage(damage, hit.point, owner);
                     if (blob != null) blob.creditWeapon = null;
+                    if (blob != null && owner != null) RexWeapons.HitConfirm(WeaponId.Harpoon, owner.transform.position);
                     transform.SetParent(hp.transform, true);
                     if (hp.IsDead)
                     {
@@ -74,7 +77,7 @@ namespace RexMagnum
                         if (blob != null && owner != null) KillCam.Show(blob.transform, owner.transform.position + Vector3.up * 1.3f, KillCam.Style.Bullet);
                     }
                     // pinned to a wall behind it (brief: blob pinned to the wall): slide it back onto the wall
-                    if (blob != null && Physics.Raycast(hit.point, velocity.normalized, out RaycastHit wall, 3.5f, ~0, QueryTriggerInteraction.Ignore) &&
+                    if (blob != null && !boss && Physics.Raycast(hit.point, velocity.normalized, out RaycastHit wall, 3.5f, ~0, QueryTriggerInteraction.Ignore) &&
                         wall.collider.GetComponentInParent<Blob>() == null)
                     {
                         var ag = blob.GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -82,7 +85,7 @@ namespace RexMagnum
                         blob.transform.position += Vector3.ProjectOnPlane(wall.point - hit.point, Vector3.up) - velocity.normalized * 0.35f;
                         if (ag != null) StartCoroutineOn(blob, ag, 3f);
                     }
-                    else if (blob != null && !hp.IsDead)
+                    else if (blob != null && !boss && !hp.IsDead)
                     {
                         hooked = blob;                                   // on the line: pull it in
                         hookedUntil = Time.time + 4f;

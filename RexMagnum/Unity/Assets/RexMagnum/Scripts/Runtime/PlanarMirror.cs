@@ -34,7 +34,11 @@ namespace RexMagnum
         Transform player;
         float nextLine;
 
-        readonly Plane[] frustum = new Plane[6];
+        static readonly Plane[] frustum = new Plane[6];
+        // one mirror render per frame at most: the nearest mirror that is in range, faced and on screen
+        static int rankFrame = -1;
+        static PlanarMirror nearest;
+        QualityAuto quality;
         // VR: one mono render sampled in screen space is wrong in each eye (swims, double image): a plain shiny
         // surface instead (reflection probe only), back to the real mirror when VR is off
         Material mirrorMat, vrMat;
@@ -57,22 +61,69 @@ namespace RexMagnum
         {
             rend = GetComponent<Renderer>();
             rend.shadowCastingMode = ShadowCastingMode.Off;
-            rt = new RenderTexture(Mathf.Max(256, Screen.width / 2), Mathf.Max(256, Screen.height / 2), 16) { name = "MirrorRT" };
+            quality = FindAnyObjectByType<QualityAuto>();
             var go = new GameObject("MirrorCamera") { hideFlags = HideFlags.HideAndDontSave };
             mirrorCam = go.AddComponent<Camera>();
             mirrorCam.enabled = false;
-            mirrorCam.targetTexture = rt;
-            var mat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
-            mat.SetTexture("_BaseMap", rt);
-            rend.material = mat;
-            mirrorMat = mat;
+            // a cheap render: no shadow maps, depth / opaque copies, post or AA of its own (the reflection is small and
+            // seen through the screen-space mirror shader)
+            // (by reflection: not every one of these setters is public in every URP version)
+            var cd = go.AddComponent<UniversalAdditionalCameraData>();
+            foreach (var pn in new[] { "renderShadows", "requiresDepthTexture", "requiresColorTexture", "renderPostProcessing" })
+            {
+                var pi = typeof(UniversalAdditionalCameraData).GetProperty(pn);
+                if (pi != null && pi.CanWrite && pi.PropertyType == typeof(bool)) pi.SetValue(cd, false);
+            }
+            cd.antialiasing = AntialiasingMode.None;
+            mirrorMat = new Material(Shader.Find("RexMagnum/MirrorScreen"));      // samples the RT in screen space
+            rend.material = mirrorMat;
+            EnsureRT();
             var rex = FindAnyObjectByType<RexController>();
             if (rex != null) player = rex.transform;
         }
 
+        /// <summary>RT at half the screen size, a quarter on the Low tier; remade when the tier or the window changes.</summary>
+        void EnsureRT()
+        {
+            int div = quality != null && quality.Tier == QualityTier.Low ? 4 : 2;
+            int w = Mathf.Max(256, Screen.width / div), h = Mathf.Max(256, Screen.height / div);
+            if (rt != null && rt.width == w && rt.height == h) return;
+            if (rt != null) { rt.Release(); Destroy(rt); }
+            rt = new RenderTexture(w, h, 16) { name = "MirrorRT" };
+            if (mirrorCam != null) mirrorCam.targetTexture = rt;
+            if (mirrorMat != null) mirrorMat.SetTexture("_BaseMap", rt);
+        }
+
+        /// <summary>In range, the camera in front of it and its bounds in the camera frustum (frustum computed per frame
+        /// by Rank). isVisible alone is also true from the shadow pass and from behind.</summary>
+        bool Eligible(Camera cam, out float dist)
+        {
+            dist = float.MaxValue;
+            if (rend == null || mirrorCam == null || vrLook || !isActiveAndEnabled || !rend.isVisible) return false;
+            dist = Vector3.Distance(cam.transform.position, transform.position);
+            if (dist > activeDistance) return false;
+            Vector3 n = transform.TransformDirection(localNormal).normalized;
+            if (Vector3.Dot(cam.transform.position - transform.position, n) <= 0f) return false;
+            return GeometryUtility.TestPlanesAABB(frustum, rend.bounds);
+        }
+
+        /// <summary>Once per frame: the nearest eligible mirror is the only one rendered (two mirrors in one room were
+        /// two extra scene renders).</summary>
+        static void Rank(Camera cam)
+        {
+            if (rankFrame == Time.frameCount) return;
+            rankFrame = Time.frameCount;
+            nearest = null;
+            GeometryUtility.CalculateFrustumPlanes(cam, frustum);
+            float best = float.MaxValue;
+            foreach (var m in all)
+                if (m != null && m.Eligible(cam, out float md) && md < best) { best = md; nearest = m; }
+        }
+
         void OnDestroy()
         {
-            if (rt != null) rt.Release();
+            if (rt != null) { rt.Release(); Destroy(rt); }
+            if (mirrorMat != null) Destroy(mirrorMat);
             if (mirrorCam != null) Destroy(mirrorCam.gameObject);
             if (vrMat != null) Destroy(vrMat);
         }
@@ -94,14 +145,12 @@ namespace RexMagnum
             if (cam == null || rendering) return;
             if (VRMode.Active != vrLook) SetVRLook(VRMode.Active);
             if (vrLook) return;
-            if (Vector3.Distance(cam.transform.position, transform.position) > activeDistance || !rend.isVisible) return;
+            // a full scene render is costly: only the nearest mirror in front of the player and on screen
+            Rank(cam);
+            if (nearest != this) return;
+            EnsureRT();
             Vector3 n = transform.TransformDirection(localNormal).normalized;
             Vector3 p = transform.position;
-            // a full scene render is costly: only when the player is in front of the mirror and it is on screen
-            // (isVisible is also true from the shadow pass and from behind)
-            if (Vector3.Dot(cam.transform.position - p, n) <= 0f) return;
-            GeometryUtility.CalculateFrustumPlanes(cam, frustum);
-            if (!GeometryUtility.TestPlanesAABB(frustum, rend.bounds)) return;
             float d = -Vector3.Dot(n, p);
             var refl = new Matrix4x4();
             refl.m00 = 1 - 2 * n.x * n.x; refl.m01 = -2 * n.x * n.y; refl.m02 = -2 * n.x * n.z; refl.m03 = -2 * d * n.x;
@@ -112,8 +161,12 @@ namespace RexMagnum
             mirrorCam.targetTexture = rt;
             mirrorCam.useOcclusionCulling = false;          // the game camera's occlusion data is for its own view, not the reflected one
             mirrorCam.worldToCameraMatrix = cam.worldToCameraMatrix * refl;
+            // rooms and corridors: ~30 m of reflected view is enough (fewer objects culled in and drawn)
+            mirrorCam.farClipPlane = Mathf.Min(cam.farClipPlane, 30f);
+            mirrorCam.aspect = cam.aspect;                 // the RT size is rounded / clamped: keep the screen's shape
+            mirrorCam.ResetProjectionMatrix();
             Vector4 plane = CameraSpacePlane(mirrorCam, p, n);
-            mirrorCam.projectionMatrix = cam.CalculateObliqueMatrix(plane);
+            mirrorCam.projectionMatrix = mirrorCam.CalculateObliqueMatrix(plane);
             // Unity 6 / URP 17: render the mirror camera with a render request (synchronous)
             var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(mirrorCam, req)) return;

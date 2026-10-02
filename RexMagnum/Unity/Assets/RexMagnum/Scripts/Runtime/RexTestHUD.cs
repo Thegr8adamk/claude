@@ -39,7 +39,8 @@ namespace RexMagnum
 
         void Awake()
         {
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // the menus' OS font (one look for menus and HUD); Unity's built-in one if the system has none of them
+            var font = MenuSkin.UiFont != null ? MenuSkin.UiFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             var go = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler));
             go.transform.SetParent(transform, false);
             go.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
@@ -517,6 +518,12 @@ namespace RexMagnum
             string warning = null, side = null;
             if (GameFlow.Busy || GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
             else { objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; side = GameGuide.Side; }
+            // the bar defense set piece: its own line while the waves come (the step id stays: no NEW GOAL after it)
+            if (objective != null && BarActive(out int wave, out int waves))
+            {
+                objective = waves > 0 ? $"Defend the bar! Wave {Mathf.Max(1, wave)}/{waves}." : "Defend the bar!";
+                side = null;
+            }
             // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
             if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
             if (side != null && layoutTouch) side = "Side: sniper rifle on the hotel roof.";
@@ -535,6 +542,30 @@ namespace RexMagnum
             AnnounceGoal(objective != null ? GameGuide.StepId : null);
         }
 
+        static System.Type barType;
+        static bool barLooked;
+
+        /// <summary>BarDefense.Active / Wave / Waves, read by name (static field or property): the HUD compiles and
+        /// works without the bar set piece in the build.</summary>
+        static bool BarActive(out int wave, out int waves)
+        {
+            wave = 0; waves = 0;
+            if (!barLooked) { barLooked = true; barType = System.Type.GetType("RexMagnum.BarDefense"); }
+            if (barType == null || !(BarStatic("Active") is bool on) || !on) return false;
+            if (BarStatic("Wave") is int wv) wave = wv;
+            if (BarStatic("Waves") is int wn) waves = wn;
+            return true;
+        }
+
+        static object BarStatic(string name)
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+            var pi = barType.GetProperty(name, F);
+            if (pi != null) return pi.GetValue(null, null);
+            var fi = barType.GetField(name, F);
+            return fi != null ? fi.GetValue(null) : null;
+        }
+
         string goalShown, goalPending, shownObjective, shownWarning, shownSide;
         float goalPendingSince;
         bool nightShown;
@@ -549,7 +580,7 @@ namespace RexMagnum
             Notice((goalShown == null ? "GOAL: " : "NEW GOAL: ") + objective, 4f);
             goalShown = step;
             goalPending = null;
-            MenuNav.Click();
+            Sfx.PlayUI("ui_click", 0.22f, 0.8f);       // soft and low: a cue, not a menu click
         }
 
         /// <summary>Diamond + distance over the goal while it is in front of the camera (not too close, not in the scope).</summary>

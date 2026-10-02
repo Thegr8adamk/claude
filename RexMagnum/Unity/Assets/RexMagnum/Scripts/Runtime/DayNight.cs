@@ -184,37 +184,46 @@ namespace RexMagnum
             Vector3 c = rexT != null ? rexT.position : (Camera.main != null ? Camera.main.transform.position : Vector3.zero);
             for (int i = 0; i < n; i++)
                 lightDist[i] = nightLights[i] != null ? (nightLights[i].transform.position - c).sqrMagnitude : float.MaxValue;
-            // lit = enabled (also still fading out): never more than MaxNightLights, counted as they switch on
-            int wanted = 0;
-            for (int i = 0; i < n; i++) if (lightWant[i]) wanted++;
-            for (int guard = 0; guard < n; guard++)
+            // ranked once per pass (it was a full scan for every light switched: O(n^2) with many lamps)
+            if (lightOrder == null || lightOrder.Length != n) { lightOrder = new int[n]; lightKey = new float[n]; }
+            int wanted = 0, lit = 0;      // lit = enabled (also still fading out): never more than MaxNightLights
+            for (int i = 0; i < n; i++)
             {
-                int near = -1, far = -1;
-                for (int i = 0; i < n; i++)
-                {
-                    if (nightLights[i] == null) { lightWant[i] = false; continue; }
-                    if (lightWant[i]) { if (far < 0 || lightDist[i] > lightDist[far]) far = i; }
-                    else if (near < 0 || lightDist[i] < lightDist[near]) near = i;      // also one still fading out
-                }
-                if (near < 0) break;
+                if (nightLights[i] == null) lightWant[i] = false;
+                else if (nightLights[i].enabled) lit++;
+                if (lightWant[i]) wanted++;
+                lightOrder[i] = i;
+                lightKey[i] = lightDist[i];
+            }
+            System.Array.Sort(lightKey, lightOrder);                    // nearest first
+            // nearest unchosen light from the front, farthest chosen one from the back. A dropped light is always
+            // farther than the current nearest (and a newly chosen one nearer than the dropped), so both only move on.
+            int np = 0, fp = n - 1;
+            while (true)
+            {
+                while (np < n && (lightWant[lightOrder[np]] || nightLights[lightOrder[np]] == null)) np++;
+                if (np >= n) break;
+                int near = lightOrder[np];
                 if (wanted < MaxNightLights)
                 {
                     // a free slot (a fading-out light still counts as on until it is dark)
-                    if (nightLights[near].enabled || Lit() < MaxNightLights) { lightWant[near] = true; wanted++; SwitchOn(near); continue; }
+                    if (nightLights[near].enabled || lit < MaxNightLights)
+                    {
+                        if (!nightLights[near].enabled) lit++;
+                        lightWant[near] = true; wanted++; SwitchOn(near);
+                        continue;
+                    }
                     break;
                 }
                 // full: the weakest burning light fades out only for a clearly nearer one (it switches on once its slot is free)
-                if (far >= 0 && lightDist[near] < lightDist[far] * SwapCloser) { lightWant[far] = false; wanted--; continue; }
+                while (fp >= 0 && !lightWant[lightOrder[fp]]) fp--;
+                if (fp >= 0 && lightDist[near] < lightDist[lightOrder[fp]] * SwapCloser) { lightWant[lightOrder[fp]] = false; wanted--; continue; }
                 break;
             }
         }
 
-        int Lit()
-        {
-            int k = 0;
-            foreach (var l in nightLights) if (l != null && l.enabled) k++;
-            return k;
-        }
+        int[] lightOrder;
+        float[] lightKey;
 
         void SwitchOn(int i)
         {

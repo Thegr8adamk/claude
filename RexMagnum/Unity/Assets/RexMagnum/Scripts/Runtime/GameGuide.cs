@@ -132,7 +132,7 @@ namespace RexMagnum
             if (!FactoryCore.Stopped && !Visited("cave") && !Visited("ruins"))
             { target = Zones[6].at; return "The cave behind the waterfall (north-west) leads to the ruins."; }
             id = "factory";
-            if (!FactoryCore.Stopped) { target = Factory; return "Stop the blob factory (jungle ruins, east)."; }
+            if (!FactoryCore.Stopped) return FactoryRoute(rex, out target);
             id = "glorp";
             if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) return BossRoute(rex, out target);
             int zones = Progress.Value("zones");
@@ -160,6 +160,19 @@ namespace RexMagnum
                 return "Take the cave tunnels up to the crashed ship: the temple's back door leads in.";
             target = Door("Cave_DoorA", Zones[6].at);
             return "Take the cave tunnels (north-west) up to the crashed ship.";
+        }
+
+        /// <summary>After the cave the factory is reached through the tunnels, not overland through rock: inside the
+        /// tunnels the marker leads to the ruins branch, near the cave mouth into the cave, else to the factory.</summary>
+        static string FactoryRoute(Vector3 rex, out Vector3 target)
+        {
+            FindThings();
+            if (InTunnels(rex) && DoorAt("RuinsTunnel_DoorA", out target))
+                return "Take the ruins branch at the fork: it leads to the blob factory.";
+            if (rex.y > -20f && InZone(Zones[6], rex) && DoorAt("Cave_DoorA", out target))
+                return "Stop the blob factory: the cave tunnels lead to the jungle ruins.";
+            target = Factory;
+            return "Stop the blob factory (jungle ruins, east).";
         }
 
         // Island.json tunnels: ~40-60 m under the island between the cave mouth, the ruins and the ship

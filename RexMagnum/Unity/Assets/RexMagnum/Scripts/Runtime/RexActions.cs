@@ -33,7 +33,9 @@ namespace RexMagnum
             if (controller.Locked) { controller.FaceAim = false; return; }   // dead or slipped: no punch, taunt, photo
             bool busy = Time.time < busyUntil;
 
-            if (RMInput.Hands)
+            // hold mode: the hands follow the held state (an event toggle could drift and stick the hands inverted)
+            bool handsChange = RMInput.HandsHold ? RMInput.HandsHoldDown != controller.HandsDown : RMInput.Hands;
+            if (handsChange)
             {
                 controller.HandsDown = !controller.HandsDown;
                 if (controller.bodyAnimator) controller.bodyAnimator.SetBool(HandsDownHash, controller.HandsDown);
@@ -54,6 +56,7 @@ namespace RexMagnum
                     else if (RMInput.ActionHeld && Time.time - pressTime >= holdTime)
                     {
                         Do(Heavy, 0.9f);
+                        Sfx.Play("swing", transform.position, 0.45f, 0.55f);     // charge cue (as RexWeapons)
                         StartCoroutine(HitAfter(0.45f, heavyDamage, 1.6f, true));
                         pressTime = -1f;
                     }
@@ -127,6 +130,7 @@ namespace RexMagnum
                 if (h == null || h.gameObject == gameObject) continue;
                 bool wasAlive = !h.IsDead;
                 h.Damage(damage, col.ClosestPoint(c), gameObject);
+                if (wasAlive && h.GetComponent<Blob>() != null) RexWeapons.HitConfirm(WeaponId.Fists, c);
                 if (wasAlive && h.IsDead)
                 {
                     RexVoice.Say(gameObject, "Fists");

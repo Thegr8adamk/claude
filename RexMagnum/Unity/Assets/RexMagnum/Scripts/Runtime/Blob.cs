@@ -58,6 +58,7 @@ namespace RexMagnum
         /// <summary>Harpoon: pinned (stuck in place, flailing) for a few seconds.</summary>
         public void Pin(float seconds)
         {
+            if (kind == Kind.KingGlorp) return;                            // too big to pin: only his own dizzy stuns him
             stunUntil = Time.time + seconds;
             Play("Pinned");
         }
@@ -127,7 +128,7 @@ namespace RexMagnum
             // transform scale (the bones place the vertices), and the clips animate the bones but not the Model itself
             squashT = animator != null && animator.transform != transform ? animator.transform
                     : jellyRenderer != null ? jellyRenderer.transform : null;
-            if (squashT != null) jellyBaseScale = squashT.localScale;
+            if (squashT != null) { jellyBaseScale = squashT.localScale; jellyBasePos = squashT.localPosition; }
         }
         Transform squashT;
 
@@ -142,6 +143,8 @@ namespace RexMagnum
         bool telegraphShown;
         /// <summary>Starts the warning glow (KingGlorpBoss uses it before his volley too).</summary>
         public void Telegraph() => telegraphUntil = Time.time + TelegraphTime;
+        /// <summary>Hunts Rex for this long even beyond its sight range (BarDefense's waves come for him).</summary>
+        public void Alert(float seconds) => alertUntil = Mathf.Max(alertUntil, Time.time + seconds);
 
         // group fight: at most MaxAttackers blobs attack Rex at once; the others circle at 4-6 m and wait their turn
         const int MaxAttackers = 2;
@@ -204,7 +207,9 @@ namespace RexMagnum
                 Vector3 away = transform.position - rex.position; away.y = 0f;
                 if (away.sqrMagnitude < 0.01f) away = -transform.forward;
                 Vector3 p = transform.position + away.normalized * 4f;
-                if (NavMesh.SamplePosition(p, out NavMeshHit nh, 2f, NavMesh.AllAreas)) agent.SetDestination(nh.position);
+                // the pool floor is on the NavMesh too: no backing off into the water
+                if (NavMesh.SamplePosition(p, out NavMeshHit nh, 2f, NavMesh.AllAreas) && WaterVolume.Depth(nh.position + Vector3.up * 0.1f) <= 0.2f)
+                    agent.SetDestination(nh.position);
                 else retreatUntil = 0f;                                    // wall or water behind it: fight on
             }
         }
@@ -270,6 +275,7 @@ namespace RexMagnum
             orbitRadius = Random.Range(4f, 6f);
             orbitDir = Random.value < 0.5f ? -1f : 1f;
             orbitSpeed = Random.Range(18f, 32f);
+            nextSignature = Time.time + Random.Range(4f, 10f);             // not straight out of the water
             SetNightGlow(DayNight.Night);         // DayNight only writes the glow when Night changes: a new blob gets it here
         }
 
@@ -374,6 +380,7 @@ namespace RexMagnum
                     return;
                 }
                 if (circling) { circling = false; nextPath = 0f; }
+                if (TrySignature(dist)) return;                            // lifeguard dive / lunge, bouncer jump-slam (rare)
             }
             if (agent.isOnNavMesh)
             {
@@ -425,6 +432,204 @@ namespace RexMagnum
                 Vector3 target = rex.position + Vector3.up * 1.2f;
                 SlimeProjectile.Launch(mouth, target, damage, gameObject, BaseColor(),
                     kind == Kind.Lifeguard ? (throwPrefab != null ? throwPrefab : ThrowProps.Random01()) : null);
+            }
+        }
+
+        // ---------------------------------------------------------------- signature moves
+        // rare (one per SignatureCooldown+ s), always after the warning glow:
+        //  Lifeguard: dives into water near it and comes up on the shore close to Rex; no water: a fast lunge
+        //  Bouncer (full size): a short hop and a slam with a slime shockwave (jump it, or get hit and pushed back)
+        const float SignatureCooldown = 9f, SlamRadius = 3f;
+        float nextSignature, nextSignatureRoll;
+        Vector3 jellyBasePos;
+
+        bool TrySignature(float dist)
+        {
+            if ((kind != Kind.Lifeguard && kind != Kind.Bouncer) || isHalf || Disguised || !agent.isOnNavMesh) return false;
+            if (Time.time < nextSignature || Time.time < nextSignatureRoll || Time.time < nextAttack) return false;
+            nextSignatureRoll = Time.time + 1f;                            // one roll per second, not per frame
+            if (Random.value > 0.35f) return false;
+            if (kind == Kind.Lifeguard)
+            {
+                if (dist > 8f && dist < 22f && DiveRoute(out Vector3 inAt, out Vector3 outAt, out Vector3 shore))
+                    StartCoroutine(Dive(inAt, outAt, shore));
+                else if (dist > 4f && dist < 9f) StartCoroutine(Lunge());
+                else return false;
+            }
+            else if (dist > 3.2f && dist < 7f) StartCoroutine(JumpSlam());
+            else return false;
+            nextSignature = Time.time + SignatureCooldown + Random.Range(0f, 5f);
+            return true;
+        }
+
+        /// <summary>Water near the lifeguard and water near Rex on the same level (one pool / the sea), with a dry
+        /// shore point close to Rex to come out on.</summary>
+        bool DiveRoute(out Vector3 inAt, out Vector3 outAt, out Vector3 shore)
+        {
+            outAt = shore = default;
+            if (!WaterVolume.RandomSurfacePoint(transform.position, 9f, out inAt)) return false;
+            float best = (transform.position - rex.position).sqrMagnitude * 0.4f;   // must end clearly closer to Rex
+            bool found = false;
+            for (int i = 0; i < 4; i++)
+            {
+                if (!WaterVolume.RandomSurfacePoint(rex.position, 9f, out Vector3 w)) continue;
+                float d2 = (w - rex.position).sqrMagnitude;
+                if (d2 < best && d2 > 2.5f * 2.5f && Mathf.Abs(w.y - inAt.y) < 0.5f && (w - inAt).sqrMagnitude < 30f * 30f)
+                {
+                    best = d2; outAt = w; found = true;
+                }
+            }
+            if (!found || !BlobSpawner.DryShore(outAt, out NavMeshHit dry)) return false;
+            shore = dry.position;
+            return (shore - rex.position).sqrMagnitude > 2f * 2f;
+        }
+
+        IEnumerator Dive(Vector3 inAt, Vector3 outAt, Vector3 shore)
+        {
+            busyUntil = Time.time + 8f;                                    // Update leaves it alone while it swims
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned) { busyUntil = 0f; yield break; }
+            agent.enabled = false;
+            var tr = transform;
+            Vector3 from = tr.position;
+            Sfx.Play("blob_slide", from, 0.8f);
+            for (float t = 0f; t < 0.45f; t += Time.deltaTime)             // hop in
+            {
+                if (health.IsDead) yield break;
+                float k = t / 0.45f;
+                tr.position = Vector3.Lerp(from, inAt, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 1.5f;
+                yield return null;
+            }
+            SlimeFX.Splat(inAt, Vector3.up, new Color(0.75f, 0.9f, 1f), 14);
+            Sfx.Play("splash", inAt, 0.9f);
+            // under the surface to the spot near Rex
+            Vector3 under = inAt - Vector3.up * 1.6f, rise = outAt - Vector3.up * 1.6f;
+            float swim = Mathf.Clamp(Vector3.Distance(under, rise) / 8f, 0.6f, 3f);
+            for (float t = 0f; t < swim; t += Time.deltaTime)
+            {
+                if (health.IsDead) yield break;
+                tr.position = Vector3.Lerp(under, rise, t / swim);
+                yield return null;
+            }
+            SlimeFX.Splat(outAt, Vector3.up, new Color(0.75f, 0.9f, 1f), 14);
+            Sfx.Play("splash", outAt, 0.9f);
+            for (float t = 0f; t < 0.8f; t += Time.deltaTime)              // up, then a hop onto the shore
+            {
+                if (health.IsDead) yield break;
+                float k = t / 0.8f;
+                tr.position = k < 0.4f ? Vector3.Lerp(rise, outAt, k / 0.4f)
+                                       : Vector3.Lerp(outAt, shore, (k - 0.4f) / 0.6f) + Vector3.up * Mathf.Sin((k - 0.4f) / 0.6f * Mathf.PI) * 0.8f;
+                yield return null;
+            }
+            tr.position = shore;
+            agent.enabled = true;
+            agent.Warp(shore);
+            busyUntil = 0f;
+            nextAttack = Time.time + 0.5f;                                 // comes up throwing
+        }
+
+        IEnumerator Lunge()
+        {
+            busyUntil = Time.time + TelegraphTime + 0.9f;
+            nextAttack = Mathf.Max(nextAttack, Time.time + 1.4f);
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned || rex == null || !agent.isOnNavMesh) yield break;
+            Vector3 to = rex.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
+            Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 1.4f, 0f, 6f);
+            Play("Whip");
+            Sfx.Play("blob_whip", transform.position, 0.9f, 1.15f);
+            float done = 0f;
+            for (float t = 0f; t < 0.3f; t += Time.deltaTime)
+            {
+                if (health.IsDead || !agent.enabled || !agent.isOnNavMesh) yield break;
+                float k = Mathf.Clamp01((t + Time.deltaTime) / 0.3f);
+                agent.Move(step * (k - done));                             // Move keeps it on the NavMesh
+                done = k;
+                yield return null;
+            }
+            if (rex != null && rexHealth != null && Vector3.Distance(transform.position, rex.position) < 2.4f)
+                rexHealth.Damage(damage * 1.2f, rex.position + Vector3.up, gameObject);
+        }
+
+        IEnumerator JumpSlam()
+        {
+            busyUntil = Time.time + TelegraphTime * 2f + 0.9f;
+            nextAttack = Mathf.Max(nextAttack, Time.time + 2.2f);
+            // two warning pulses (longer than a whip's): the slam hits hard
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            Telegraph();
+            squashUntil = Time.time + SquashTime; squashAmount = 0.35f;    // crouch before the hop
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned || rex == null || !agent.isOnNavMesh) yield break;
+            Vector3 to = rex.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
+            Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 1.5f, 0f, 3f);
+            float lift = 1.4f / Mathf.Max(0.1f, transform.localScale.y);  // the model's local space is scaled with the blob
+            float done = 0f;
+            for (float t = 0f; t < 0.5f; t += Time.deltaTime)
+            {
+                if (health.IsDead || !agent.enabled || !agent.isOnNavMesh)
+                {
+                    if (squashT != null) squashT.localPosition = jellyBasePos;
+                    yield break;
+                }
+                float k = Mathf.Clamp01((t + Time.deltaTime) / 0.5f);
+                agent.Move(step * (k - done));
+                done = k;
+                if (squashT != null) squashT.localPosition = jellyBasePos + Vector3.up * Mathf.Sin(k * Mathf.PI) * lift;   // the hop (model only)
+                yield return null;
+            }
+            if (squashT != null) squashT.localPosition = jellyBasePos;
+            // landing: squash, slime, the king's shockwave sound (higher) and a slime ring out to SlamRadius
+            squashUntil = Time.time + SquashTime; squashAmount = 0.4f;
+            Sfx.Play("shockwave", transform.position, 0.8f, 1.3f);
+            SlimeFX.Splat(transform.position + Vector3.up * 0.2f, Vector3.up, BaseColor(), 16);
+            StartCoroutine(SlamRing());
+            if (rex == null || rexHealth == null) yield break;
+            Vector3 off = rex.position - transform.position;
+            var rc = rex.GetComponent<RexController>();
+            bool jumped = rc != null && !rc.Grounded;                      // in the air: it passes under him (like the king's ring)
+            if (!jumped && Mathf.Abs(off.y) < 1.5f && new Vector2(off.x, off.z).sqrMagnitude < SlamRadius * SlamRadius)
+            {
+                rexHealth.Damage(damage * 0.9f, rex.position + Vector3.up, gameObject);
+                if (rexHealth.LastDamageTime == Time.time && !rexHealth.IsDead) StartCoroutine(PushRex(off));   // not through a dodge
+            }
+        }
+
+        IEnumerator SlamRing()
+        {
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(ring.GetComponent<Collider>());
+            Destroy(ring, 1f);                                             // also when the blob pops mid-ring
+            ring.transform.position = transform.position + Vector3.up * 0.05f;
+            var mr = ring.GetComponent<Renderer>();
+            mr.sharedMaterial = SlimeFX.SharedSlime(BaseColor());
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            for (float t = 0f; t < 0.35f && ring != null; t += Time.deltaTime)
+            {
+                float r = Mathf.Lerp(0.5f, SlamRadius, t / 0.35f);
+                ring.transform.localScale = new Vector3(r * 2f, 0.03f, r * 2f);
+                yield return null;
+            }
+            if (ring != null) Destroy(ring);
+        }
+
+        /// <summary>The slam throws Rex back ~1.2 m (his CharacterController, over 0.25 s).</summary>
+        IEnumerator PushRex(Vector3 dir)
+        {
+            dir.y = 0f;
+            dir = dir.sqrMagnitude > 0.01f ? dir.normalized : transform.forward;
+            var cc = rex != null ? rex.GetComponent<CharacterController>() : null;
+            if (cc == null) yield break;
+            for (float t = 0f; t < 0.25f; t += Time.deltaTime)
+            {
+                if (cc == null || !cc.enabled) yield break;
+                cc.Move((dir * 9f + Vector3.up * 1.5f) * Time.deltaTime * (1f - t / 0.25f));
+                yield return null;
             }
         }
 
@@ -481,9 +686,10 @@ namespace RexMagnum
             angryUntil = Time.time + 10f;
         }
 
-        public void Stun(float seconds)
+        /// <summary>boss: true only from KingGlorpBoss's own dizzy (towel snaps and other stuns do not stop the king).</summary>
+        public void Stun(float seconds, bool boss = false)
         {
-            if (health.IsDead) return;
+            if (health.IsDead || (kind == Kind.KingGlorp && !boss)) return;
             stunUntil = Time.time + seconds;
             Play("Stun");
         }

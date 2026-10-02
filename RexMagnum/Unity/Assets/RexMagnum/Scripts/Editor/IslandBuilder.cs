@@ -139,6 +139,7 @@ namespace RexMagnum.EditorTools
                     Guests(data.hotel, pool);
                 }
                 Beach(world);
+                LightProbeGrid(terrain);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -1087,11 +1088,11 @@ namespace RexMagnum.EditorTools
             var at = Vector3.Lerp(prev.Value, fork + Vector3.up * 2.5f, 0.6f);
             sign.position = at + Vector3.up * 0.2f;                      // about 2.7 m above the floor: Rex walks under it
             sign.rotation = Quaternion.LookRotation(dir);                 // text and quad face the player walking in
-            var board = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            var board = GameObject.CreatePrimitive(PrimitiveType.Cube);     // a plank, not a quad: hides the text from behind
             UnityEngine.Object.DestroyImmediate(board.GetComponent<Collider>());
             board.name = "Board";
             board.transform.SetParent(sign, false);
-            board.transform.localScale = new Vector3(2.6f, 1.1f, 1f);
+            board.transform.localScale = new Vector3(2.6f, 1.1f, 0.05f);
             var bm = Asset("TunnelSign", Shader.Find("Universal Render Pipeline/Lit"));
             bm.SetColor("_BaseColor", new Color(0.18f, 0.11f, 0.06f));    // old painted plank
             bm.SetFloat("_Smoothness", 0.15f);
@@ -1100,7 +1101,7 @@ namespace RexMagnum.EditorTools
             if (font == null) return;
             var tg = new GameObject("Text");
             tg.transform.SetParent(sign, false);
-            tg.transform.localPosition = new Vector3(0f, 0f, -0.02f);     // just in front of the board
+            tg.transform.localPosition = new Vector3(0f, 0f, -0.04f);     // just in front of the plank's face (-0.025)
             var tm = tg.AddComponent<TextMesh>();
             tm.font = font;
             tm.text = Arrow(shipEnd, "SHIP") + "\n" + Arrow(ruinsEnd, "RUINS");
@@ -1111,7 +1112,17 @@ namespace RexMagnum.EditorTools
             tm.alignment = TextAlignment.Center;
             tm.color = new Color(1f, 0.85f, 0.4f);                        // unlit: readable in the dark cavern
             var tr = tg.GetComponent<MeshRenderer>();
-            tr.sharedMaterial = font.material;
+            // the font's own material (GUI/Text Shader) has ZTest [unity_GUIZTestMode] = Always: it drew through the rock
+            // from the other tunnels. A saved copy with LessEqual: same glyph texture, hidden behind walls
+            string tmp = Gen + "/TunnelSignText.mat";
+            var txm = AssetDatabase.LoadAssetAtPath<Material>(tmp);
+            if (txm == null) { txm = new Material(font.material) { name = "TunnelSignText" }; AssetDatabase.CreateAsset(txm, tmp); }
+            else { txm.shader = font.material.shader; txm.CopyPropertiesFromMaterial(font.material); }
+            txm.mainTexture = font.material.mainTexture;
+            txm.SetFloat("unity_GUIZTestMode", (float)CompareFunction.LessEqual);
+            txm.renderQueue = 3000;                                          // after the opaque plank and rock
+            EditorUtility.SetDirty(txm);
+            tr.sharedMaterial = txm;
             tr.shadowCastingMode = ShadowCastingMode.Off;
         }
 
@@ -1905,6 +1916,52 @@ namespace RexMagnum.EditorTools
             r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
+        /// <summary>Coarse light probes (resort, ruins, cave mouth): after Bake Lighting the lower building LODs, Rex,
+        /// blobs and props are lit from these instead of the one ambient probe (they were flat / too bright in shade).
+        /// A sparse grid over each area at 1, 4 and 10 m above the ground; points inside colliders are skipped.</summary>
+        static void LightProbeGrid(Terrain terrain)
+        {
+            var areas = new List<Bounds>();
+            foreach (var an in new[] { "Hotel", "PoolArea", "TikiBar", "DiveShop", "Ruins" })
+            {
+                var go = GameObject.Find("Island/" + an);
+                if (go == null) continue;
+                var rs = go.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToArray();   // hidden ones have empty bounds at the origin
+                if (rs.Length == 0) continue;
+                var bb = rs[0].bounds;
+                foreach (var rr in rs) bb.Encapsulate(rr.bounds);
+                bb.Expand(new Vector3(12f, 0f, 12f));                       // the paths and open ground around it
+                areas.Add(bb);
+            }
+            var mouthAt = U(-160f, 232f, 0f);                               // cave mouth (as in Tunnels)
+            areas.Add(new Bounds(mouthAt, new Vector3(36f, 10f, 36f)));
+            Physics.SyncTransforms();
+            var pts = new List<Vector3>();
+            foreach (var bb in areas)
+            {
+                float step = Mathf.Max(8f, Mathf.Max(bb.size.x, bb.size.z) / 8f);   // at most ~9 x 9 columns per area
+                for (float x = bb.min.x; x <= bb.max.x + 0.01f; x += step)
+                    for (float z = bb.min.z; z <= bb.max.z + 0.01f; z += step)
+                    {
+                        var col = new Vector3(x, 0f, z);
+                        float gy = terrain != null ? terrain.SampleHeight(col) + terrain.transform.position.y : bb.min.y;
+                        foreach (float up in new[] { 1f, 4f, 10f })
+                        {
+                            var pp = new Vector3(x, gy + up, z);
+                            if (Physics.CheckSphere(pp, 0.3f, ~0, QueryTriggerInteraction.Ignore)) continue;   // inside a wall / rock
+                            if (pts.Any(o => (o - pp).sqrMagnitude < 4f)) continue;                            // overlapping areas
+                            pts.Add(pp);
+                        }
+                    }
+            }
+            if (pts.Count < 4) return;
+            var lpg = new GameObject("LightProbes").AddComponent<LightProbeGroup>();   // at the origin: positions are world
+            // by reflection: the setter is missing from older editor assemblies
+            var probeProp = typeof(LightProbeGroup).GetProperty("probePositions");
+            if (probeProp != null && probeProp.CanWrite) probeProp.SetValue(lpg, pts.ToArray());
+            Debug.Log($"[Rex Magnum] {pts.Count} light probes (Bake Lighting fills them).");
+        }
+
         static void Lighting()
         {
             var sun = UnityEngine.Object.FindAnyObjectByType<Light>();
@@ -1948,6 +2005,8 @@ namespace RexMagnum.EditorTools
             var urpA = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             QualityAuto.SetUrp(urpA, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
             QualityAuto.SetUrp(urpA, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
+            // dithered LOD cross-fade (also here, not only in Project Setup: a project set up before it had pops)
+            QualityAuto.SetUrp(urpA, "enableLODCrossFade", "m_EnableLODCrossFade", true);
             if (urpA != null) EditorUtility.SetDirty(urpA);
 
             // post-processing

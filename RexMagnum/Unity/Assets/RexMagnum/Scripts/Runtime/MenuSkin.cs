@@ -71,8 +71,8 @@ namespace RexMagnum
         static Font uiFont;
         static bool fontTried;
         /// <summary>A clean system sans-serif (installed on the player's machine; nothing is downloaded), or null for
-        /// Unity's built-in font.</summary>
-        static Font UiFont
+        /// Unity's built-in font. The HUD's uGUI text uses it too (one font for menus and HUD).</summary>
+        public static Font UiFont
         {
             get
             {

@@ -39,7 +39,7 @@ namespace RexMagnum
         /// <summary>Low health with a blob near (set by RexLife): no limp (a 2 m/s limp vs 5.7 m/s blobs is a death
         /// spiral), but tired: walk 3, run capped at HurtRunSpeed.</summary>
         public bool HurtInFight { get; set; }
-        public const float HurtRunSpeed = 4.0f;
+        public const float HurtRunSpeed = 5.0f;    // under the blob's 5.7 (it still catches up), not hopeless
         public Vector3 Velocity => velocity;
         public bool IsRunning { get; private set; }
         public bool Grounded => cc.isGrounded;

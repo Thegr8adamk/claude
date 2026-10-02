@@ -99,10 +99,13 @@ namespace RexMagnum
                 Vector3 v = cam.WorldToViewportPoint(transform.position + Vector3.up);
                 seen = v.z > 0f && v.x > -0.1f && v.x < 1.1f && v.y > -0.1f && v.y < 1.1f;
             }
-            bool sleep = far && !seen && state != State.Rescued && !lockedIn;     // rescued: let them walk off and go
+            bool sleep = far && !seen && state != State.Rescued;     // rescued: let them walk off and go
+            // locked in for the night sleeps too (agent off all night for nothing); dawn while asleep: unlock in
+            // place (it stands at home), so a far guest is visible again before Rex gets close
+            if (lockedIn && dormant && DayNight.Night <= LockNight) SetLockedIn(false);
             // night: an indoor guest still walking home would sleep on the way and jump back in when Rex comes near
             // (the rescue / objective target moved): lock in at home now, as it would on arrival
-            if (sleep && !dormant && indoors && !security && DayNight.Night > LockNight && state != State.Panic)
+            if (sleep && !dormant && !lockedIn && indoors && !security && DayNight.Night > LockNight && state != State.Panic)
             {
                 if (agent.enabled && agent.isOnNavMesh) agent.Warp(home);
                 else transform.position = home;
@@ -121,7 +124,8 @@ namespace RexMagnum
             else
             {
                 agent.enabled = true;
-                if (hadPath && agent.isOnNavMesh) agent.SetDestination(savedDestination);   // where it was going
+                if (agent.isOnNavMesh) agent.isStopped = lockedIn;             // SetLockedIn skipped this while the agent was off
+                if (hadPath && !lockedIn && agent.isOnNavMesh) agent.SetDestination(savedDestination);   // where it was going
             }
         }
 

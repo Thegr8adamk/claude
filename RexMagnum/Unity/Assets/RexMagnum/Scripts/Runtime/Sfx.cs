@@ -95,6 +95,26 @@ namespace RexMagnum
             return a;
         }
 
+        static AudioSource uiSrc;
+
+        /// <summary>A 2D UI sound at the listener (no world filters, not pooled): soft cues like a new goal or a
+        /// combat tip. PlayOneShot, so a cue does not cut the one before.</summary>
+        public static void PlayUI(string name, float volume = 1f, float pitch = 1f)
+        {
+            var c = Get(name);
+            if (c == null) return;
+            if (uiSrc == null)
+            {
+                var go = new GameObject("SfxUI");
+                Object.DontDestroyOnLoad(go);
+                uiSrc = go.AddComponent<AudioSource>();
+                uiSrc.playOnAwake = false;
+                uiSrc.spatialBlend = 0f;
+            }
+            uiSrc.pitch = pitch;
+            uiSrc.PlayOneShot(c, volume * AudioMix.Effects);
+        }
+
         // ------------------------------------------------------------ world filters (Ambience sets them)
 
         static float cutoff = 22000f;

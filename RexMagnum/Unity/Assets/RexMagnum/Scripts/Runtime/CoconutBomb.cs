@@ -54,10 +54,16 @@ namespace RexMagnum
             float radius = 4f;
             bool killed = false;
             int kills = 0;
+            // each Health once (a blob / Rex with several colliders took the blast per collider), and only with a line
+            // from the blast: a wall or door between blocks it (a Health in the way, e.g. another blob, does not)
+            var struck = new System.Collections.Generic.HashSet<Health>();
+            Vector3 eye = p + Vector3.up * 0.1f;           // off the floor the coconut lies on
             foreach (var col in Physics.OverlapSphere(p, radius, ~0, QueryTriggerInteraction.Ignore))
             {
                 var h = col.GetComponentInParent<Health>();
-                if (h == null || h.IsDead) continue;
+                if (h == null || h.IsDead || struck.Contains(h)) continue;
+                if (!BlastClear(eye, col.ClosestPoint(p)) && !BlastClear(eye, col.bounds.center)) continue;
+                struck.Add(h);
                 float k = 1f - Vector3.Distance(p, col.ClosestPoint(p)) / radius;
                 var blob = h.GetComponent<Blob>();
                 if (blob != null) blob.deathStyle = DeathStyle.Blast;
@@ -89,5 +95,9 @@ namespace RexMagnum
             KillCam.CoconutDone(killed);
             Destroy(gameObject);
         }
+
+        static bool BlastClear(Vector3 from, Vector3 to) =>
+            !Physics.Linecast(from, to, out RaycastHit block, ~0, QueryTriggerInteraction.Ignore) ||
+            block.collider.GetComponentInParent<Health>() != null || block.collider.GetComponent<CoconutBomb>() != null;
     }
 }

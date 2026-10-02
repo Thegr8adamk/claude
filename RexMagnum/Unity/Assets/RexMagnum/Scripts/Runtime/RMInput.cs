@@ -337,12 +337,20 @@ namespace RexMagnum
             if (G != null) G.SetMotorSpeeds(0f, 0f);
         }
         /// <summary>The kill cam is on screen, or was skipped this frame: the skip click does not also attack.</summary>
-        public static int ActionBlockedFrame = -1;
+        // KillCam writes this on a skip press (this frame) and as the cam closes (next frame: one frame of grace).
+        // The skip press is also kept in SkipFrame: only that one blocks the touch release for 30 frames.
+        static int actionBlockedFrame = -1;
+        public static int SkipFrame = -1;
+        public static int ActionBlockedFrame
+        {
+            get => actionBlockedFrame;
+            set { actionBlockedFrame = value; if (value == Time.frameCount) SkipFrame = value; }
+        }
         public static bool ActionDown => !KillCam.Active && Time.frameCount != ActionBlockedFrame && (TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
                                          (G != null && ActTrig.wasPressedThisFrame));
         public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
-        // touch: a tap that skipped the kill cam does not fire on release
-        public static bool ActionUp => (!KillCam.Active && Time.frameCount - ActionBlockedFrame > 30 && TouchState.Up("Action")) ||
+        // touch: a tap that skipped the kill cam does not fire on release (the cam-end grace frame does not block it)
+        public static bool ActionUp => (!KillCam.Active && Time.frameCount - SkipFrame > 30 && TouchState.Up("Action")) ||
                                        (M != null && M.leftButton.wasReleasedThisFrame) ||
                                        (G != null && ActTrig.wasReleasedThisFrame);
         public static bool Aim
@@ -369,6 +377,12 @@ namespace RexMagnum
         // stick down. Cached per frame: several readers (Rex, golf cart) see the same event.
         static int handsFrame = -1;
         static bool handsEvent, handsHoldDown;
+        /// <summary>Hold mode: the hands are down right now (state, not event: Rex reads this so a missed event
+        /// can never flip the hands the wrong way).</summary>
+        public static bool HandsHoldDown { get { HandsHoldEvent(); return handsHoldDown; } }
+        /// <summary>Only the press (tap mode: the toggle press; hold mode: the press, never the release).
+        /// The golf cart lights use this.</summary>
+        public static bool HandsPressed => HandsHold ? HandsHoldEvent() && handsHoldDown : Hands;
         static bool HandsHoldEvent()
         {
             if (handsFrame == Time.frameCount) return handsEvent;
@@ -409,7 +423,7 @@ namespace RexMagnum
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()       // editor with Domain Reload off
         {
-            LookBlocked = false; ActionBlockedFrame = -1; rumbleUntil = 0f; rumbling = false;
+            LookBlocked = false; ActionBlockedFrame = -1; SkipFrame = -1; rumbleUntil = 0f; rumbling = false;
             Application.quitting -= StopRumble;          // a pad must not keep buzzing after the game closes
             Application.quitting += StopRumble;
         }

@@ -61,6 +61,8 @@ namespace RexMagnum
             if (src != null && bang != null) src.PlayOneShot(bang, AudioMix.Effects);     // effects volume setting
             else Sfx.Play("door_bang", transform.position);
             if (by != null) RexVoice.Say(by, "Door", true);
+            // like OpenAll: the carving obstacle goes off, agents walk through the open door
+            foreach (var ob in GetComponentsInChildren<NavMeshObstacle>()) ob.enabled = false;
             var a = transform.localRotation;
             var b = a * Quaternion.Euler(0f, openAngle, 0f);
             for (float t = 0; t < 1f; t += Time.deltaTime / openTime)

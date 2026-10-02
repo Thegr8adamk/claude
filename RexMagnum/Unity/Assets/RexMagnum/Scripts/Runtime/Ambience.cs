@@ -4,7 +4,8 @@ namespace RexMagnum
 {
     /// <summary>
     /// Ambient sound and Rex's body sounds (no builder step needed: it attaches itself when a scene with Rex loads).
-    ///  - Beach waves near the shore (low ground), jungle insects and birds inland; the jungle is louder at night.
+    ///  - Beach waves near the shore (the resort beach, or the sea within 40 m anywhere), jungle insects and birds
+    ///    inland; the jungle is louder at night.
     ///  - Footsteps (flip-flops) timed by Rex's ground speed, by surface: sand on low terrain by the beach, grass on
     ///    other terrain, tile on buildings. Swim strokes while he swims. A splash when he goes into water.
     ///  - World filters: muffled (low-pass) with the camera under water, Room reverb under a roof. Only on the world
@@ -55,6 +56,50 @@ namespace RexMagnum
 
         GameObject loops;
         AudioLowPassFilter loopLowPass;
+        float shore, nextShoreCheck;
+        Terrain[] terrains;
+        float nextTerrainFind;
+
+        /// <summary>0..1: how near the sea is. Three rings (10, 25, 40 m, 8 directions) around Rex: a point on
+        /// terrain under 1 m (or off every terrain: open sea) is sea. Full at 10 m, gone past 40 m; less high up
+        /// (a cliff top 30 m over the surf) and none underground (the cave tunnels).</summary>
+        float ShoreNear(Vector3 p)
+        {
+            if (p.y < -5f) return 0f;
+            if (terrains == null || terrains.Length == 0 || Time.time > nextTerrainFind)
+            {
+                nextTerrainFind = Time.time + 10f;           // zones can load later
+                terrains = Terrain.activeTerrains;
+            }
+            if (terrains == null || terrains.Length == 0) return 0f;
+            float nearest = -1f;
+            for (int ring = 0; ring < 3 && nearest < 0f; ring++)
+            {
+                float rad = ring == 0 ? 10f : ring == 1 ? 25f : 40f;
+                for (int k = 0; k < 8; k++)
+                {
+                    float ang = k * Mathf.PI / 4f;
+                    Vector3 q = p + new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
+                    if (GroundY(q) < 1f) { nearest = rad; break; }
+                }
+            }
+            if (nearest < 0f) return 0f;
+            float height = Mathf.Clamp01(1f - (p.y - 2f) / 30f);
+            return Mathf.Clamp01(1f - (nearest - 10f) / 40f) * height;
+        }
+
+        /// <summary>Terrain height at q (world y); off every terrain: -10 (the open sea).</summary>
+        float GroundY(Vector3 q)
+        {
+            foreach (var t in terrains)
+            {
+                if (t == null || t.terrainData == null) continue;
+                Vector3 o = t.transform.position, size = t.terrainData.size;
+                if (q.x < o.x || q.z < o.z || q.x > o.x + size.x || q.z > o.z + size.z) continue;
+                return t.SampleHeight(q) + o.y;
+            }
+            return -10f;
+        }
 
         AudioSource Loop(string clipName)
         {
@@ -90,7 +135,9 @@ namespace RexMagnum
             Vector3 toBeach = p - GameGuide.Zones[2].at;
             toBeach.y = 0f;
             float nearBeach = Mathf.Clamp01(1f - (toBeach.magnitude - 60f) / 90f);
-            float wantBeach = title ? 0f : 0.35f * low * nearBeach * outside;
+            // any other shore: the sea (terrain under ~1 m, or no terrain) within 40 m, sampled twice a second
+            if (Time.time > nextShoreCheck) { nextShoreCheck = Time.time + 0.5f; shore = ShoreNear(p); }
+            float wantBeach = title ? 0f : 0.35f * Mathf.Max(low * nearBeach, shore) * outside;
             float wantJungle = title ? 0f : (0.22f + 0.18f * DayNight.Night) * Mathf.Clamp01((p.y - 4f) / 10f + (1f - low) * 0.5f) * outside;
             if (beach != null) beach.volume = Mathf.MoveTowards(beach.volume, wantBeach * AudioMix.Effects, dt * 0.2f);
             if (jungle != null) jungle.volume = Mathf.MoveTowards(jungle.volume, wantJungle * AudioMix.Effects, dt * 0.2f);

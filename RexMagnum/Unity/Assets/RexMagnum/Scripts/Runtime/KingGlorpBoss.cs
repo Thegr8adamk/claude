@@ -10,7 +10,7 @@ namespace RexMagnum
     ///  - Absorbs objects as armor: loose props near him fly to his body and stick; each piece takes the hits
     ///    until heavy attacks knock it off. He re-absorbs new pieces from time to time.
     ///  - 3 phases by health: crown spikes grow each phase; phase 2 calls tourist blobs out of the slime;
-    ///    phase 3 sends slime shockwaves (jump over them) and he moves faster.
+    ///    phase 3 sends slime shockwaves (jump over them) and he moves faster. Phase 2+ spits marked slime pools around Rex.
     ///  - On death: big pop, kill cam, Rex's win line, then the ending (viral video, agent call, bar tab, "I'm back").
     ///  Saved: PlayerPrefs "RexMagnum_GlorpDefeated". Free play continues after the ending.
     /// </summary>
@@ -36,11 +36,13 @@ namespace RexMagnum
         float chargeUntil = -1f, farSince = -1f, nextVolley;
         bool charging;
         // weak-point window after each volley / charge: dizzy (stunned) for 2 s, every hit counts 1.5x
-        const float DizzyTime = 2f, DizzyFactor = 1.5f;
+        const float DizzyTime = 2f, DizzyFactor = 1.5f, DizzyVolleyRange = 30f;
         float dizzyUntil = -1f;
-        bool dizzyTold, bonusHit;
+        bool dizzyTold;
         bool Dizzy => Time.time < dizzyUntil;
-        float nextAbsorb, nextWave, nextMinions, nextLine;
+        float nextAbsorb, nextWave, nextMinions, nextLine, nextPools;
+        // slime pools (phase 2/3): 2-3 marked spots near Rex turn into burning slime for PoolTime seconds
+        const float PoolWarn = 1.1f, PoolTime = 6f, PoolRadius = 1.6f, PoolDamage = 5f, PoolTick = 0.5f;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
         AudioSource music;
 
@@ -130,6 +132,12 @@ namespace RexMagnum
                 if (Blob.LivingNear(transform.position, 30f) < 7) Minions();     // a long fight does not pile up blobs
             }
             if (phase == 3 && Time.time > nextWave) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
+            // phase 2+: slime pools spat on the ground around Rex (not while he snipes from far: the volley covers that)
+            if (phase >= 2 && Time.time > nextPools && d < 35f && !blob.IsStunned)
+            {
+                nextPools = Time.time + (phase == 3 ? 11f : 15f) + Random.Range(-1f, 1f);
+                StartCoroutine(SlimePools());
+            }
             // charge after a long shot: double speed for 3 s (the multiplier comes off again; phase 3's 1.4x stays)
             bool charge = Time.time < chargeUntil;
             if (charge != charging)
@@ -143,7 +151,7 @@ namespace RexMagnum
             if (d > blob.attackRange && d < VolleyRange)
             {
                 if (farSince < 0f) farSince = Time.time;
-                if (Time.time - farSince > VolleyAfter && Time.time > nextVolley && !blob.IsStunned)
+                if (Time.time - farSince > VolleyAfter && Time.time > nextVolley && !blob.IsStunned && !Dizzy)
                 {
                     nextVolley = Time.time + VolleyEvery + Random.Range(-0.5f, 0.5f);
                     StartCoroutine(Volley());
@@ -176,6 +184,7 @@ namespace RexMagnum
         IEnumerator PhaseChange()
         {
             Say(phase == 2 ? "Rise, my subjects!" : "NOW YOU SEE MY FINAL FORM!");
+            nextPools = Mathf.Max(nextPools, Time.time + 6f);       // not on top of the phase change and the minions
             if (crown != null)
             {
                 Vector3 a = crown.localScale, b = a * 1.35f;
@@ -230,7 +239,6 @@ namespace RexMagnum
         void OnDamaged(float amount, Vector3 point, GameObject by)
         {
             // a sniper shot from the ship approach (or any hit) starts the whole fight: phases, armor, minions
-            if (bonusHit) return;                               // our own dizzy bonus (already counted)
             float taken = amount;                               // what really counts (long shots: less)
             if (!dead && by != null && rex != null && by.transform == rex)
             {
@@ -325,6 +333,81 @@ namespace RexMagnum
             if (ring != null) Destroy(ring);
         }
 
+        /// <summary>Phase 2/3: he spits 2-3 globs that land around Rex. Orange rings mark the spots for PoolWarn s
+        /// (time to step out), then they are burning slime pools for PoolTime s: standing in one hurts every PoolTick.</summary>
+        static Material poolWarnMat;
+        IEnumerator SlimePools()
+        {
+            if (rex == null) yield break;
+            blob.Telegraph();
+            blob.Play("Spit");
+            Sfx.Play("blob_spit", transform.position, 1f, 0.8f);
+            int count = phase == 3 ? 3 : 2;
+            var spots = new List<Vector3>();
+            var marks = new List<GameObject>();
+            for (int i = 0; i < count; i++)
+            {
+                // the first lands right where Rex stands, the others a few metres around him
+                Vector3 p = rex.position;
+                if (i > 0) { Vector2 o = Random.insideUnitCircle.normalized * Random.Range(2.5f, 5f); p += new Vector3(o.x, 0f, o.y); }
+                if (!UnityEngine.AI.NavMesh.SamplePosition(p, out var nh, 3f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                var mark = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                Destroy(mark.GetComponent<Collider>());
+                Destroy(mark, PoolWarn + PoolTime + 0.5f);           // gone even if the coroutine stops (Glorp popped)
+                mark.transform.position = nh.position + Vector3.up * 0.03f;
+                mark.transform.localScale = new Vector3(0.3f, 0.01f, 0.3f);
+                var mr = mark.GetComponent<Renderer>();
+                if (poolWarnMat == null) poolWarnMat = new Material(mr.sharedMaterial) { color = new Color(1f, 0.45f, 0.1f) };   // one, kept
+                mr.sharedMaterial = poolWarnMat;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                spots.Add(nh.position);
+                marks.Add(mark);
+            }
+            if (spots.Count == 0) yield break;
+            // warning: the marks grow to the pool size and blink
+            for (float t = 0f; t < PoolWarn; t += Time.deltaTime)
+            {
+                float s = Mathf.Lerp(0.3f, PoolRadius * 2f, t / PoolWarn);
+                bool on = Mathf.Repeat(t * 6f, 1f) < 0.6f;
+                foreach (var m in marks)
+                    if (m != null) { m.transform.localScale = new Vector3(s, 0.01f, s); m.GetComponent<Renderer>().enabled = on; }
+                yield return null;
+            }
+            Color slime = blob.BaseColor();
+            foreach (var m in marks)
+            {
+                if (m == null) continue;
+                var r = m.GetComponent<Renderer>();
+                r.enabled = true;
+                r.sharedMaterial = SlimeFX.SharedSlime(slime);       // shared per colour (no new material per pool)
+                SlimeFX.Splat(m.transform.position + Vector3.up * 0.2f, Vector3.up, slime, 10);
+            }
+            Sfx.Play("blob_hit", spots[0], 0.8f);
+            var rh = rex.GetComponent<Health>();
+            var rc = rex.GetComponent<RexController>();
+            float nextTick = 0f;
+            for (float t = 0f; t < PoolTime; t += Time.deltaTime)
+            {
+                if (dead || rex == null) yield break;
+                if (Time.time >= nextTick && rh != null && !rh.IsDead)
+                {
+                    foreach (var sp in spots)
+                    {
+                        Vector3 off = rex.position - sp;
+                        if (Mathf.Abs(off.y) > 1.2f) continue;              // jumped over it / other floor
+                        off.y = 0f;
+                        if (off.sqrMagnitude > PoolRadius * PoolRadius) continue;
+                        nextTick = Time.time + PoolTick;
+                        rh.Damage(PoolDamage, rex.position, gameObject);
+                        if (rc != null && rh.LastDamageTime == Time.time && Random.value < 0.3f) rc.Slimed();
+                        break;
+                    }
+                }
+                yield return null;
+            }
+            foreach (var m in marks) if (m != null) Destroy(m);
+        }
+
         /// <summary>Rex keeps out of reach: warning glow, then 3 slime shots, a little spread and led.</summary>
         IEnumerator Volley()
         {
@@ -342,7 +425,9 @@ namespace RexMagnum
                 SlimeProjectile.Launch(mouth, target, blob.damage * 0.6f, gameObject, blob.BaseColor());
                 yield return new WaitForSeconds(0.35f);
             }
-            StartDizzy();                                           // the volley leaves him dizzy: Rex's window to close in
+            // the volley leaves him dizzy (Rex's window to close in), but only when Rex is close enough to use it:
+            // a sniper duel at range must not keep him stunned half the time
+            if (rex != null && Vector3.Distance(rex.position, transform.position) <= DizzyVolleyRange) StartDizzy();
         }
 
         /// <summary>Weak-point window: stunned-looking pause (Blob.Stun), hits count DizzyFactor times.</summary>
@@ -350,21 +435,21 @@ namespace RexMagnum
         {
             if (dead || !started || blob.IsDead) return;
             dizzyUntil = Time.time + DizzyTime;
-            blob.Stun(DizzyTime);
+            nextVolley = Mathf.Max(nextVolley, dizzyUntil + VolleyEvery + Random.Range(-0.5f, 0.5f));   // the volley timer starts after the dizzy
+            blob.Stun(DizzyTime, true);
             if (crown != null) SlimeFX.Splat(crown.position, Vector3.up, new Color(1f, 0.9f, 0.3f), 12);   // a little burst over his head
             RexTestHUD.Notice(dizzyTold ? "KING GLORP IS DIZZY!" : "KING GLORP IS DIZZY! Hit him now!", 2f);
             dizzyTold = true;
         }
 
-        /// <summary>Dizzy: the extra 50% of a hit that got through. Never the killing part (Damage would run Died twice).</summary>
+        /// <summary>Dizzy: the extra 50% of a hit that got through. Silent (no second Damaged: no double flash, sound or
+        /// reaction); never the killing part, so the hit itself runs Died the normal way.</summary>
         void DizzyBonus(float taken, Vector3 point, GameObject by)
         {
-            if (!Dizzy || bonusHit || dead) return;
+            if (!Dizzy || dead) return;
             float extra = Mathf.Min(taken * (DizzyFactor - 1f), health.Current - 1f);
             if (extra <= 0f) return;
-            bonusHit = true;                                        // the nested Damaged call must not add another bonus
-            health.Damage(extra, point, by);
-            bonusHit = false;
+            health.DamageSilent(extra, by);
         }
 
         IEnumerator Victory(GameObject by, Vector3 at)

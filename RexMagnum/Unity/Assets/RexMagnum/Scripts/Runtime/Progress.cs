@@ -198,7 +198,7 @@ namespace RexMagnum
 
         /// <summary>
         /// NEW GAME (title menu): clears counters, accomplishments, the album (list and picture files), clues, weapons,
-        /// and the factory / King Glorp / voice mail flags. Settings and key bindings stay.
+        /// and the factory / King Glorp / voice mail / checkpoint flags. Settings and key bindings stay.
         /// </summary>
         public static void ResetAll()
         {
@@ -210,6 +210,7 @@ namespace RexMagnum
             PlayerPrefs.DeleteKey(FactoryCore.SaveKey);
             PlayerPrefs.DeleteKey(KingGlorpBoss.SaveKey);
             PlayerPrefs.DeleteKey("RexMagnum_VoiceMail");      // MartyPhone: the voice mails start again
+            PlayerPrefs.DeleteKey(RexLife.SavedCheckpointKey); // the saved checkpoint: wake up in room 304 again
             PlayerPrefs.Save();
         }
     }

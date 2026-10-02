@@ -80,7 +80,7 @@ namespace RexMagnum
                 if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
                     battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
             if (!driving) return;
-            if (!locked && RMInput.Hands && !PauseMenu.Open) SetLights(!lights);
+            if (!locked && RMInput.HandsPressed && !PauseMenu.Open) SetLights(!lights);
             // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
             // pushing until 15% (not back in the seat at the first 0.1% of charge)
             if (battery <= 0f) pushMode = true;

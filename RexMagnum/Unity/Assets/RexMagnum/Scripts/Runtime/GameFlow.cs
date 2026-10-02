@@ -13,7 +13,10 @@ namespace RexMagnum
     ///  3. Rex stands next to the bed; controls are taught one hint at a time (look/walk, punch the stuck door,
     ///     pick up the beer, taunt at the mirror, camera switch, dodge, towel on the balcony rail). A hint stays until the player
     ///     does it (or a time-out), then the next one shows. Day music loops.
-    ///  4. The first fight teaches dodge, heavy (hold) and combo (3 taps) the same way, each once per save.
+    ///     The room hints end when Rex leaves the room (downstairs or along the corridor).
+    ///  4. The first fight teaches dodge (unless the room did), heavy (hold) and combo (3 taps) the same way, each once
+    ///     per save, drawn under the NEXT goal line. A returning player wakes at the saved far checkpoint.
+    ///  5. A big goal done (factory, King Glorp, bar defense): "BIG GOAL COMPLETE" banner + a short music sting.
     /// Music and sounds load from Resources/Music and Resources/Sfx when the ElevenLabs files are added
     /// (title_theme, day_resort, chaos); without them the flow still works, silently.
     /// </summary>
@@ -169,6 +172,7 @@ namespace RexMagnum
             {
                 UpdateHint();
                 CombatHints();
+                BigGoals();
                 FightMusic();
             }
             TutorialActive = state == State.Play && hint < HintCount;
@@ -225,6 +229,8 @@ namespace RexMagnum
         void UpdateHint()
         {
             if (hint >= HintCount) return;
+            // out of room 304 (downstairs, or off along the corridor): the room hints end, the goal line takes over
+            if (rex != null && LeftRoom(rex.transform.position)) { hint = HintCount; return; }
             float t = Time.time - hintTime;
             bool done;
             switch (hint)
@@ -237,7 +243,20 @@ namespace RexMagnum
                 case 5: done = (RMInput.Dodge && t > 1f) || t > 20f; break;
                 default: done = (weapons != null && weapons.Has(WeaponId.Towel)) || t > 60f; break;
             }
-            if (done) { hint++; hintTime = Time.time; }
+            if (!done) return;
+            if (hint == 5) Progress.Max("combat_tips", 1);      // the room taught dodge: the first fight starts at heavy
+            hint++; hintTime = Time.time;
+        }
+
+        // room 304 (Island.json hotel, floor 3 ~10.7 m): left when below the 2nd floor or ~18 m away on the flat
+        static readonly Vector3 Room304 = new Vector3(16f, 10.7f, -293.7f);
+
+        bool LeftRoom(Vector3 p)
+        {
+            if (p.y < 6f) return true;
+            Vector3 c = wakePoint != null ? wakePoint.position : Room304;
+            Vector3 d = p - c; d.y = 0f;
+            return d.sqrMagnitude > 18f * 18f;
         }
 
         int combatHint = -1, comboTaps;
@@ -252,8 +271,9 @@ namespace RexMagnum
             if (shown >= CombatHintCount) { combatHint = -1; return; }
             if (combatHint < 0)
             {
-                if (Blob.LivingNear(rex.transform.position, 15f) == 0) return;      // waits for a fight
+                if (!FightNear(rex.transform.position, 15f)) return;      // waits for a fight
                 combatHint = shown; combatHintTime = Time.time; comboTaps = 0; actionDownAt = -1f;
+                Sfx.PlayUI("ui_click", 0.22f, 0.8f);         // soft cue: a tip came up
             }
             float t = Time.time - combatHintTime;
             if (RMInput.ActionDown)
@@ -274,8 +294,92 @@ namespace RexMagnum
             combatHint = -1;          // the next one shows right away while the fight goes on, else at the next fight
         }
 
+        /// <summary>A living blob within r that is not in disguise (a sundress tourist strolling by is no fight yet).</summary>
+        static bool FightNear(Vector3 p, float r)
+        {
+            float r2 = r * r;
+            foreach (var b in Blob.All)
+                if (b != null && !b.IsDead && !b.Disguised && (b.transform.position - p).sqrMagnitude < r2) return true;
+            return false;
+        }
+
+        // ------------------------------------------------------------ big goals: banner + music sting
+
+        static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended" };
+        // the reward line: RexLife raises max health by 25 for the factory and King Glorp (its own notice says so)
+        static readonly string[] GoalNames = { "The blob factory is stopped.   MAX HEALTH +25", "King Glorp is popped.   MAX HEALTH +25", "The bar held. The guests are safe." };
+        AudioSource sting;
+        float bannerUntil, stingStart = -100f, nextGoalCheck;
+        string bannerLine;
+
+        /// <summary>A big goal is done: "BIG GOAL COMPLETE" + its reward line and a short music sting,
+        /// once per goal per save ("goal_banner_&lt;key&gt;"). Waits while the ending plays.</summary>
+        void BigGoals()
+        {
+            if (Time.unscaledTime < nextGoalCheck) return;
+            nextGoalCheck = Time.unscaledTime + 0.5f;
+            if (EndingSequence.Playing || Time.unscaledTime < bannerUntil) return;
+            for (int i = 0; i < GoalKeys.Length; i++)
+            {
+                if (Progress.Value(GoalKeys[i]) <= 0 || Progress.Value("goal_banner_" + GoalKeys[i]) > 0) continue;
+                Progress.Set("goal_banner_" + GoalKeys[i], 1);
+                bannerLine = GoalNames[i];
+                bannerUntil = Time.unscaledTime + 5f;
+                Sting();
+                return;
+            }
+        }
+
+        /// <summary>Goals done before this save knew banners (an old save): marked shown, no banner on load.</summary>
+        static void MarkGoalsShown()
+        {
+            foreach (var k in GoalKeys)
+                if (Progress.Value(k) > 0 && Progress.Value("goal_banner_" + k) <= 0) Progress.Set("goal_banner_" + k, 1);
+        }
+
+        /// <summary>The title theme's first ~4 s as a sting (no extra clip needed); the day / fight music dips under it.</summary>
+        void Sting()
+        {
+            var clip = Resources.Load<AudioClip>("Music/title_theme");
+            if (clip == null) return;
+            if (sting == null)
+            {
+                sting = gameObject.AddComponent<AudioSource>();
+                sting.loop = false;
+                sting.spatialBlend = 0f;
+                sting.playOnAwake = false;
+            }
+            sting.clip = clip;
+            sting.time = 0f;
+            sting.Play();
+            stingStart = Time.unscaledTime;
+        }
+
+        const float StingLength = 4f;
+
+        /// <summary>0..1: how far the sting ducks the other music (in 0.2 s, out over the sting's last second).</summary>
+        float StingDuck
+        {
+            get
+            {
+                float t = Time.unscaledTime - stingStart;
+                if (t < 0f || t > StingLength + 0.5f) return 0f;
+                return Mathf.Clamp01(t / 0.2f) * Mathf.Clamp01((StingLength + 0.5f - t) / 1f);
+            }
+        }
+
+        void UpdateSting()
+        {
+            if (sting == null || !sting.isPlaying) return;
+            float t = Time.unscaledTime - stingStart;
+            if (t > StingLength) { sting.Stop(); return; }
+            // fades out over its last 1.2 s (a cut-off song, but soft)
+            sting.volume = 0.55f * AudioMix.Music * Mathf.Clamp01((StingLength - t) / 1.2f) * AudioMix.Duck;
+        }
+
         void FightMusic()
         {
+            UpdateSting();
             if (rex == null) return;
             if (fight != null && fight.clip != null)
             {
@@ -284,12 +388,13 @@ namespace RexMagnum
                 // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
                 fightLevel = Mathf.MoveTowards(fightLevel, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
                 // AudioMix.Duck: music dips to 60% while a voice line plays (no AudioMixer asset needed)
-                fight.volume = fightLevel * AudioMix.Music * AudioMix.Duck;
+                fight.volume = fightLevel * AudioMix.Music * AudioMix.Duck * (1f - 0.8f * StingDuck);
                 if (fightLevel > 0f && !fight.isPlaying) fight.Play();
                 else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
             }
             // without the fight clip the day music still follows night, the boss and the voice duck
-            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music * AudioMix.Duck;   // night jungle music takes over
+            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music * AudioMix.Duck
+                           * (1f - 0.8f * StingDuck);   // night jungle music takes over; the big goal sting ducks it
         }
 
         IEnumerator Intro()
@@ -328,13 +433,18 @@ namespace RexMagnum
             }
             if (rex != null && wakePoint != null)
             {
+                // a returning player wakes at the last saved far checkpoint (RexLife, PlayerPrefs "rm_cp"), else in room 304
+                Vector3 wakeAt = wakePoint.position;
+                float wakeYaw = wakePoint.eulerAngles.y;
+                if (returning && RexLife.TryLoadSavedCheckpoint(out Vector3 cpAt, out float cpYaw)) { wakeAt = cpAt; wakeYaw = cpYaw; }
                 rex.Revive();
-                rex.Teleport(wakePoint.position, wakePoint.eulerAngles.y);
+                rex.Teleport(wakeAt, wakeYaw);
                 var wrig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
-                if (wrig) wrig.SetYaw(wakePoint.eulerAngles.y);
+                if (wrig) wrig.SetYaw(wakeYaw);
                 if (rex.bodyAnimator) rex.bodyAnimator.Play("Locomotion", 0, 0f);
                 if (rex.armsAnimator && rex.armsAnimator.gameObject.activeInHierarchy) rex.armsAnimator.Play("Locomotion", 0, 0f);
             }
+            MarkGoalsShown();
             state = State.Play;
             Busy = false;
             SetPlayerActive(true);
@@ -433,6 +543,22 @@ namespace RexMagnum
             GUI.color = Color.white;
         }
 
+        /// <summary>"BIG GOAL COMPLETE" across the upper middle: fades in, holds, fades out (5 s).</summary>
+        void DrawBanner(float w, float h, float s)
+        {
+            float left = bannerUntil - Time.unscaledTime;
+            float a = MenuSkin.Appear(bannerUntil - 5f, 0.35f) * Mathf.Clamp01(left / 0.8f);
+            var r = new Rect(w * 0.2f, h * 0.36f, w * 0.6f, 150 * s);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            MenuSkin.DrawPanel(r);
+            GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
+            GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            GUI.Label(new Rect(r.x, r.y + 10 * s, r.width, 80 * s), "BIG GOAL COMPLETE", MenuSkin.Title);
+            GUI.Label(new Rect(r.x, r.y + 80 * s, r.width, 56 * s), bannerLine, MenuSkin.Hint);
+            GUI.color = Color.white;
+        }
+
         int menuView = -1, hintDrawn = -1;
         float hintSince;
         float viewSince, titleSince, ua = 1f;
@@ -478,10 +604,12 @@ namespace RexMagnum
             {
                 int shownHint = hint < HintCount ? hint : HintCount + combatHint;
                 // under the HUD compass. Touch: below the top button row (centres 0.1 H from the top, radius 0.075 H,
-                // bigger if resized) and right of the top-left compass / health, clear of Pause and Jump on the right
-                var r = RMInput.LastDevice == RMInput.DeviceKind.Touch
-                    ? new Rect(w * 0.26f, h * 0.22f, w * 0.58f, 92 * s)
-                    : new Rect(w * 0.18f, 74 * s, w * 0.64f, 92 * s);
+                // bigger if resized) and right of the top-left compass / health, clear of Pause and Jump on the right.
+                // Combat tips: lower, under the NEXT goal line (it shows again after the room hints, up to 3 lines)
+                bool touch = RMInput.LastDevice == RMInput.DeviceKind.Touch, combatTip = hint >= HintCount;
+                var r = touch
+                    ? new Rect(w * 0.26f, h * (combatTip ? 0.32f : 0.22f), w * 0.58f, 92 * s)
+                    : new Rect(w * 0.18f, (combatTip ? 180 : 74) * s, w * 0.64f, 92 * s);
                 // each new hint fades in and drops 16 px into place (unscaled: slow-mo does not stretch it)
                 if (shownHint != hintDrawn) { hintDrawn = shownHint; hintSince = Time.unscaledTime; }
                 float a = MenuSkin.Appear(hintSince, 0.3f);
@@ -494,6 +622,7 @@ namespace RexMagnum
                 GUI.Label(r, hint < HintCount ? Hint(hint) : CombatHint(combatHint), MenuSkin.Hint);
                 GUI.color = Color.white;
             }
+            if (state == State.Play && Time.unscaledTime < bannerUntil && !PauseMenu.Open && !EndingSequence.Playing) DrawBanner(w, h, s);
             if (fade > 0.001f)
             {
                 GUI.color = new Color(0, 0, 0, fade);
