@@ -297,7 +297,7 @@ namespace RexMagnum.EditorTools
                     case "water":
                         m = Asset(r.name, water);
                         m.SetTexture("_NormalMap", Tex("Textures/Water_nrm.png"));
-                        if (r.water == "slime")
+                        if (r.water == "slime" || r.water == "river")
                         {
                             m.SetColor("_ShallowColor", new Color(0.45f, 1f, 0.3f, 0.55f));
                             m.SetColor("_DeepColor", new Color(0.04f, 0.3f, 0.05f, 0.95f));
@@ -305,6 +305,8 @@ namespace RexMagnum.EditorTools
                             m.SetFloat("_DepthFade", 1.5f);
                             m.SetFloat("_FoamDepth", 0.25f);
                             m.SetColor("_FoamColor", new Color(0.7f, 1f, 0.6f, 0.8f));
+                            m.SetFloat("_River", r.water == "river" ? 1f : 0f);
+                            if (r.water == "river") { m.SetFloat("_FlowSpeed", 0.25f); m.SetFloat("_NormalStrength", 0.8f); }
                         }
                         else
                         {

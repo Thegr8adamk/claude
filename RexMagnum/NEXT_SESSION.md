@@ -1,6 +1,6 @@
 # Handoff for the next Claude session (Rex Magnum)
 
-The owner chose **option B**: run Unity in the cloud to find build errors before the PC test.
+Option B (cloud Unity test) is ON HOLD: env settings only reach new sessions and the owner wants to stay in the current session. Default = option A (owner tests on PC).
 Owner writes to Claude in short messages; answer in Simplified Technical English with tables and pictures.
 Branch: push to `claude-serene-carson-m4zf28` (`git push origin HEAD:claude-serene-carson-m4zf28`).
 Brief: `RexMagnum/CLAUDE.md`. Status: `RexMagnum/README.md`. Progress log + pictures: `RexMagnum/Renders/progress/LOG.md`.
@@ -8,7 +8,7 @@ Brief: `RexMagnum/CLAUDE.md`. Status: `RexMagnum/README.md`. Progress log + pict
 ## What to do first
 0. Fast check any time (no license, ~1 min): `bash RexMagnum/Tools/compile_check.sh`. Last run 2026-10-02: 0 errors
    (editor + player pass). It finds C# errors only, not builder exceptions or looks. Run it before every push.
-1. Check the environment has `UNITY_LICENSE` (the owner's Unity_lic.ulf text) and network access to the Unity hosts
+1. Check the environment has `UNITY_LICENSE_B64` (the owner's Unity_lic.ulf as one base64 line; `UNITY_LICENSE` raw text also works) and network access to the Unity hosts
    listed in `Tools/unity_cloud_test.sh`. Never print the license.
 2. Run `bash RexMagnum/Tools/unity_cloud_test.sh` (long: editor download ~3 GB, first import 20-40 min). Run it in the
    background and watch `/tmp/unity/*.log`.
@@ -36,3 +36,4 @@ Old routine "Rex Magnum hourly build" stays off. New routine "Rex Magnum hourly 
 | Guests | `cd RexMagnum/Blender && python guests.py --only Name1,Name2` (re-export; ~3 min per guest) |
 | Rex swim clips | `python swim_export.py [--render out.png]` (no re-bake of Rex) |
 Blender previews of Rex in extreme poses can show a shirt spike from the Smooth/Solidify modifiers; the game mesh does not.
+Session 1 (Blender island work) also runs its routine "Rex Magnum hourly build" at :01. Both sessions push to this branch: always fetch + rebase before push.

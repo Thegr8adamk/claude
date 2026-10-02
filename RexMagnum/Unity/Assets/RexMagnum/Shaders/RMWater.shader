@@ -19,6 +19,7 @@ Shader "RexMagnum/Water"
         _WaveHeight ("Wave Height (m)", Float) = 0
         _WaveLength ("Wave Length (m)", Float) = 28
         _WaveFade ("Wave Fade Distance (m)", Float) = 900
+        _River ("River Mode (flow along UV v, foam from vertex colour R)", Float) = 0
     }
     SubShader
     {
@@ -43,10 +44,10 @@ Shader "RexMagnum/Water"
             CBUFFER_START(UnityPerMaterial)
                 float4 _ShallowColor, _DeepColor, _FoamColor, _Glow, _FlowDir, _NormalMap_ST;
                 float _DepthFade, _NormalTiling, _NormalStrength, _FlowSpeed, _Smoothness, _FoamDepth;
-                float _WaveHeight, _WaveLength, _WaveFade;
+                float _WaveHeight, _WaveLength, _WaveFade, _River;
             CBUFFER_END
 
-            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; };
             struct V
             {
                 float4 positionCS : SV_POSITION;
@@ -54,6 +55,8 @@ Shader "RexMagnum/Water"
                 float3 normalWS : TEXCOORD1;
                 float4 screenPos : TEXCOORD2;
                 float fog : TEXCOORD3;
+                float2 uv : TEXCOORD4;
+                float4 color : TEXCOORD5;
             };
 
             float3 Gerstner(float3 p, float2 dir, float steep, float len, inout float3 tangent, inout float3 binormal)
@@ -89,6 +92,8 @@ Shader "RexMagnum/Water"
                 o.positionCS = TransformWorldToHClip(ws);
                 o.screenPos = ComputeScreenPos(o.positionCS);
                 o.fog = ComputeFogFactor(o.positionCS.z);
+                o.uv = i.uv;
+                o.color = i.color;
                 return o;
             }
 
@@ -96,6 +101,13 @@ Shader "RexMagnum/Water"
             {
                 float2 uv = i.positionWS.xz * _NormalTiling;
                 float2 flow = normalize(_FlowDir.xy + 1e-4) * _FlowSpeed * _Time.y;
+                if (_River > 0.5)
+                {
+                    // river mesh: u = metres across, v = metres downstream; ripples stretched along the flow and
+                    // faster where the vertex colour G (slope) is high
+                    uv = i.uv * float2(_NormalTiling * 1.6, _NormalTiling * 0.5);
+                    flow = float2(0, -_FlowSpeed * (1 + i.color.g * 4) * _Time.y);
+                }
                 float3 n1 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv + flow), _NormalStrength);
                 float3 n2 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv * 1.7 - flow * 1.3 + 0.37), _NormalStrength);
                 float3 nt = normalize(float3(n1.xy + n2.xy, n1.z * n2.z));
@@ -125,6 +137,8 @@ Shader "RexMagnum/Water"
 
                 // foam where the water is shallow (shore, rocks, pool edges), broken up by the normal map
                 float foam = saturate(1 - depth / _FoamDepth) * saturate(n1.x * 2 + 0.6);
+                if (_River > 0.5)   // rapids: vertex colour R, broken into streaks by the moving normal map
+                    foam = max(foam, saturate(i.color.r * 1.6 - 0.35 + (n1.x + n2.y) * 0.8));
                 rgb = lerp(rgb, _FoamColor.rgb * (L.color * 0.8 + 0.2), foam * _FoamColor.a);
                 alpha = max(alpha, foam);
                 rgb = MixFog(rgb, i.fog);

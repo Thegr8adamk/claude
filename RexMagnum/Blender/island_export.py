@@ -44,7 +44,7 @@ BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). B
     "A_DoorWood": (4, 3.6, True),
 }
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
-WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime"}
+WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime", "A_RiverWater": "river"}
 FALL = {"A_Fall", "A_SmallFall"}
 FOLIAGE_IMG = {"PalmLeaf": "leaf_palm.png", "BroadLeaf": "leaf_broad.png", "FernLeaf": "leaf_fern.png"}
 TWO_SIDED = {"A_GrassBlade", "A_Vine", "A_Straw", "A_Curtain0", "A_Curtain1", "A_Curtain2", "A_Curtain3",
@@ -53,7 +53,7 @@ REMAP = {"TerrainHQ": "A_Rock"}
 SKIP_MAT = {"Mist"}
 LOD1_DROP = ("Straw", "Curtain", "Bed", "Chair", "Table", "Towel", "Lamp", "Stool", "Leg", "Bottle", "Slat",
              "Ladder", "Rung", "Vine", "Sandbag", "RailPost", "Screw", "WhiteWater", "Text", "Sign", "Room304")
-ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
+ASSETS = ["Asset_Hotel", "Asset_Room304", "Asset_Golf", "Asset_GolfCart", "Asset_JungleFalls", "Asset_RiverRocks", "Asset_PoolArea", "Asset_DiveShop", "Asset_TikiBar", "Asset_BeachProps", "Asset_Pier",
           "Asset_Ruins", "Asset_Cave", "Asset_Ship", "Asset_Waterfall"]
 
 
@@ -498,7 +498,14 @@ def export_assets(mats_used, names=None):
     # slime river (world mesh)
     river = bpy.data.objects.get("SlimeRiver")
     if river:
-        ob = bpy.data.objects.new("River_LOD0", joined_mesh([river], "River_LOD0", mats_used))
+        # keep the river's own UVs (metres across / downstream) and vertex colours (foam, speed): no box UV
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = bpy.data.meshes.new_from_object(river.evaluated_get(dg), depsgraph=dg)
+        me.transform(river.matrix_world)
+        me.name = "River_LOD0"
+        for mt in me.materials:
+            mats_used.add(mat_name(mt))
+        ob = bpy.data.objects.new("River_LOD0", me)
         tmp.objects.link(ob)
         export_fbx([ob], os.path.join(BLD, "River.fbx"))
         rows.append(dict(name="River", fbx="Buildings/River.fbx", tris=len(ob.data.polygons)))
@@ -658,12 +665,20 @@ def rebuild_assets(names, res):
         off = (-160.0, 228.0, IA.TUNNEL_Z)
         extra["tunnels"] = {k: [[p[0] + off[0], p[1] + off[1], p[2] + off[2]] for p in v] for k, v in mk.items()}
         return c
+    falls_cache = []
+
+    def falls_builder(m_):          # built once: RiverRocks needs the fall spots too
+        if not falls_cache:
+            falls_cache.append(IA.jungle_falls(m_, ha, I.heightmap()[3]))
+        return falls_cache[0]
     builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
                     TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship,
-                    Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder)
+                    Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder,
+                    JungleFalls=lambda m_: falls_builder(m_)[0],
+                    RiverRocks=lambda m_: IA.river_rocks(m_, ha, I.heightmap()[3], skip=[f[0] for f in falls_builder(m_)[1]]))
     for n in names:
         coll = builders[n](m)
-        if n in ("Golf", "GolfCart"):
+        if n in ("Golf", "GolfCart", "JungleFalls", "RiverRocks"):
             pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
         elif n == "Ruins":           # same placement as build_island_v2: on the highest ground under the temple
             from mathutils import Matrix

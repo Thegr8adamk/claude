@@ -2,14 +2,17 @@
 # Rex Magnum - install the Unity 6 Linux editor in the cloud session, activate it with the license in $UNITY_LICENSE
 # (the text of the owner's Unity_lic.ulf, stored as an environment variable - never in the repo), make a URP project,
 # copy Assets/RexMagnum in, and run the builders in batch mode. Logs: /tmp/unity/*.log
-# Needs network access to: download.unity3d.com, public-cdn.cloud.unity3d.com, license.unity3d.com,
+# Needs network access (Custom + defaults) to: *.unity3d.com, *.unity.com - i.e. download.unity3d.com, public-cdn.cloud.unity3d.com, license.unity3d.com,
 # core.cloud.unity3d.com, services.api.unity.com, packages.unity.com, download.packages.unity.com
 set -euo pipefail
 VERSION_PREFIX="${UNITY_VERSION:-6000.0}"
 ROOT=/tmp/unity
 mkdir -p "$ROOT"
 cd "$ROOT"
-if [ -z "${UNITY_LICENSE:-}" ]; then echo "UNITY_LICENSE is not set (environment settings)"; exit 2; fi
+# UNITY_LICENSE_B64 = the .ulf file as one base64 line (safe in the .env box); UNITY_LICENSE = the raw text, quoted
+if [ -n "${UNITY_LICENSE_B64:-}" ]; then UNITY_LICENSE=$(printf "%s" "$UNITY_LICENSE_B64" | tr -d ' \r\n' | base64 -d); fi
+if [ -z "${UNITY_LICENSE:-}" ]; then echo "UNITY_LICENSE_B64 / UNITY_LICENSE is not set (environment settings)"; exit 2; fi
+case "$UNITY_LICENSE" in *"</root>"*) ;; *) echo "License text is incomplete (no </root>): re-copy it"; exit 2;; esac
 
 # 1. find + download the newest Linux editor for the version prefix
 if [ ! -x "$ROOT/Editor/Unity" ]; then
