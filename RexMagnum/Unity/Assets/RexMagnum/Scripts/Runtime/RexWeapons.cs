@@ -146,6 +146,9 @@ namespace RexMagnum
             if (prefab == null) return;
             heldBody = Attach(prefab, controller.bodyAnimator);
             heldArms = Attach(prefab, controller.armsAnimator);
+            bodyScale = heldBody ? heldBody.transform.localScale : Vector3.one;
+            armsScale = heldArms ? heldArms.transform.localScale : Vector3.one;
+            drawT = 0f;                                        // take out: grows into the hand
             UpdateVisibility();
         }
 
@@ -178,11 +181,20 @@ namespace RexMagnum
             return go;
         }
 
+        // brief section 5: take out / put away. The weapon grows into the hand in 0.2 s and shrinks away when the
+        // hands go down (a short procedural move; the body animations stay as they are).
+        float drawT = 1f;
+        Vector3 bodyScale = Vector3.one, armsScale = Vector3.one;
+        const float DrawTime = 0.2f;
+
         void UpdateVisibility()
         {
             bool show = !controller.HandsDown;
-            if (heldBody) heldBody.SetActive(show);
-            if (heldArms) heldArms.SetActive(show);
+            drawT = Mathf.MoveTowards(drawT, show ? 1f : 0f, Time.deltaTime / DrawTime);
+            float k = drawT * drawT * (3f - 2f * drawT);
+            bool on = drawT > 0.01f;
+            if (heldBody) { heldBody.SetActive(on); heldBody.transform.localScale = bodyScale * Mathf.Max(0.01f, k); }
+            if (heldArms) { heldArms.SetActive(on); heldArms.transform.localScale = armsScale * Mathf.Max(0.01f, k); }
         }
 
         // ---------------------------------------------------------------- input

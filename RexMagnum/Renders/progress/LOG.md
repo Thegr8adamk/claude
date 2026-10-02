@@ -34,3 +34,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 03:20 | On-screen button names follow the device used last (brief §7): keyboard shows your remapped keys, controller shows Xbox names, phone shows touch button names | (code only) |
 | 2026-10-02 03:40 | Controller buttons can be remapped (brief §7): Pause > Controls > CONTROLLER BUTTONS, swap on conflict, reset; saved like the keyboard set | (code only) |
 | 2026-10-02 01:40 | Kill cam now plays on the last blob of a group for every weapon (brief §8); fixed a count that kept dead blobs "alive" for ~1 s, so it never fired before | (code only) |
+| 2026-10-02 02:35 | Weapons: take out / put away (brief §5) - a new weapon grows into the hand in 0.2 s; hands down shrinks it away | (code only) |
