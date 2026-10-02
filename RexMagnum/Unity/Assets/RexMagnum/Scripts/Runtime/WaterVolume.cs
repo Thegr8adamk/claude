@@ -16,6 +16,15 @@ namespace RexMagnum
         static readonly RaycastHit[] hits = new RaycastHit[8];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void Init()
+        {
+            // NEW GAME reloads the scene: the old areas would point at the old water. -= first: never subscribed twice.
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            Scan();
+        }
+        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m) => Scan();
+
         public static void Scan()
         {
             areas.Clear();

@@ -483,6 +483,19 @@ def p_push(P, t):
         P.fist(side, 0.2)
 
 
+def p_dodge(P, t):
+    """Dodge: a quick duck-and-lunge sideways out of harm's way, forearm up over the face (not a graceful roll)."""
+    k = math.sin(math.pi * min(1.0, t * 1.15))            # 0 -> 1 -> 0 over the move
+    P.leg("Left", 35 * k, 70 * k, -15 * k, spread=0.14 + 0.08 * k)
+    P.leg("Right", 10 * k, 45 * k, -5 * k, spread=0.14 + 0.1 * k)
+    P.hips((0.12 * k, 0, -0.32 * k), pitch=22 * k, roll=-12 * k)
+    P.spine(bend=30 * k, side=-10 * k)
+    P.head(nod=-18 * k, tilt=10 * k)
+    P.arm_dirs("Right", d(-0.3, -0.5, 0.6 * k + 0.1), d(0.6, -0.4, 0.7))        # forearm over the face
+    P.arm_dirs("Left", d(0.6, 0.2, -0.6), d(0.3, -0.3, -0.9))                   # other arm out for balance
+    P.fist("Right", 0.6)
+
+
 def p_limp(P, t):
     """Low health: limping walk. The right leg stays stiff, the body dips on it, left hand on the lower back."""
     for side, ph in (("Left", 0.0), ("Right", 0.5)):
@@ -608,6 +621,7 @@ ACTIONS = [
     ("Rex_Push", 1.6, p_push, True),
     ("Rex_Limp", 1.4, p_limp, True),
     ("Rex_Victory", 2.2, p_victory, False),
+    ("Rex_Dodge", 0.45, p_dodge, False),
     ("Rex_Hit", 0.5, p_hit, False),
     ("Rex_Slip", 1.6, p_slip, False),
     ("Rex_Death", 1.6, p_death, False),

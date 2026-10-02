@@ -29,6 +29,8 @@ namespace RexMagnum
         public static bool Fighting { get; private set; }
         int phase = 1;
         float lastHitByRex = -999f;
+        const float LongShotRange = 45f, LongShotFactor = 0.35f;
+        bool longShotTold;
         float nextAbsorb, nextWave, nextMinions, nextLine;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
         AudioSource music;
@@ -108,6 +110,8 @@ namespace RexMagnum
             for (int i = armor.Count - 1; i >= 0; i--) if (armor[i].t == null) armor.RemoveAt(i);
         }
 
+        GUIStyle barStyle;
+
         void OnGUI()
         {
             if (!started || dead) return;
@@ -118,7 +122,9 @@ namespace RexMagnum
             GUI.color = new Color(1f, 0.8f, 0.15f);
             GUI.DrawTexture(new Rect(r.x + 3, r.y + 3, (r.width - 6) * health.Fraction, r.height - 6), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            var st = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = (int)(18 * s) };
+            if (barStyle == null) barStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            barStyle.fontSize = (int)(18 * s);
+            var st = barStyle;                                  // made once: no new GUIStyle per OnGUI call
             GUI.Label(new Rect(r.x, r.y - 26 * s, r.width, 24 * s), $"KING GLORP   {(armor.Count > 0 ? $"ARMOR x{armor.Count}" : "")}", st);
         }
 
@@ -177,10 +183,24 @@ namespace RexMagnum
         void OnDamaged(float amount, Vector3 point, GameObject by)
         {
             // a sniper shot from the ship approach (or any hit) starts the whole fight: phases, armor, minions
+            float taken = amount;                               // what really counts (long shots: less)
             if (!dead && by != null && rex != null && by.transform == rex)
             {
                 lastHitByRex = Time.time;
                 if (!started) StartFight();
+                // his armour soaks long shots: from beyond 45 m only 35% counts (no sniping him from the approach).
+                // Health has no damage hook, so the rest is given back (Damaged runs before the death check: works for a last shot too)
+                if (Vector3.Distance(rex.position, transform.position) > LongShotRange)
+                {
+                    health.Heal(amount * (1f - LongShotFactor));
+                    taken = amount * LongShotFactor;
+                    if (!longShotTold)
+                    {
+                        longShotTold = true;
+                        RexTestHUD.Notice("His armour soaks long shots: get closer than 45 m", 4f);
+                        RexVoice.Subtitle?.Invoke("REX: He's soaking it up. I need to get closer.");
+                    }
+                }
             }
             if (armor.Count == 0 || dead) return;
             // the nearest armor piece takes the hit (health is given back); heavy hits knock it off
@@ -192,9 +212,9 @@ namespace RexMagnum
                 if (dd < bd) { bd = dd; best = i; }
             }
             if (bd > 3f) return;
-            health.Heal(amount * 0.8f);
+            health.Heal(taken * 0.8f);
             var (t, hp) = armor[best];
-            hp -= amount;
+            hp -= taken;
             if (hp <= 0f && t != null)
             {
                 t.SetParent(null, true);
@@ -231,6 +251,7 @@ namespace RexMagnum
             Destroy(ring.GetComponent<Collider>());
             Destroy(ring, 3f);          // the coroutine stops if Glorp pops mid-wave: do not leave the ring behind
             ring.transform.position = transform.position + Vector3.up * 0.05f;
+            Sfx.Play("shockwave", transform.position);
             var mr = ring.GetComponent<Renderer>();
             mr.material.color = new Color(1f, 0.85f, 0.2f);
             bool hit = false;

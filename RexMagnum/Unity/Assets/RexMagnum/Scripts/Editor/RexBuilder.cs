@@ -168,6 +168,14 @@ namespace RexMagnum.EditorTools
                 EditorUtility.SetDirty(m);
                 result[r.name] = m;
             }
+            // iris map from Blender/eye_texture.py (the Blender iris is shader nodes, the FBX eye was blank grey)
+            var eyeTex = AssetDatabase.LoadAssetAtPath<Texture2D>(Root + "/Characters/Guests/Textures/Eye_BC.png");
+            if (eyeTex != null && result.TryGetValue("Rex_Eye", out var eye))
+            {
+                eye.SetTexture("_BaseMap", eyeTex);
+                eye.SetColor("_BaseColor", Color.white);
+                EditorUtility.SetDirty(eye);
+            }
             AssetDatabase.SaveAssets();
             return result;
         }
@@ -220,7 +228,7 @@ namespace RexMagnum.EditorTools
         /// <summary>Swim clips (Rex_Tread, Rex_Paddle) come in a small extra FBX (Blender/swim_export.py):
         /// armature only, Humanoid with Rex's own avatar, so they retarget exactly like his other clips.</summary>
         /// <summary>Clips in Rex_Swim.fbx (Blender/swim_export.py EXTRA).</summary>
-        static readonly string[] ExtraClips = { "Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive", "Rex_Push", "Rex_Limp", "Rex_Victory" };
+        static readonly string[] ExtraClips = { "Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive", "Rex_Push", "Rex_Limp", "Rex_Victory", "Rex_Dodge" };
 
         static void ImportSwimClips()
         {
@@ -273,7 +281,7 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("Push", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Hurt", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Dead", AnimatorControllerParameterType.Bool);     // a hit or a taunt must not stand a dead Rex up
-            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing", "Victory" };
+            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing", "Victory", "Dodge" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
             var layers = ac.layers;
@@ -285,7 +293,7 @@ namespace RexMagnum.EditorTools
             tree.blendParameter = "Speed";
             tree.useAutomaticThresholds = false;
             tree.AddChild(Clip("Rex_Idle"), 0f);
-            tree.AddChild(Clip("Rex_Walk"), 2.2f);
+            tree.AddChild(Clip("Rex_Walk"), 3.0f);          // = walkSpeed: the feet do not slide
             tree.AddChild(Clip("Rex_Run"), 6.0f);
             sm.defaultState = loco;
 
@@ -372,6 +380,7 @@ namespace RexMagnum.EditorTools
                 { "Whip", "Rex_Whip" }, { "Taunt", "Rex_Taunt" }, { "Photo", "Rex_Photo" }, { "Hit", "Rex_Hit" },
                 { "Slip", "Rex_Slip" }, { "Death", "Rex_Death" }, { "Comb", "Rex_Comb" },
                 { "Throw", "Rex_Throw" }, { "Stab", "Rex_Stab" }, { "GolfSwing", "Rex_GolfSwing" }, { "Victory", "Rex_Victory" },
+                { "Dodge", "Rex_Dodge" },          // quick sidestep / roll (Dodge key), 0.45 s
             };
             foreach (var kv in map)
             {
@@ -415,6 +424,8 @@ namespace RexMagnum.EditorTools
                 if (Vector3.Dot(fwd, parent != null ? parent.forward : Vector3.forward) < 0f)
                     go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f) * go.transform.localRotation;
             }
+            // UV-less Blender eyeballs -> spheres with iris UVs (same as the guests; seen in mirrors / kill cams)
+            GuestBuilder.EyeMeshes(go, parent != null ? parent.forward : Vector3.forward, Path.GetFileNameWithoutExtension(fbx), Mats);
             return go;
         }
 

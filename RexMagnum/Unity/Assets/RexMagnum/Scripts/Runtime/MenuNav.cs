@@ -7,6 +7,7 @@ namespace RexMagnum
     /// Menu navigation with keyboard and controller (title screen, settings, pause menu). Works while the game is
     /// paused (unscaled time). Up/Down: arrows, W/S, D-pad, left stick (held = repeats). Left/Right: change a value.
     /// OK: Enter, Space, A. Back: Esc, Backspace, B. Page: Q/E or LB/RB.
+    /// Every move, confirm and back clicks (Sfx ui_click, Click()): the menus' common sound.
     /// </summary>
     public static class MenuNav
     {
@@ -40,6 +41,7 @@ namespace RexMagnum
             if (d != lastDir) { dir = d; nextRepeat = Time.unscaledTime + 0.4f; }
             else if (d != 0 && Time.unscaledTime > nextRepeat) { dir = d; nextRepeat = Time.unscaledTime + 0.09f; }
             lastDir = d;
+            if (dir != 0) Click();
         }
 
         public static bool Up { get { Poll(); return dir == 1; } }
@@ -56,9 +58,37 @@ namespace RexMagnum
         public static bool PagePrev => (K != null && K[Key.Q].wasPressedThisFrame) || (G != null && G.leftShoulder.wasPressedThisFrame);
         public static bool PageNext => (K != null && K[Key.E].wasPressedThisFrame) || (G != null && G.rightShoulder.wasPressedThisFrame);
         /// <summary>The press opened something: no other menu reacts to it this frame.</summary>
-        public static void Consume() => consumedFrame = Time.frameCount;
+        public static void Consume() { consumedFrame = Time.frameCount; Click(); }      // a confirm or back: click
         public static bool Consumed => consumedFrame == Time.frameCount;
         /// <summary>A controller or keyboard was used for the menu last (show the selection frame).</summary>
         public static bool PadOrKeys => RMInput.LastDevice != RMInput.DeviceKind.Touch;
+
+        // ------------------------------------------------------------ menu sound
+
+        static AudioSource clickSrc;
+        static int clickFrame = -1;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { clickSrc = null; clickFrame = -1; consumedFrame = -1; frame = -1; }   // editor with Domain Reload off
+
+        /// <summary>The menu click (Sfx ui_click), quiet, once per frame. 2D (at the listener) and it plays while the
+        /// pause menu has AudioListener.pause on (ignoreListenerPause); audio does not follow Time.timeScale.</summary>
+        public static void Click()
+        {
+            if (clickFrame == Time.frameCount) return;
+            clickFrame = Time.frameCount;
+            var clip = Sfx.Get("ui_click");
+            if (clip == null) return;
+            if (clickSrc == null)
+            {
+                var go = new GameObject("MenuClick");
+                Object.DontDestroyOnLoad(go);
+                clickSrc = go.AddComponent<AudioSource>();
+                clickSrc.playOnAwake = false;
+                clickSrc.spatialBlend = 0f;
+                clickSrc.ignoreListenerPause = true;
+            }
+            clickSrc.PlayOneShot(clip, 0.35f * AudioMix.Effects);
+        }
     }
 }

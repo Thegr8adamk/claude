@@ -25,7 +25,17 @@ namespace RexMagnum
         float startYaw;
         bool lowSaid;      // the low-health line once per drop below 25 %
 
-        void Update() { if (lowSaid && health.Fraction > 0.5f) lowSaid = false; }
+        void Update()
+        {
+            if (lowSaid && health.Fraction > 0.5f) lowSaid = false;
+            // slow regen out of the fight: +2 HP/s after 6 s without damage and no living blob within 15 m
+            // (food still matters in a fight; a long walk does not leave Rex at 10 HP). Blob check twice a second.
+            if (health.IsDead || health.Fraction >= 1f || Time.time - health.LastDamageTime < 6f) return;
+            if (Time.time > nextCalmCheck) { nextCalmCheck = Time.time + 0.5f; calm = Blob.LivingNear(transform.position, 15f) == 0; }
+            if (calm) health.Heal(2f * Time.deltaTime);       // Heal clamps at max
+        }
+        float nextCalmCheck;
+        bool calm;
 
         void Awake()
         {

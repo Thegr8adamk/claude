@@ -28,9 +28,16 @@ namespace RexMagnum
             if (!IsDead) Current = Mathf.Min(maxHealth, Current + amount);
         }
 
+        float invulnerableUntil;
+        /// <summary>No damage for a moment (Rex's dodge).</summary>
+        public void Invulnerable(float seconds) => invulnerableUntil = Mathf.Max(invulnerableUntil, Time.time + seconds);
+        /// <summary>Time of the last damage taken (health regen waits after a hit).</summary>
+        public float LastDamageTime { get; private set; } = -999f;
+
         public void Damage(float amount, Vector3 point, GameObject attacker = null)
         {
-            if (IsDead || amount <= 0f) return;
+            if (IsDead || amount <= 0f || Time.time < invulnerableUntil) return;
+            LastDamageTime = Time.time;
             Current = Mathf.Max(0f, Current - amount);
             Damaged?.Invoke(amount, point, attacker);
             if (Current <= 0f)

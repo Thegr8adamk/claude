@@ -38,6 +38,8 @@ def main():
         c = bpy.data.collections.get(cn)
         if c:
             c.hide_render = True
+    for ob in sc.objects:              # bakes use a lone plane: keep the 26 MB island out of every bake sync
+        ob.hide_render = True
     import island_assets as IA
     IA.M()
     if bpy.data.materials.get("A_CaveRock") is None:      # lives in the CaveTunnels asset (made by --rebuild)

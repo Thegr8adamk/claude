@@ -287,21 +287,23 @@ namespace RexMagnum
             busyUntil = Time.time + (heavy ? 0.75f : 0.42f);
             controller.FaceAimFor(heavy ? 0.75f : 0.42f);
             StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f));
-            // a whoosh on every swing: the weapon's own sound, else the golf swing pitched up (short and light)
-            string swing = d.id == WeaponId.Towel ? "towel_crack" : "golf_swing";
-            float pitch = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub ? 1f : heavy ? 1.35f : 1.7f;
-            float vol = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub ? 1f : heavy ? 0.55f : 0.35f;
+            // a whoosh on every swing: the towel and golf club have their own sound, the rest a plain swing
+            // (lower and louder for a heavy attack)
+            bool own = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub;
+            string swing = d.id == WeaponId.Towel ? "towel_crack" : d.id == WeaponId.GolfClub ? "golf_swing" : "swing";
+            float pitch = own ? 1f : heavy ? 0.85f : 1.1f;
+            float vol = own ? 1f : heavy ? 0.8f : 0.55f;
             StartCoroutine(PlayLater(swing, heavy ? 0.4f : 0.12f, vol, pitch));
         }
 
-        /// <summary>Heavy hit: the game freezes for 60 ms (real time) so the hit lands. Skipped while the pause menu,
-        /// kill cam or weapon wheel owns the time scale, and only undone if nobody took it over meanwhile.</summary>
-        IEnumerator HitStop()
+        /// <summary>A hit lands: the game freezes for a moment (real time; heavy 60 ms, light 25 ms). Skipped while the
+        /// pause menu, kill cam or weapon wheel owns the time scale, and only undone if nobody took it over meanwhile.</summary>
+        IEnumerator HitStop(float seconds)
         {
             const float stopScale = 0.02f;
             if (KillCam.Active || PauseMenu.Open || !Mathf.Approximately(Time.timeScale, 1f)) yield break;
             Time.timeScale = stopScale;
-            yield return new WaitForSecondsRealtime(0.06f);
+            yield return new WaitForSecondsRealtime(seconds);
             if (Mathf.Approximately(Time.timeScale, stopScale)) Time.timeScale = 1f;
         }
 
@@ -346,16 +348,18 @@ namespace RexMagnum
                             d.id == WeaponId.Fists ? KillCam.Style.Fist : KillCam.Style.Orbit);
                     KillLine(d, blob, KillCam.Active || (heavy && d.id == WeaponId.GolfClub));   // golf fling: always a line
                 }
-                if (heavy && blob != null)
+                if (blob != null)          // light hits get a smaller kick too (the jab should not feel like air)
                 {
-                    if (cameraRig != null) cameraRig.Shake(0.18f);
-                    StartCoroutine(HitStop());
+                    if (cameraRig != null) cameraRig.Shake(heavy ? 0.18f : 0.06f);
+                    StartCoroutine(HitStop(heavy ? 0.06f : 0.025f));
+                    if (heavy) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
                     Sfx.Play("bottle_break", c);
                     Progress.Add("bottle_breaks");
                     owned.Remove(WeaponId.Bottle);
+                    SaveInventory();                       // the intact bottle must not come back after a reload
                     if (Has(WeaponId.BottleBroken)) Equip(WeaponId.BottleBroken);   // Give only equips a new weapon
                     else Give(WeaponId.BottleBroken);
                     SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
@@ -371,15 +375,14 @@ namespace RexMagnum
             if (Ammo(d.id) <= 0)
             {
                 nextShot = Time.time + 0.4f;
-                // dry fire: a short, quiet, high click (the start of the shot sound)
-                var click = Sfx.Play("pistol", transform.position, 0.12f, 2.4f);
-                if (click != null) Destroy(click.gameObject, 0.05f);
+                Sfx.Play("dryfire", transform.position, 0.6f);      // empty: click
                 return;
             }
             ammo[d.id]--;
             SaveInventory();
             nextShot = Time.time + (d.id == WeaponId.Sniper ? 1.2f : d.id == WeaponId.Harpoon ? 1.0f : 0.25f);
             controller.FaceAimFor(0.6f);
+            RMInput.Rumble(0.2f, 0.4f, 0.08f);
             Sfx.Play(d.id == WeaponId.Sniper ? "sniper" : d.id == WeaponId.Harpoon ? "harpoon" : "pistol", transform.position);
             Vector3 target = cameraRig.AimPoint(d.reach);
             Transform muzzle = MuzzleOf(cameraRig.Mode == RexCameraRig.CameraMode.FirstPerson ? heldArms : heldBody);

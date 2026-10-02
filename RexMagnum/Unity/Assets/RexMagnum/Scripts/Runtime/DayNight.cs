@@ -20,7 +20,7 @@ namespace RexMagnum
         public static float Night { get; private set; }
         float baseSun, baseAmbient, baseFog, baseExposure;
         Material sky;
-        float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f;
+        float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f, glowNight = -1f;
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
         AudioSource nightMusic;
@@ -83,10 +83,15 @@ namespace RexMagnum
             RenderSettings.fogDensity = baseFog * Mathf.Lerp(1.6f, 1f, day);
             if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(0.12f, baseExposure, day));
             foreach (var l in nightLights) if (l != null) l.enabled = Night > 0.3f;
-            foreach (var b in Blob.All) if (b != null) b.SetNightGlow(Night);
+            // the glow only when Night really changed (a property block write per blob per frame added up); new blobs set it in Start
+            if (Mathf.Abs(Night - glowNight) > 0.01f || (Night == 0f && glowNight != 0f))      // and exactly off by day
+            {
+                glowNight = Night;
+                foreach (var b in Blob.All) if (b != null) b.SetNightGlow(Night);
+            }
             if (spawners != null)
                 foreach (var sp in spawners)
-                    if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 2.5f, Night) * sp.factoryScale));
+                    if (sp != null) sp.maxAlive = Mathf.Max(1, Mathf.RoundToInt(sp.baseMax * Mathf.Lerp(1f, 1.8f, Night) * sp.factoryScale));
             if (nightMusic != null) nightMusic.volume = Mathf.MoveTowards(nightMusic.volume, Night * 0.5f * AudioMix.Music, Time.deltaTime * 0.1f);
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)

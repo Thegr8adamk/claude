@@ -51,6 +51,8 @@ BAKE = {   # material -> (tile width m, tile height m, bake on a wall plane?). B
 UV_OWN = {"A_JungleFall"}          # baked in the mesh's own UV space (0..1 = one tile), not metres
 # plain materials get a fine noise bump at bake time so their normal map is not flat: name -> (noise scale, strength)
 MICRO_BUMP = {"A_Trim": (40, 0.15), "A_Aluminum": (60, 0.08), "A_Cushion": (25, 0.3), "A_SignBoard": (30, 0.15)}
+NRM_TARGET = {"A_Marble": 0.04, "A_Aluminum": 0.04, "A_Trim": 0.05, "A_SignBoard": 0.05, "A_Glass": 0.0,
+              "A_CorridorPaper": 0.05, "A_JungleFall": 0.15, "T_Sand": 0.1, "T_WetSand": 0.08}   # rms normal slope
 BUMP_DIST = 0.02     # Blender 4.2+ creates Bump nodes with Distance 0.001 (was 1.0): far too flat to bake
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
 WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime", "A_RiverWater": "river"}
@@ -193,6 +195,11 @@ def bake_material(mat, size, wall, res, name=None):
     rough = _tileable(results["rough"])[..., 0]
     nrm = _tileable(results["nrm"])
     v = nrm[..., :3] * 2 - 1
+    v /= np.linalg.norm(v, axis=-1, keepdims=True) + 1e-6
+    # procedural bumps bake very shallow (a few % slope): lift the slopes to a visible target, max 10x
+    target = NRM_TARGET.get(name, 0.12)
+    sd = float(np.sqrt((v[..., :2] ** 2).mean()))
+    v[..., :2] *= float(np.clip(target / (sd + 1e-6), 1.0, 10.0))
     v /= np.linalg.norm(v, axis=-1, keepdims=True) + 1e-6
     nrm[..., :3] = v * 0.5 + 0.5
     nrm[..., 3] = 1

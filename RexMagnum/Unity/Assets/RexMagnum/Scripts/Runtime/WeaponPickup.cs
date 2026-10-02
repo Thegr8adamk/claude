@@ -40,7 +40,13 @@ namespace RexMagnum
             transform.position = basePos + Vector3.up * (0.25f + Mathf.Sin(Time.time * 2f) * 0.05f);
             transform.Rotate(0, 60f * Time.deltaTime, 0, Space.World);
             glow.intensity = 1.2f + Mathf.Sin(Time.time * 3f) * 0.4f;
-            if (player == null) player = GameObject.FindGameObjectWithTag("Player");     // found once, not every frame
+            if (player == null)
+            {
+                player = GameObject.FindGameObjectWithTag("Player");     // found once, not every frame
+                // a weapon kept from the last session (saved inventory): its world copy is gone, so a restart gives no free ammo
+                var pw = player != null ? player.GetComponent<RexWeapons>() : null;
+                if (!ammoOnly && pw != null && pw.Has(weapon)) { Destroy(gameObject); return; }
+            }
             var p = player;
             if (p == null) return;
             // flat distance (a pickup on a table or a rail is higher than Rex's feet) plus a height window

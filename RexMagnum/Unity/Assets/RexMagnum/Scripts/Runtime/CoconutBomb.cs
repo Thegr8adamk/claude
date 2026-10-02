@@ -75,6 +75,14 @@ namespace RexMagnum
             flash.range = 10f;
             flash.intensity = 8f;
             Destroy(flash.gameObject, 0.15f);
+            Sfx.Play("coconut_boom", p);
+            // close to Rex: the controller kicks (and the camera, a little)
+            if (owner != null && Vector3.Distance(owner.transform.position, p) < 10f)
+            {
+                RMInput.Rumble(0.8f, 1f, 0.3f);
+                var rig = owner.GetComponent<RexController>();
+                if (rig != null && rig.cameraRig != null) rig.cameraRig.Shake(0.25f);
+            }
             if (killed) RexVoice.Say(owner, "Coconut");
             if (kills >= 3) Progress.Add("coconut_multi");
             KillCam.CoconutDone(killed);

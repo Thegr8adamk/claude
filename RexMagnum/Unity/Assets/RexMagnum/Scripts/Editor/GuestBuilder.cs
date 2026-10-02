@@ -72,7 +72,9 @@ namespace RexMagnum.EditorTools
                 var r = human ? an.GetBoneTransform(HumanBodyBones.RightUpperArm) : null;
                 if (l != null && r != null && Vector3.Dot(Vector3.Cross(r.position - l.position, Vector3.up), Vector3.forward) < 0f)
                     inst.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                EyeMeshes(inst, human ? an.GetBoneTransform(HumanBodyBones.Head) : null, g.name);
+                // both eyes look where the body faces (the same right-arm x up test as the flip above)
+                var face = l != null && r != null ? Vector3.Cross(r.position - l.position, Vector3.up) : root.transform.forward;
+                EyeMeshes(inst, face.sqrMagnitude > 1e-6f ? face.normalized : root.transform.forward, g.name);
                 var agent = root.AddComponent<NavMeshAgent>();
                 agent.radius = 0.3f;
                 agent.height = 1.75f;
@@ -94,7 +96,7 @@ namespace RexMagnum.EditorTools
         /// <summary>The Blender eyeballs are UV-less spheres (iris came from shader nodes, so they showed blank grey).
         /// Swap in a sphere of the same size whose UVs put the front pole (looking forward) at the centre of
         /// Textures/Eye_BC.png (iris + pupil + highlight), with more texels on the visible front half.</summary>
-        static void EyeMeshes(GameObject inst, Transform head, string who)
+        public static void EyeMeshes(GameObject inst, Vector3 facing, string who, string folder = Prefabs)
         {
             int k = 0;
             foreach (var mf in inst.GetComponentsInChildren<MeshFilter>(true))
@@ -103,15 +105,7 @@ namespace RexMagnum.EditorTools
                 if (mf.sharedMesh == null || mr == null || mr.sharedMaterial == null || mr.sharedMaterial.name != "Rex_Eye") continue;
                 var b = mf.sharedMesh.bounds;
                 float rad = Mathf.Max(b.extents.x, Mathf.Max(b.extents.y, b.extents.z));
-                // forward = from the head bone to the eye, flattened; fall back to the character's forward
-                Vector3 fw = inst.transform.forward;
-                if (head != null)
-                {
-                    var d = mf.transform.TransformPoint(b.center) - head.position;
-                    d.y = 0f;
-                    if (d.sqrMagnitude > 1e-6f) fw = d.normalized;
-                }
-                Vector3 f = mf.transform.InverseTransformDirection(fw).normalized;
+                Vector3 f = mf.transform.InverseTransformDirection(facing).normalized;     // same for both eyes (no wall-eye)
                 Vector3 up = Vector3.ProjectOnPlane(mf.transform.InverseTransformDirection(Vector3.up), f).normalized;
                 Vector3 right = Vector3.Cross(up, f);
                 const int rings = 24, segs = 32;
@@ -146,9 +140,10 @@ namespace RexMagnum.EditorTools
                 }
                 mesh.RecalculateTangents();
                 mesh.RecalculateBounds();
-                string p = $"{Prefabs}/{who}_Eye{k++}.asset";
-                AssetDatabase.DeleteAsset(p);
-                AssetDatabase.CreateAsset(mesh, p);
+                string p = $"{folder}/{who}_Eye{k++}.asset";
+                var old = AssetDatabase.LoadAssetAtPath<Mesh>(p);     // keep the asset (GUID): other prefabs may use it
+                if (old != null) { EditorUtility.CopySerialized(mesh, old); UnityEngine.Object.DestroyImmediate(mesh); mesh = old; EditorUtility.SetDirty(old); }
+                else AssetDatabase.CreateAsset(mesh, p);
                 mf.sharedMesh = mesh;
             }
         }

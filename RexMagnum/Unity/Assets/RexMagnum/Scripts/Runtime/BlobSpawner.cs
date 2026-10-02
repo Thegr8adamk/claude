@@ -40,6 +40,15 @@ namespace RexMagnum
             return prefabs[prefabs.Length - 1];
         }
 
+        /// <summary>Blobs alive on the whole island before no spawner adds more.</summary>
+        public const int GlobalCap = 24;
+
+        Blob TouristPrefab()
+        {
+            foreach (var p in prefabs) if (p != null && p.kind == Blob.Kind.Tourist && !p.isHalf) return p;
+            return null;
+        }
+
         static float Weight(Blob p, float night)
         {
             if (p == null || p.isHalf || (int)p.kind > 2) return 0f;
@@ -96,7 +105,12 @@ namespace RexMagnum
             lastNear = near;
             // DayNight scales maxAlive up at night; cap it here so night stays hard but fair
             int cap = baseMax >= 0 ? Mathf.Max(1, Mathf.RoundToInt(baseMax * nightMaxScale * factoryScale)) : maxAlive;
+            // first fight (until 4 kills): tourists only, and at most 4 at the pool (the builder's spawner on "Game")
+            bool firstFight = Progress.Value("kills") < 4;
+            if (firstFight && gameObject.name == "Game") cap = Mathf.Min(cap, 4);
             if (near >= Mathf.Min(maxAlive, cap)) return;
+            // global cap: all zones together (popping blobs count until they are gone)
+            if (Blob.AliveCount() >= GlobalCap) return;
             if (rex == null) { var pl = GameObject.FindGameObjectWithTag("Player"); if (pl != null) rex = pl.transform; }
             Vector2 c = Random.insideUnitCircle.normalized * radius;
             Vector3 p = transform.position + new Vector3(c.x, 0, c.y);
@@ -114,7 +128,8 @@ namespace RexMagnum
             }
             if (found)
             {
-                var b = Instantiate(PickPrefab(), hit.position, Quaternion.identity);
+                Blob pick = firstFight ? TouristPrefab() : null;
+                var b = Instantiate(pick != null ? pick : PickPrefab(), hit.position, Quaternion.identity);
                 if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
                 if (fromWater) StartCoroutine(Rise(b, water));
             }

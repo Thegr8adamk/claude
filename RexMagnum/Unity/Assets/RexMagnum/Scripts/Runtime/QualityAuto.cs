@@ -62,7 +62,7 @@ namespace RexMagnum
             float[] lodBias        = { 0.6f,  1f,    1.5f,  2f };
             float[] pixelError     = { 12f,   6f,    3f,    2f };
             int[]   cascades       = { 1,     2,     4,     4 };
-            int[]   shadowRes      = { 1024,  2048,  4096,  4096 };
+            int[]   shadowRes      = { 1024,  2048,  2048,  4096 };
             int i = (int)t;
             if (urp != null)
             {
@@ -70,8 +70,9 @@ namespace RexMagnum
                 urp.shadowDistance = shadowDist[i];
                 SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", cascades[i]);
                 SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", shadowRes[i]);
-                SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
-                SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t >= QualityTier.High);   // lamp / torch shadows
+                SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", t == QualityTier.Ultra);
+                // lamp / torch / tunnel-lamp shadows (point + spot) only on Ultra: they are the expensive ones
+                SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t == QualityTier.Ultra);
                 urp.msaaSampleCount = msaa[i];
                 urp.supportsCameraDepthTexture = true;    // water depth colour + shore foam
                 urp.supportsCameraOpaqueTexture = false;

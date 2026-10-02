@@ -27,6 +27,8 @@ namespace RexMagnum
         RexCameraRig rig;
         float speed, nextUse, nextLine;
         bool lights;
+        // driven metres, kept here and written to Progress at most once per second (Progress.Set saves)
+        float cartMetres, nextProgress;
 
         public static void RegisterCharger(Transform t) { if (!chargers.Contains(t)) chargers.Add(t); }
 
@@ -54,7 +56,9 @@ namespace RexMagnum
             bool driving = Driven == this;
             // Rex died at the wheel: get out, so the respawn in room 304 is not pulled back to the seat
             if (driving && rexHealth != null && rexHealth.IsDead) { Exit(); return; }
-            if (RMInput.Use && Time.time > nextUse && !PauseMenu.Open && !GameFlow.Busy)
+            // the ending cutscene: Rex may sit at the wheel (InputEnabled is off then anyway), so it has its own flag
+            bool locked = EndingSequence.Playing;
+            if (!locked && RMInput.Use && Time.time > nextUse && !PauseMenu.Open && !GameFlow.Busy)
             {
                 if (driving) { Exit(); nextUse = Time.time + 0.5f; }
                 else if (Driven == null && rex.InputEnabled && Vector3.Distance(rex.transform.position, transform.position) < 3f)
@@ -65,7 +69,7 @@ namespace RexMagnum
                 if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
                     battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
             if (!driving) return;
-            if (RMInput.Hands) SetLights(!lights);
+            if (!locked && RMInput.Hands) SetLights(!lights);
             // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
             // pushing until 15% (not back in the seat at the first 0.1% of charge)
             if (battery <= 0f) pushMode = true;
@@ -89,7 +93,7 @@ namespace RexMagnum
         void FixedUpdate()
         {
             bool driving = Driven == this;
-            Vector2 mv = driving ? RMInput.Move : Vector2.zero;
+            Vector2 mv = driving && !EndingSequence.Playing ? RMInput.Move : Vector2.zero;
             float top = !pushMode ? maxSpeed : maxSpeed * 0.15f;      // pushing: walking pace
             speed = Mathf.MoveTowards(speed, mv.y * top, accel * Time.fixedDeltaTime);
             if (Mathf.Abs(mv.y) < 0.05f) speed = Mathf.MoveTowards(speed, 0f, accel * 1.5f * Time.fixedDeltaTime);
@@ -105,8 +109,14 @@ namespace RexMagnum
                 float uphill = Mathf.Clamp01(rb.linearVelocity.y / Mathf.Max(0.5f, Mathf.Abs(speed))) * 3f;
                 float drain = 0.05f * dist * (1f + (Mathf.Abs(speed) > 6f ? 0.6f : 0f) + uphill);
                 if (lights) drain += 0.6f / 60f * Time.fixedDeltaTime;
-                Progress.Add("cart_m_frac", Mathf.RoundToInt(dist * 100f));
-                if (Progress.Value("cart_m_frac") >= 100) { Progress.Add("cart_m", Progress.Value("cart_m_frac") / 100); Progress.Set("cart_m_frac", Progress.Value("cart_m_frac") % 100); }
+                cartMetres += dist;
+                if (Time.time >= nextProgress && cartMetres >= 1f)
+                {
+                    nextProgress = Time.time + 1f;
+                    int whole = Mathf.FloorToInt(cartMetres);
+                    Progress.Add("cart_m", whole);
+                    cartMetres -= whole;
+                }
                 float before = battery;
                 battery = Mathf.Max(0f, battery - drain);
                 if (before > 0f && battery <= 0f) { RexVoice.Say(rex.gameObject, "CartDead", true); Progress.Set("cart_dead", 1); }

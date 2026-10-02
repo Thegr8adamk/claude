@@ -5,19 +5,31 @@ namespace RexMagnum
     /// <summary>
     /// Ambient sound and Rex's body sounds (no builder step needed: it attaches itself when a scene with Rex loads).
     ///  - Beach waves near the shore (low ground), jungle insects and birds inland; the jungle is louder at night.
-    ///  - Footsteps (flip-flops) timed by Rex's ground speed; a splash when he goes into water.
-    /// Clips: Resources/Sfx/amb_beach, amb_jungle, footstep, splash (silent if missing). Volume: Settings > Sound > Effects.
+    ///  - Footsteps (flip-flops) timed by Rex's ground speed, by surface: sand on low terrain by the beach, grass on
+    ///    other terrain, tile on buildings. Swim strokes while he swims. A splash when he goes into water.
+    /// Clips: Resources/Sfx/amb_beach, amb_jungle, footstep, footstep_sand, footstep_grass, swim_stroke, splash (silent if
+    /// missing). Volume: Settings > Sound > Effects.
     /// </summary>
     public class Ambience : MonoBehaviour
     {
         AudioSource beach, jungle;
         CharacterController cc;
+        RexController ctrl;
         Transform rex;
-        float stepDist;
+        float stepDist, nextStroke;
         bool wasInWater, roofed;
         float nextRoofCheck;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void Init()
+        {
+            // NEW GAME reloads the scene (a new Rex): attach again on every load. -= first: never subscribed twice.
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            Attach();
+        }
+        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m) => Attach();
+
         static void Attach()
         {
             var r = Object.FindAnyObjectByType<RexController>();
@@ -28,6 +40,7 @@ namespace RexMagnum
         {
             rex = transform;
             cc = GetComponent<CharacterController>();
+            ctrl = GetComponent<RexController>();
             beach = Loop("amb_beach");
             jungle = Loop("amb_jungle");
         }
@@ -77,12 +90,28 @@ namespace RexMagnum
                 if (stepDist > stride)
                 {
                     stepDist = 0f;
-                    Sfx.Play("footstep", p, speed > 4.5f ? 0.5f : 0.3f);
+                    Sfx.Play(StepClip(p), p, speed > 4.5f ? 0.5f : 0.3f);
                 }
             }
             else stepDist = 0.3f;           // first step comes soon after landing / leaving water
+            // swimming: a stroke splash about every 1.1 s while he moves
+            if (ctrl != null && ctrl.IsSwimming && speed > 0.4f && Time.time > nextStroke)
+            {
+                nextStroke = Time.time + 1.1f;
+                Sfx.Play("swim_stroke", p + Vector3.up, 0.45f);
+            }
             if (inWater && !wasInWater && Mathf.Abs(v.y) + speed > 1.5f) Sfx.Play("splash", p, 0.8f);
             wasInWater = inWater;
+        }
+
+        /// <summary>What is under Rex's feet: terrain near sea level = beach sand, other terrain = grass,
+        /// anything else (hotel, paths, decks) = tile.</summary>
+        static string StepClip(Vector3 p)
+        {
+            if (!Physics.Raycast(p + Vector3.up * 0.3f, Vector3.down, out RaycastHit g, 1.2f, ~0, QueryTriggerInteraction.Ignore))
+                return "footstep";
+            if (!(g.collider is TerrainCollider)) return "footstep";
+            return g.point.y < 4f ? "footstep_sand" : "footstep_grass";
         }
     }
 }

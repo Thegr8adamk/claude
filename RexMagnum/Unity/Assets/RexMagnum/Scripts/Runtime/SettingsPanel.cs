@@ -315,22 +315,11 @@ namespace RexMagnum
 
         void Styles(float s)
         {
-            if (Mathf.Approximately(s, styleScale) && hdr != null) return;
+            // the shared menu look (MenuSkin builds them once per screen height)
+            MenuSkin.Use(s);
             styleScale = s;
-            hdr = new GUIStyle(GUI.skin.label) { fontSize = (int)(28 * s), fontStyle = FontStyle.Bold };
-            hdr.normal.textColor = new Color(1f, 0.8f, 0.25f);
-            lbl = new GUIStyle(GUI.skin.label) { fontSize = (int)(22 * s), wordWrap = false, alignment = TextAnchor.MiddleLeft };
-            lbl.normal.textColor = Color.white;
-            hdrValue = new GUIStyle(lbl) { fontStyle = FontStyle.Bold };
-            hdrValue.normal.textColor = new Color(1f, 0.9f, 0.6f);
-            small = new GUIStyle(GUI.skin.label) { fontSize = (int)(17 * s), wordWrap = true };
-            small.normal.textColor = new Color(0.8f, 0.85f, 0.9f);
-            btn = new GUIStyle(GUI.skin.button) { fontSize = (int)(19 * s), fixedHeight = 40 * s };
-            rowSel = new GUIStyle(GUI.skin.box) { padding = new RectOffset(6, 6, 2, 2) };
-            var t = new Texture2D(1, 1);
-            t.SetPixel(0, 0, new Color(1f, 0.75f, 0.2f, 0.28f));
-            t.Apply();
-            rowSel.normal.background = t;
+            hdr = MenuSkin.Header; lbl = MenuSkin.LabelRow; hdrValue = MenuSkin.Value; small = MenuSkin.Small;
+            btn = MenuSkin.Option; rowSel = MenuSkin.RowSel;
         }
 
         public void Draw(Rect area, float s)

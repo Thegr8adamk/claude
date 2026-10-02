@@ -7,7 +7,7 @@ namespace RexMagnum
     /// <summary>
     /// Phone controls (brief section 7): move stick bottom-left (push to the edge = run), drag the right side to look,
     /// Action bottom-right (hold = heavy / aim with a gun), Jump above Action, Use beside it (bright when something is
-    /// near), Taunt / Photo / Hands / Weapon / Camera along the top, Pause in the top corner. Landscape.
+    /// near), Dodge left of Jump, Taunt / Photo / Hands / Weapon / Camera along the top, Pause in the top corner. Landscape.
     /// Hidden when a controller is connected.
     /// </summary>
     [DefaultExecutionOrder(-50)]     // fill TouchState before the scripts that read it this frame
@@ -17,7 +17,7 @@ namespace RexMagnum
         public float opacity = 0.45f;
         // ---- layout editor (brief: drag / resize / opacity per button, saved, reset)
         public static bool EditMode;
-        static readonly string[] AllButtons = { "Action", "Jump", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera", "Move" };
+        static readonly string[] AllButtons = { "Action", "Jump", "Dodge", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera", "Move" };
         string selected = "Action";
         bool dragging;
         Vector2 lastPointer;
@@ -60,6 +60,7 @@ namespace RexMagnum
             {
                 case "Action": return new Vector2(W - H * 0.17f, H * 0.2f);
                 case "Jump": return new Vector2(W - H * 0.17f, H * 0.45f);
+                case "Dodge": return new Vector2(W - H * 0.40f, H * 0.38f);      // left of Jump, above Use
                 case "Use": return new Vector2(W - H * 0.42f, H * 0.14f);
                 case "Pause": return new Vector2(W - H * 0.08f, H * 0.92f);
                 case "Move": return new Vector2(H * 0.22f, H * 0.22f);
@@ -72,7 +73,7 @@ namespace RexMagnum
 
         string HitButton(Vector2 p)
         {
-            foreach (var n in new[] { "Action", "Jump", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera" })
+            foreach (var n in new[] { "Action", "Jump", "Dodge", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera" })
                 if (Vector2.Distance(p, Btn(n)) < Rad(n) * 1.15f) return n;
             return null;
         }
@@ -173,7 +174,7 @@ namespace RexMagnum
             if (!weaponSeen) weaponId = -1;
             bool act = held.Contains("Action");
             if (act && !TouchState.Held("Action")) actionStart = Time.time;
-            foreach (var n in new[] { "Action", "Jump", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera" })
+            foreach (var n in new[] { "Action", "Jump", "Dodge", "Use", "Pause", "Taunt", "Photo", "Hands", "Weapon", "Camera" })
                 TouchState.Set(n, held.Contains(n));
             TouchState.Set("Aim", act && Time.time - actionStart > 0.3f);
         }
@@ -214,6 +215,7 @@ namespace RexMagnum
             if (rw != null && !string.IsNullOrEmpty(rw.ActionWord)) word = rw.ActionWord;
             Draw(Btn("Action"), Rad("Action"), word, opacity);
             Draw(Btn("Jump"), Rad("Jump"), "Jump", opacity);
+            Draw(Btn("Dodge"), Rad("Dodge"), "Dodge", opacity);      // icon UI/Icons/Dodge.png if present, else the word
             Draw(Btn("Use"), Rad("Use"), "Use", (WeaponPickup.Nearby != null || FoodPickup.Nearby != null) ? opacity * 1.6f : opacity * 0.4f);
             Draw(Btn("Pause"), Rad("Pause"), "Pause", opacity);
             foreach (var n in top) Draw(Btn(n), Rad(n), n, opacity);

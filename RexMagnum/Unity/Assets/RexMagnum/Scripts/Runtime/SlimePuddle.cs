@@ -8,8 +8,9 @@ namespace RexMagnum
         public float slipChance = 0.25f;    // when Rex runs over it (RexController keeps 4 s between slips)
         public float lifetime = 25f;
         float born;
-        Material mat;
+        Renderer rend;
         Color c0;
+        static MaterialPropertyBlock mpb;
 
         public static GameObject Spawn(Vector3 at, Color color, float size = 0.9f)
         {
@@ -20,7 +21,7 @@ namespace RexMagnum
             go.transform.localScale = new Vector3(size, 0.004f, size * Random.Range(0.7f, 1.1f));
             go.transform.rotation = Quaternion.Euler(0, Random.Range(0, 360f), 0);
             var r = go.GetComponent<Renderer>();
-            r.material = SlimeFX.SlimeMaterial(color);
+            r.sharedMaterial = SlimeFX.SharedSlime(color);      // one material per colour (batches); the fade is a property block
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             var trig = go.AddComponent<SphereCollider>();
             trig.isTrigger = true;
@@ -32,18 +33,21 @@ namespace RexMagnum
         void Start()
         {
             born = Time.time;
-            mat = GetComponent<Renderer>().sharedMaterial;      // already its own copy (Spawn): no second copy
-            c0 = mat.GetColor("_BaseColor");
+            rend = GetComponent<Renderer>();
+            c0 = rend.sharedMaterial.GetColor("_BaseColor");
+            if (mpb == null) mpb = new MaterialPropertyBlock();
         }
 
         void Update()
         {
-            float a = 1f - Mathf.Clamp01((Time.time - born - lifetime + 3f) / 3f);
-            mat.SetColor("_BaseColor", new Color(c0.r, c0.g, c0.b, c0.a * a));
-            if (Time.time - born > lifetime) Destroy(gameObject);
+            float age = Time.time - born;
+            if (age > lifetime) { Destroy(gameObject); return; }
+            if (age < lifetime - 3f) return;                    // full colour until the last 3 s: no write
+            float a = 1f - Mathf.Clamp01((age - lifetime + 3f) / 3f);
+            rend.GetPropertyBlock(mpb);
+            mpb.SetColor("_BaseColor", new Color(c0.r, c0.g, c0.b, c0.a * a));
+            rend.SetPropertyBlock(mpb);
         }
-
-        void OnDestroy() { if (mat != null) Destroy(mat); }     // its own fading material
 
         void OnTriggerEnter(Collider other)
         {

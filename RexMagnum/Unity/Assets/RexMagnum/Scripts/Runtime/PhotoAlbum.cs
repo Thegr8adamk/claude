@@ -101,6 +101,7 @@ namespace RexMagnum
             Directory.CreateDirectory(Progress.AlbumDir);
             string file = $"photo_{System.DateTime.Now:yyyyMMdd_HHmmss}.jpg";
             File.WriteAllBytes(Path.Combine(Progress.AlbumDir, file), tex.EncodeToJPG(85));
+            SaveThumb(tex, file);                   // the ALBUM tab loads only these (small: phone memory)
             Object.Destroy(tex);
             string caption;
             if (subject == "KingGlorp") caption = GlorpCaption;
@@ -108,7 +109,7 @@ namespace RexMagnum
             Progress.AddPhoto(new Progress.Photo { file = file, caption = caption, subject = subject, time = System.DateTime.Now.Ticks });
             if (subject == "KingGlorp") Progress.Add("photos_glorp");
             else if (!string.IsNullOrEmpty(subject) && subject != "Guest") Progress.Add("photos_blob");
-            RexVoice.Subtitle?.Invoke("PHOTO SAVED: " + caption);
+            RexTestHUD.Notice("PHOTO SAVED: " + caption, 4f);        // a game message: shows with subtitles off too
             if (selfie != null)
             {
                 yield return new WaitForSeconds(0.6f);
@@ -118,6 +119,74 @@ namespace RexMagnum
             if (rig == null || rig.Mode == RexCameraRig.CameraMode.FirstPerson)
                 foreach (var r in hidden) if (r != null) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
             foreach (var r in arms) if (r != null) r.enabled = true;
+        }
+
+        // ------------------------------------------------------------ thumbnails (album)
+
+        public const int ThumbW = 384, ThumbH = 216;
+        static string ThumbPath(string file) => Path.Combine(Progress.AlbumDir, "thumb_" + file);
+
+        /// <summary>Writes thumb_&lt;file&gt; (384x216 JPG) from the full picture.</summary>
+        static void SaveThumb(Texture src, string file)
+        {
+            var t = Downscale(src);
+            try { File.WriteAllBytes(ThumbPath(file), t.EncodeToJPG(80)); }
+            catch (System.Exception e) { Debug.LogWarning(e); }
+            Object.Destroy(t);
+        }
+
+        /// <summary>
+        /// The album picture for the ALBUM tab: thumb_&lt;file&gt;. Older photos without one: the full JPG is loaded once,
+        /// shrunk, saved as the thumbnail and freed. Null if the photo is gone. The caller destroys the texture.
+        /// </summary>
+        public static Texture2D LoadThumb(string file)
+        {
+            string tp = ThumbPath(file);
+            try
+            {
+                if (File.Exists(tp))
+                {
+                    var t = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    t.LoadImage(File.ReadAllBytes(tp), true);          // no CPU copy
+                    return t;
+                }
+                string full = Path.Combine(Progress.AlbumDir, file);
+                if (!File.Exists(full)) return null;
+                var big = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                big.LoadImage(File.ReadAllBytes(full), true);
+                var small = Downscale(big);
+                Object.Destroy(big);
+                File.WriteAllBytes(tp, small.EncodeToJPG(80));
+                small.Apply(false, true);                            // keep only the GPU copy
+                return small;
+            }
+            catch (System.Exception e) { Debug.LogWarning(e); return null; }
+        }
+
+        /// <summary>GPU shrink to 384x216 in halving steps (one big bilinear step would shimmer). Readable result.</summary>
+        static Texture2D Downscale(Texture src)
+        {
+            int w = src.width, h = src.height;
+            RenderTexture cur = null;
+            while (w / 2 >= ThumbW && h / 2 >= ThumbH)
+            {
+                w /= 2; h /= 2;
+                var next = RenderTexture.GetTemporary(w, h, 0);
+                if (cur == null) Graphics.Blit(src, next); else Graphics.Blit(cur, next);
+                if (cur != null) RenderTexture.ReleaseTemporary(cur);
+                cur = next;
+            }
+            var dst = RenderTexture.GetTemporary(ThumbW, ThumbH, 0);
+            if (cur == null) Graphics.Blit(src, dst); else Graphics.Blit(cur, dst);
+            if (cur != null) RenderTexture.ReleaseTemporary(cur);
+            var prev = RenderTexture.active;
+            RenderTexture.active = dst;
+            var t = new Texture2D(ThumbW, ThumbH, TextureFormat.RGB24, false);
+            t.ReadPixels(new Rect(0, 0, ThumbW, ThumbH), 0, 0);
+            t.Apply();
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(dst);
+            return t;
         }
     }
 }

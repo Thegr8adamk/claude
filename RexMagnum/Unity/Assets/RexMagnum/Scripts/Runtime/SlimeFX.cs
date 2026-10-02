@@ -33,18 +33,51 @@ namespace RexMagnum
             return m;
         }
 
+        /// <summary>A pooled slime drop: switches itself off when its time is up (SlimeFX reuses it).</summary>
+        sealed class SlimeDrop : MonoBehaviour
+        {
+            public float until;
+            public Rigidbody rb;
+            public Renderer rend;
+            void Update() { if (Time.time >= until) gameObject.SetActive(false); }
+        }
+
+        // drops all live 1.2 s, so the queue is oldest first: reuse the front when it is off or the pool is full
+        const int MaxDrops = 120;
+        const float DropLife = 1.2f;
+        static readonly System.Collections.Generic.Queue<SlimeDrop> drops = new System.Collections.Generic.Queue<SlimeDrop>();
+
+        static SlimeDrop GetDrop()
+        {
+            while (drops.Count > 0 && drops.Peek() == null) drops.Dequeue();         // destroyed with a scene
+            if (drops.Count > 0 && (drops.Count >= MaxDrops || !drops.Peek().gameObject.activeSelf)) return drops.Dequeue();
+            var g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            g.name = "SlimeDrop";
+            Object.Destroy(g.GetComponent<Collider>());
+            var d = g.AddComponent<SlimeDrop>();
+            d.rb = g.AddComponent<Rigidbody>();
+            d.rend = g.GetComponent<Renderer>();
+            d.rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return d;
+        }
+
         public static void Splat(Vector3 at, Vector3 normal, Color color, int count = 8)
         {
+            var mat = SharedSlime(color);
             for (int i = 0; i < count; i++)
             {
-                var g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                Object.Destroy(g.GetComponent<Collider>());
+                var d = GetDrop();
+                var g = d.gameObject;
+                g.SetActive(false);
                 g.transform.position = at + normal * 0.05f;
                 g.transform.localScale = Vector3.one * Random.Range(0.04f, 0.1f);
-                g.GetComponent<Renderer>().sharedMaterial = SharedSlime(color);
-                var rb = g.AddComponent<Rigidbody>();
-                rb.linearVelocity = (normal + Random.insideUnitSphere * 0.8f) * Random.Range(2f, 4f);
-                Object.Destroy(g, 1.2f);
+                d.rend.sharedMaterial = mat;
+                g.SetActive(true);
+                d.rb.position = g.transform.position;
+                d.rb.angularVelocity = Vector3.zero;
+                d.rb.linearVelocity = (normal + Random.insideUnitSphere * 0.8f) * Random.Range(2f, 4f);
+                d.until = Time.time + DropLife;
+                drops.Enqueue(d);
             }
         }
 

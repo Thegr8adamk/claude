@@ -1094,7 +1094,19 @@ namespace RexMagnum.EditorTools
             {
                 var bb = body[0].bounds;
                 foreach (var r in body) bb.Encapsulate(r.bounds);
-                model.transform.position -= new Vector3(bb.center.x, bb.min.y, bb.center.z) - root.transform.position;
+                // the cart's origin in Blender is "ground under the middle" at the first parking point (golf.carts[0]):
+                // offset by that point (bb.min.y also held an A_RoomLight submesh 1.33 m under the wheels)
+                Vector3 park = new Vector3(bb.center.x, bb.min.y, bb.center.z);
+                string jsonPath = Dir + "/Island.json";
+                if (File.Exists(jsonPath))
+                {
+                    string json = File.ReadAllText(jsonPath);
+                    int g = json.IndexOf("\"golf\"", StringComparison.Ordinal);
+                    var carts = g >= 0 ? Pts(json.Substring(g), "carts") : new List<Vector3>();
+                    // sanity: the point must be at the model (else keep the bounds guess)
+                    if (carts.Count > 0 && new Vector2(carts[0].x - bb.center.x, carts[0].z - bb.center.z).magnitude < 3f) park = carts[0];
+                }
+                model.transform.position -= park - root.transform.position;
             }
             var box = root.AddComponent<BoxCollider>();
             box.center = new Vector3(0, 0.95f, 0.02f);

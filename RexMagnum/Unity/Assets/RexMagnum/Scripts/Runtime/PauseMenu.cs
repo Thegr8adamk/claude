@@ -24,7 +24,7 @@ namespace RexMagnum
         readonly SettingsPanel panel = new SettingsPanel();
         readonly Dictionary<string, Texture2D> thumbs = new Dictionary<string, Texture2D>();
         static readonly string[] Tabs = { "MAP", "ALBUM", "ACCOMPLISHMENTS", "SETTINGS", "HELP" };
-        GUIStyle title, label, button, small;
+        GUIStyle title, label, button, small, tabStyle;
 
         void Start()
         {
@@ -76,12 +76,16 @@ namespace RexMagnum
         {
             tab = (t + Tabs.Length) % Tabs.Length;
             scroll = Vector2.zero;
+            MenuNav.Click();
         }
 
         void SetOpen(bool o)
         {
             panel.CancelWait();
             Open = o;
+            MenuNav.Click();
+            if (!o) FreeThumbs();        // album pictures only live while the menu is open (phone memory)
+            else { rexCached = null; nextObjective = 0f; }
             if (o) scaleBefore = Time.timeScale;
             // back to the kill cam's slow motion only while it still runs (else normal speed: no slow motion left behind)
             Time.timeScale = o ? 0f : (KillCam.Active && scaleBefore > 0f ? scaleBefore : 1f);
@@ -99,12 +103,9 @@ namespace RexMagnum
 
         void Styles(float s)
         {
-            title = new GUIStyle(GUI.skin.label) { fontSize = (int)(34 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            title.normal.textColor = new Color(1f, 0.8f, 0.25f);
-            label = new GUIStyle(GUI.skin.label) { fontSize = (int)(22 * s), wordWrap = true };
-            label.normal.textColor = Color.white;
-            small = new GUIStyle(label) { fontSize = (int)(17 * s) };
-            button = new GUIStyle(GUI.skin.button) { fontSize = (int)(20 * s) };
+            // the shared menu look (built once per screen height, not per OnGUI event)
+            MenuSkin.Use(s);
+            title = MenuSkin.Title; label = MenuSkin.Label; small = MenuSkin.Small; button = MenuSkin.Button; tabStyle = MenuSkin.Tab;
         }
 
         void OnGUI()
@@ -113,14 +114,15 @@ namespace RexMagnum
             GUI.depth = -100;            // on top of every other OnGUI (ending bars, door fade, boss bar, toasts)
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             Styles(s);
-            GUI.color = new Color(0, 0, 0, 0.82f);
+            GUI.color = new Color(0, 0, 0, 0.72f);
             GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(new Rect(0, 20 * s, w, 50 * s), "PAUSED", title);
             float tw = w / Tabs.Length;
             for (int i = 0; i < Tabs.Length; i++)
-                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 46 * s), tab == i, Tabs[i], button) && tab != i) pendingTab = i;
+                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 50 * s), tab == i, Tabs[i], tabStyle) && tab != i) pendingTab = i;
             var area = new Rect(w * 0.08f, 150 * s, w * 0.84f, h - 260 * s);
+            MenuSkin.DrawPanel(new Rect(area.x - 16 * s, area.y - 12 * s, area.width + 32 * s, area.height + 24 * s));
             if (tab == 3)
             {
                 panel.Draw(area, s);
@@ -149,6 +151,9 @@ namespace RexMagnum
         }
 
         Texture2D mapTex, arrowTex;
+        RexController rexCached;
+        RexWeapons rexWeapons;
+        float nextObjective;
         string objective;
         Vector3 objectiveAt;
         bool objectiveHas;
@@ -158,9 +163,15 @@ namespace RexMagnum
         {
             if (mapTex == null) mapTex = Resources.Load<Texture2D>("UI/map");
             if (arrowTex == null) arrowTex = ArrowTexture();
-            var rex = FindAnyObjectByType<RexController>();
-            objective = GameGuide.Objective(rex != null ? rex.GetComponent<RexWeapons>() : null,
-                                            rex != null ? rex.transform.position : Vector3.zero, out objectiveAt, out objectiveHas);
+            // Rex and the goal are found when the menu opens, then twice a second (OnGUI runs several times a frame)
+            if (rexCached == null) { rexCached = FindAnyObjectByType<RexController>(); rexWeapons = rexCached != null ? rexCached.GetComponent<RexWeapons>() : null; }
+            var rex = rexCached;
+            if (Time.unscaledTime >= nextObjective)
+            {
+                nextObjective = Time.unscaledTime + 0.5f;
+                objective = GameGuide.Objective(rexWeapons, rex != null ? rex.transform.position : Vector3.zero, out objectiveAt, out objectiveHas);
+                if (GameFlow.TutorialActive) { objective = null; objectiveHas = false; }     // the room hints first (as the HUD)
+            }
             if (mapTex != null) GUI.DrawTexture(r, mapTex, ScaleMode.StretchToFill);
             else { GUI.color = new Color(0.1f, 0.3f, 0.5f); GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = Color.white; }
             Vector2 P(Vector3 world) { var uv = GameGuide.MapUV(world); return new Vector2(r.x + uv.x * r.width, r.y + uv.y * r.height); }
@@ -275,12 +286,19 @@ namespace RexMagnum
         Texture2D Thumb(string file)
         {
             if (thumbs.TryGetValue(file, out var t)) return t;
-            string path = Path.Combine(Progress.AlbumDir, file);
-            t = null;
-            if (File.Exists(path)) { t = new Texture2D(2, 2, TextureFormat.RGB24, false); t.LoadImage(File.ReadAllBytes(path), true); }   // no mip maps, no CPU copy
+            t = PhotoAlbum.LoadThumb(file);      // 384x216 thumb_<file> (made once from the full JPG for older photos)
             thumbs[file] = t;
             return t;
         }
+
+        /// <summary>The menu closed: free the album pictures (loaded again on the next visit to ALBUM).</summary>
+        void FreeThumbs()
+        {
+            foreach (var t in thumbs.Values) if (t != null) Destroy(t);
+            thumbs.Clear();
+        }
+
+        void OnDestroy() => FreeThumbs();
 
         void AccomplishmentsTab()
         {

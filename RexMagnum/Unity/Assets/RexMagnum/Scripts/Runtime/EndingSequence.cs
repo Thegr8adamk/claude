@@ -12,6 +12,11 @@ namespace RexMagnum
     {
         float t;
         Camera cam;
+        /// <summary>True while the ending plays (GolfCart: no driving input, Rex may be at the wheel).</summary>
+        public static bool Playing { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Playing = false;      // editor with Domain Reload off
         RexController rex;
         bool slipped, heroed;
         int lastCall = -1, nextCall;
@@ -35,6 +40,7 @@ namespace RexMagnum
 
         void Start()
         {
+            Playing = true;
             rex = FindAnyObjectByType<RexController>();
             if (rex != null)
             {
@@ -55,6 +61,7 @@ namespace RexMagnum
 
         void OnDestroy()
         {
+            Playing = false;
             if (cam != null) Destroy(cam.gameObject);
             foreach (var b in stunned) if (b != null && !b.IsDead) b.Stun(0f);     // ending skipped: blobs move again with Rex
             // still off if he is at the golf cart's wheel or the pause menu is open (either may change during the ending)
@@ -119,13 +126,26 @@ namespace RexMagnum
             return clip.length;
         }
 
+        GUIStyle big, mid, mono, head, monoCenter, tot;
+
         void OnGUI()
         {
             if (PauseMenu.Open) return;
             float w = Screen.width, h = Screen.height, s = h / 1080f;
-            var big = new GUIStyle(GUI.skin.label) { fontSize = (int)(44 * s), alignment = TextAnchor.MiddleCenter, wordWrap = true, fontStyle = FontStyle.Bold };
-            var mid = new GUIStyle(big) { fontSize = (int)(30 * s) };
-            var mono = new GUIStyle(GUI.skin.label) { fontSize = (int)(26 * s), font = null };
+            // styles made once (a new GUIStyle per OnGUI call is garbage every frame), sizes set per call
+            if (big == null)
+            {
+                big = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, wordWrap = true, fontStyle = FontStyle.Bold };
+                mid = new GUIStyle(big);
+                mono = new GUIStyle(GUI.skin.label) { font = null };
+                head = new GUIStyle(mono) { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+                monoCenter = new GUIStyle(mono) { alignment = TextAnchor.MiddleCenter };
+                tot = new GUIStyle(head) { alignment = TextAnchor.MiddleLeft };
+            }
+            big.fontSize = (int)(44 * s);
+            mid.fontSize = (int)(30 * s);
+            mono.fontSize = monoCenter.fontSize = (int)(26 * s);
+            head.fontSize = tot.fontSize = (int)(30 * s);
             if (t < 7f)
             {
                 // portrait phone frame around the middle of the screen
@@ -165,9 +185,9 @@ namespace RexMagnum
                 GUI.DrawTexture(new Rect(rx, ry, rw, rh), Texture2D.whiteTexture);
                 GUI.color = Color.white;
                 mono.normal.textColor = new Color(0.1f, 0.1f, 0.1f);
-                var head = new GUIStyle(mono) { fontSize = (int)(30 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+                head.normal.textColor = monoCenter.normal.textColor = tot.normal.textColor = mono.normal.textColor;
                 GUI.Label(new Rect(rx, ry + 20 * s, rw, 40 * s), "ISLA GRANDE RESORT", head);
-                GUI.Label(new Rect(rx, ry + 60 * s, rw, 30 * s), "Guest: R. MAGNUM, room 304", new GUIStyle(mono) { alignment = TextAnchor.MiddleCenter });
+                GUI.Label(new Rect(rx, ry + 60 * s, rw, 30 * s), "Guest: R. MAGNUM, room 304", monoCenter);
                 int shown = Mathf.Clamp((int)((t - tReceipt) / 0.6f), 0, Tab.Length);
                 for (int i = 0; i < shown; i++)
                 {
@@ -176,7 +196,6 @@ namespace RexMagnum
                 }
                 if (shown == Tab.Length)
                 {
-                    var tot = new GUIStyle(head) { alignment = TextAnchor.MiddleLeft };
                     GUI.Label(new Rect(rx + 24 * s, ry + rh - 90 * s, rw, 40 * s), "TOTAL DUE:  $25,877.50", tot);
                     GUI.Label(new Rect(rx + 24 * s, ry + rh - 50 * s, rw, 34 * s), "\"The damage has been added to your tab.\"", mono);
                 }

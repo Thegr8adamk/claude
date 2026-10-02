@@ -32,7 +32,7 @@ namespace RexMagnum
 
         void Update()
         {
-            if (blob.IsDead) return;
+            if (blob.IsDead || !blob.Disguised) return;      // the trail gives the disguise away; found out: no more trail
             if ((transform.position - lastTrail).sqrMagnitude > trailStep * trailStep)
             {
                 SlimePuddle.Spawn(transform.position, blob.BaseColor(), 0.3f);

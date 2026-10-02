@@ -93,7 +93,7 @@ namespace RexMagnum
             SetMode(fp ? CameraMode.FirstPerson : CameraMode.ThirdPerson, true);
             // Rex is hit: a small shake (bigger hits shake more)
             var hp = target.GetComponent<Health>();
-            if (hp != null) hp.Damaged += (a, p, by) => { if (!hp.IsDead) Shake(Mathf.Clamp(a * 0.012f, 0.08f, 0.3f)); };
+            if (hp != null) hp.Damaged += (a, p, by) => { if (!hp.IsDead) { Shake(Mathf.Clamp(a * 0.012f, 0.08f, 0.3f)); RMInput.Rumble(0.5f, 0.8f, 0.18f); } };
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -118,8 +118,11 @@ namespace RexMagnum
             if (instant) blend = fp ? 1f : 0f;
         }
 
+        void OnDisable() => RMInput.StopRumble();
+
         void LateUpdate()
         {
+            RMInput.TickRumble();
             if (target == null || cam == null) return;
             float dt = Time.deltaTime;
             if (InputEnabled)
@@ -211,11 +214,13 @@ namespace RexMagnum
 
             float b = blend * blend * (3f - 2f * blend);
             transform.SetPositionAndRotation(Vector3.Lerp(tp, eye, b), rot);
-            if (VRControlled) shake = 0f;                      // no shake in a headset (sickness)
+            aimRot = rot;                                      // the aim ignores the shake below
+            if (VRControlled || scoped) shake = 0f;            // no shake in a headset (sickness) or through the scope
             if (shake > 0.001f)
             {
-                // unscaled: a shake during the hit-stop still plays out; random roll/pitch kick, no position jump through walls
-                float s = shake;
+                // unscaled: a shake during the hit-stop still plays out; random roll/pitch kick, no position jump through walls.
+                // Scaled by the field of view: a kick of N degrees fills more of a narrow (aim zoom) view, so it is smaller there.
+                float s = shake * cam.fieldOfView / 65f;
                 transform.rotation *= Quaternion.Euler(Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 8f, Random.Range(-1f, 1f) * s * 4f);
                 shake = Mathf.MoveTowards(shake, 0f, Time.unscaledDeltaTime * 1.6f);
             }
@@ -259,9 +264,13 @@ namespace RexMagnum
         RexController rexBody;
 
         /// <summary>World point the player aims at (crosshair), for both modes.</summary>
+        Quaternion aimRot = Quaternion.identity;
+
         public Vector3 AimPoint(float range = 200f)
         {
-            Ray ray = new Ray(transform.position, transform.forward);
+            // the crosshair direction without the camera shake (VR: the head direction set by VRMode)
+            Vector3 fwd = VRControlled ? transform.forward : aimRot * Vector3.forward;
+            Ray ray = new Ray(transform.position, fwd);
             // aim assist (phone + controller, setting): pull the aim to the nearest blob within 4 degrees
             // not for mouse players, not through the scope (precise brain shots), only for blobs in clear view
             if (RMInput.AimAssist && (TouchState.Active || RMInput.LookIsStick) && !(weapons != null && weapons.Scoped))
@@ -274,7 +283,7 @@ namespace RexMagnum
                     Vector3 c = b.transform.position + Vector3.up * 1.0f;
                     float d = Vector3.Distance(c, transform.position);
                     if (d > range) continue;
-                    float ang = Vector3.Angle(transform.forward, c - transform.position);
+                    float ang = Vector3.Angle(fwd, c - transform.position);
                     if (ang >= bestAng) continue;
                     // in clear view: nothing between the camera and the blob, or the first thing hit is this blob
                     bool seen = !Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore)

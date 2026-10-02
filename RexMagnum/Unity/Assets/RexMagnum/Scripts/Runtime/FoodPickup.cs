@@ -68,7 +68,7 @@ namespace RexMagnum
             RMInput.ConsumeUse();
             h.Heal(HealAmount[(int)kind]);
             Progress.Add(kind == Kind.Cocktail ? "drinks" : "snacks");
-            Sfx.Play("bottle_clink", basePos);      // no eat / drink sounds yet
+            Sfx.Play(kind == Kind.Cocktail ? "drink" : "eat", basePos);
             if (Nearby == this) Nearby = null;
             if (respawnSeconds > 0f) { model.SetActive(false); backAt = Time.time + respawnSeconds; }
             else Destroy(gameObject);

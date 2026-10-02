@@ -169,6 +169,11 @@ namespace RexMagnum
                                       : (run ? runSpeed : walkSpeed) * (HandsDown ? handsDownBonus : 1f) * input.magnitude;
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
             planar = Vector3.MoveTowards(planar, wish.normalized * target, acceleration * Mathf.Max(target, 2f) * dt);
+            // dodge (Ctrl / B / touch Dodge): a quick ~4 m burst, untouchable for a moment. Fast at the start, easing out.
+            if (InputEnabled && RMInput.Dodge && cc.isGrounded && !IsSwimming && Time.time >= lockedUntil && Time.time >= nextDodge)
+                StartDodge(input.sqrMagnitude > 0.01f ? wish.normalized : -transform.forward, input.sqrMagnitude <= 0.01f);
+            bool dodging = Time.time < dodgeUntil;
+            if (dodging) planar = dodgeDir * Mathf.Lerp(18f, 8.7f, 1f - (dodgeUntil - Time.time) / DodgeTime);   // avg ~13.3 m/s = 4 m
             velocity.x = planar.x;
             velocity.z = planar.z;
 
@@ -213,7 +218,7 @@ namespace RexMagnum
             bool fp = cameraRig != null && cameraRig.Mode == RexCameraRig.CameraMode.FirstPerson;
             if (fp || FaceAim || Time.time < faceAimUntil || (cameraRig != null && cameraRig.IsAiming))
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, yawRot, (fp ? 5000f : turnSpeed) * dt);
-            else if (planar.sqrMagnitude > 0.05f)
+            else if (planar.sqrMagnitude > 0.05f && !(dodging && dodgeBack))    // a back dodge keeps facing the enemy
                 transform.rotation = Quaternion.RotateTowards(transform.rotation,
                     Quaternion.LookRotation(planar.normalized), turnSpeed * dt);
 
@@ -230,6 +235,25 @@ namespace RexMagnum
                 armsAnimator.SetFloat(SpeedHash, 0f);
                 armsAnimator.SetBool(GroundedHash, cc.isGrounded);
             }
+        }
+
+        const float DodgeTime = 0.3f;
+        static readonly int DodgeHash = Animator.StringToHash("Dodge");
+        float dodgeUntil, nextDodge;
+        Vector3 dodgeDir;
+        bool dodgeBack;
+        Health hp;
+
+        void StartDodge(Vector3 dir, bool back)
+        {
+            dodgeDir = dir;
+            dodgeBack = back;
+            dodgeUntil = Time.time + DodgeTime;
+            nextDodge = Time.time + 0.8f;
+            if (hp == null) hp = GetComponent<Health>();
+            if (hp != null) hp.Invulnerable(0.35f);
+            SetTrigger(DodgeHash);
+            Sfx.Play("swing", transform.position + Vector3.up, 0.5f, 0.7f);    // low whoosh
         }
 
         /// <summary>Start swimming when the water reaches Rex's chest; stop when he can stand (hysteresis).</summary>

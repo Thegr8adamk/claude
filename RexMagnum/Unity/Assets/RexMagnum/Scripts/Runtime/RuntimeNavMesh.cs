@@ -4,13 +4,18 @@ using UnityEngine.AI;
 
 namespace RexMagnum
 {
-    /// <summary>Builds the NavMesh at start from the level colliders (no extra package). Blobs walk on it.</summary>
+    /// <summary>Builds the NavMesh at start from the level colliders (no extra package). Blobs walk on it.
+    /// The build runs in the background (the title does not freeze); agents check isOnNavMesh meanwhile and are
+    /// warped onto the mesh when it is done.</summary>
     [DefaultExecutionOrder(-200)]
     public class RuntimeNavMesh : MonoBehaviour
     {
         public Vector3 center = Vector3.zero;
         public Vector3 size = new Vector3(80f, 30f, 80f);
         NavMeshDataInstance instance;
+        AsyncOperation build;
+        /// <summary>True once this NavMesh is built.</summary>
+        public bool Ready { get; private set; }
 
         void Awake()
         {
@@ -27,8 +32,22 @@ namespace RexMagnum
             settings.agentHeight = 1.2f;
             settings.agentClimb = 0.4f;
             settings.agentSlope = 40f;
-            instance = NavMesh.AddNavMeshData(
-                NavMeshBuilder.BuildNavMeshData(settings, sources, bounds, Vector3.zero, Quaternion.identity));
+            var data = new NavMeshData(settings.agentTypeID);
+            instance = NavMesh.AddNavMeshData(data);
+            build = NavMeshBuilder.UpdateNavMeshDataAsync(data, settings, sources, bounds);
+        }
+
+        void Update()
+        {
+            if (Ready || build == null || !build.isDone) return;
+            Ready = true;
+            enabled = false;
+            // agents that started before the mesh existed are not on it: put them on the nearest point
+            var bounds = new Bounds(center, size);
+            foreach (var a in FindObjectsByType<NavMeshAgent>(FindObjectsSortMode.None))
+                if (a.enabled && a.gameObject.activeInHierarchy && !a.isOnNavMesh && bounds.Contains(a.transform.position) &&
+                    NavMesh.SamplePosition(a.transform.position, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+                    a.Warp(hit.position);
         }
 
         void OnDestroy()

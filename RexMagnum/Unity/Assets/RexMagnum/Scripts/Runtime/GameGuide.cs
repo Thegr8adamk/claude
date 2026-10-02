@@ -10,14 +10,27 @@ namespace RexMagnum
     /// </summary>
     public static class GameGuide
     {
-        public struct Zone { public string id, name; public Vector3 at; public float r; }
+        /// <summary>top: Rex must be below this height (0 = any height).</summary>
+        public struct Zone { public string id, name; public Vector3 at; public float r, top; }
+        // Room 304 is at (16, 10.7, -293.7): inside the hotel (25 m from its centre), 45 m from the pool centre and
+        // 57 m from the beach centre. Pool and beach stay smaller than that and count only on the ground (y < 6;
+        // ground ~3.5-4.2, floor 3 is 10.7), so the room never visits them and "Go down to the pool" shows.
         public static readonly Zone[] Zones =
         {
-            Z("hotel", "Resort hotel", 40, -300, 60), Z("pool", "Pool area", 40, -255, 60), Z("beach", "Beach", 40, -345, 80),
+            Z("hotel", "Resort hotel", 40, -300, 60), Z("pool", "Pool area", 40, -255, 25, 6f), Z("beach", "Beach", 40, -345, 35, 6f),
             Z("golf", "Golf course", -280, -40, 110), Z("jungle", "Thick jungle", 60, 60, 90), Z("ruins", "Jungle ruins", 300, 70, 45),
             Z("cave", "Cave", -160, 230, 25), Z("ship", "Crashed alien ship", 40, 300, 60),
         };
-        static Zone Z(string id, string n, float x, float y, float r) => new Zone { id = id, name = n, at = new Vector3(x, 0f, y), r = r };
+        static Zone Z(string id, string n, float x, float y, float r, float top = 0f) =>
+            new Zone { id = id, name = n, at = new Vector3(x, 0f, y), r = r, top = top };
+
+        /// <summary>Rex is in this zone (flat distance to the centre, and below the zone's top if it has one).</summary>
+        public static bool InZone(Zone z, Vector3 p)
+        {
+            if (z.top > 0f && p.y >= z.top) return false;
+            p.y = 0f;
+            return (p - z.at).sqrMagnitude < z.r * z.r;
+        }
 
         public static readonly Vector3 ProShop = new Vector3(-280f, 0f, -126.4f);     // Island.json golf.proShop
         public static readonly Vector3 Factory = new Vector3(300f, 0f, 75f);          // Island.json factory.core
@@ -30,18 +43,46 @@ namespace RexMagnum
         /// </summary>
         public static string Objective(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget)
         {
+            string s = Step(w, rex, out target, out hasTarget, out StepId);
+            // the first night: a warning line over the goal (the compass still points at the goal)
+            if (DayNight.Night > 0.6f && Progress.Value("nights") < 1)
+            {
+                StepId = "night";
+                return "Night: blobs glow and come in numbers. Stay near lights.";
+            }
+            return s;
+        }
+
+        /// <summary>Which step Objective returned last ("pool", "rescue", "clubs", "cart", "cave", "factory", "glorp",
+        /// "explore_&lt;zone&gt;", "night", "free"): the HUD announces a new goal when it changes.</summary>
+        public static string StepId;
+
+        static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
+        {
             target = Vector3.zero;
             hasTarget = true;
+            id = "pool";
             if (!Visited("pool")) { target = Zones[1].at; return "Go down to the pool. Something is wrong."; }
             int rescues = Progress.Value("rescues");
+            id = "rescue";
             if (rescues < 3 && NearestHidingGuest(rex, out target))
                 return $"Rescue hiding guests ({rescues}/3): go close, {RMInput.Btn("Use")}. Clear the blobs first.";
+            id = "clubs";
             if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
+            id = "cart";
+            if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0)
+            { target = ProShop; return $"Drive a golf cart: pro shop, west. {RMInput.Btn("Use")}: get in."; }
+            id = "cave";
+            if (!FactoryCore.Stopped && !Visited("cave") && !Visited("ruins"))
+            { target = Zones[6].at; return "The cave behind the waterfall (north-west) leads to the ruins."; }
+            id = "factory";
             if (!FactoryCore.Stopped) { target = Factory; return "Stop the blob factory (jungle ruins, east)."; }
+            id = "glorp";
             if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) { target = Zones[7].at; return "Pop King Glorp (crashed ship, north)."; }
             int zones = Progress.Value("zones");
             foreach (var z in Zones)
-                if (!Visited(z.id)) { target = z.at; return $"Explore: {z.name} ({zones}/{Zones.Length} zones)."; }
+                if (!Visited(z.id)) { id = "explore_" + z.id; target = z.at; return $"Explore: {z.name} ({zones}/{Zones.Length} zones)."; }
+            id = "free";
             hasTarget = false;
             return "Free play: rescue guests, take photos, pop blobs.";
         }
@@ -75,6 +116,7 @@ namespace RexMagnum
                     l.Add(("Look", "Drag on the right side"));
                     l.Add(("Run", "Push the stick to the edge"));
                     l.Add(("Jump", "Jump button"));
+                    l.Add(("Dodge", "Dodge button (left of Jump): quick dash, untouchable for a moment"));
                     l.Add(("Attack", "Action button: tap = light, hold = heavy"));
                     l.Add(("Aim / scope", "Hold Action with a gun"));
                     l.Add(("Weapons", "Tap Weapon: next.  Hold Weapon: wheel"));
@@ -85,6 +127,7 @@ namespace RexMagnum
                     l.Add(("Look", "Right stick"));
                     l.Add(("Run", B("Run")));
                     l.Add(("Jump", B("Jump")));
+                    l.Add(("Dodge", B("Dodge") + "  (quick dash, untouchable for a moment; no direction = back)"));
                     l.Add(("Attack", $"{B("Action")}: tap = light, hold = heavy"));
                     l.Add(("Aim / scope", "hold " + B("Aim")));
                     l.Add(("Weapons", $"{B("NextWeapon")} / {B("PrevWeapon")}: next / previous.  {B("Wheel")}: wheel"));
@@ -95,6 +138,7 @@ namespace RexMagnum
                     l.Add(("Look", "Mouse"));
                     l.Add(("Run", "hold " + B("Run")));
                     l.Add(("Jump", B("Jump")));
+                    l.Add(("Dodge", B("Dodge") + "  (quick dash, untouchable for a moment; no direction = back)"));
                     l.Add(("Attack", $"{B("Action")}: tap = light, hold = heavy"));
                     l.Add(("Aim / scope", "hold " + B("Aim")));
                     l.Add(("Weapons", $"{B("NextWeapon")} / {B("PrevWeapon")} or mouse wheel.  {B("Wheel")}: wheel"));

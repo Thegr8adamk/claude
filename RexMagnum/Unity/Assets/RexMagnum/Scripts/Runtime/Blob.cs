@@ -117,6 +117,44 @@ namespace RexMagnum
             ApplyKind();
             if (jellyRenderer != null && jellyRenderer.sharedMaterial != null)
                 baseColor = jellyRenderer.sharedMaterial.GetColor("_BaseColor");
+            if (jellyRenderer != null) jellyBaseScale = jellyRenderer.transform.localScale;
+        }
+
+        // hit reaction (every hit): a short white flash and a squash of the jelly
+        const float FlashTime = 0.08f, SquashTime = 0.12f;
+        float flashUntil, squashUntil;
+        Vector3 jellyBaseScale = Vector3.one;
+
+        void Squash()
+        {
+            if (jellyRenderer == null) return;
+            float k = squashUntil > Time.time ? (squashUntil - Time.time) / SquashTime : 0f;
+            var t = jellyRenderer.transform;
+            if (k <= 0f) { if (t.localScale != jellyBaseScale) t.localScale = jellyBaseScale; return; }
+            float s = Mathf.Sin(k * Mathf.PI) * 0.22f;                     // flat and wide, then back
+            t.localScale = Vector3.Scale(jellyBaseScale, new Vector3(1f + s * 0.5f, 1f - s, 1f + s * 0.5f));
+        }
+
+        // far-away blobs nobody sees go away quietly (keeps the blob count and the agents down)
+        const float CullDistance = 90f, CullAfter = 20f;
+        float hiddenSince = -1f, nextCull;
+
+        void CullCheck()
+        {
+            if (Time.time < nextCull) return;
+            nextCull = Time.time + 1f;
+            if (kind == Kind.KingGlorp || KingGlorpBoss.Fighting || rex == null) { hiddenSince = -1f; return; }
+            bool far = (transform.position - rex.position).sqrMagnitude > CullDistance * CullDistance;
+            var cam = Camera.main;
+            bool seen = false;
+            if (cam != null)
+            {
+                Vector3 v = cam.WorldToViewportPoint(transform.position + Vector3.up * HeightOf() * 0.5f);
+                seen = v.z > 0f && v.x > -0.1f && v.x < 1.1f && v.y > -0.1f && v.y < 1.1f;
+            }
+            if (!far || seen) { hiddenSince = -1f; return; }
+            if (hiddenSince < 0f) hiddenSince = Time.time;
+            else if (Time.time - hiddenSince > CullAfter) Destroy(gameObject);
         }
 
         void ApplyKind()
@@ -142,12 +180,16 @@ namespace RexMagnum
                 rexHealth = p.GetComponent<Health>();
             }
             nextAttack = Time.time + Random.Range(1f, 3f);
+            nextCull = Time.time + Random.Range(0f, 1f);                   // spread the checks over the frames
+            SetNightGlow(DayNight.Night);         // DayNight only writes the glow when Night changes: a new blob gets it here
         }
 
         void Update()
         {
+            Squash();                                                      // also restores the jelly when it dies mid-squash
             if (!health.IsDead && Random.value < Time.deltaTime * 0.06f) Sfx.Play("blob_idle", transform.position, 0.5f);
             if (health.IsDead) return;
+            CullCheck();
             if (animator != null) animator.SetFloat(SpeedHash, agent.enabled ? agent.velocity.magnitude : 0f);
             // wet squelch now and then while sliding fast (not every frame: one blob every ~1.5-3 s)
             if (agent.enabled && agent.velocity.sqrMagnitude > 2.25f && Time.time > nextSlideSfx)
@@ -167,7 +209,14 @@ namespace RexMagnum
                 jellyRenderer.GetPropertyBlock(mpb);
                 var dark = baseColor * 0.45f;
                 dark.a = baseColor.a;                          // darker, not more see-through
-                mpb.SetColor("_BaseColor", Color.Lerp(baseColor, dark, angry));
+                var col = Color.Lerp(baseColor, dark, angry);
+                // hit flash: toward white for 0.08 s
+                if (Time.time < flashUntil)
+                {
+                    float f = (flashUntil - Time.time) / FlashTime;
+                    col = Color.Lerp(col, new Color(1f, 1f, 1f, col.a), f * 0.85f);
+                }
+                mpb.SetColor("_BaseColor", col);
                 jellyRenderer.SetPropertyBlock(mpb);
             }
 
@@ -210,7 +259,7 @@ namespace RexMagnum
             bool melee = kind == Kind.Bouncer || (kind == Kind.KingGlorp && dist < 4f) || dist < 2.2f;
             string clip = melee ? "Whip" : kind == Kind.Lifeguard ? "Throw" : "Spit";
             Play(clip);
-            if (!melee) Sfx.Play("blob_spit", transform.position, 0.8f);
+            Sfx.Play(melee ? "blob_whip" : "blob_spit", transform.position, 0.8f);
             busyUntil = Time.time + 0.6f;
             yield return new WaitForSeconds(melee ? 0.4f : 0.45f);
             if (health.IsDead || rex == null) yield break;
@@ -307,6 +356,8 @@ namespace RexMagnum
             // a hit that does not kill: the weapon's death style (golf fling, knife leak) must not stay for a later kill
             if (health.Current > 0f) { deathStyle = DeathStyle.Pop; flingSpeed = 0f; }
             if (!health.IsDead && !IsStunned) Play("Hit", 0.03f);
+            flashUntil = Time.time + FlashTime;                            // every hit, light ones too
+            squashUntil = Time.time + SquashTime;
             Sfx.Play("blob_hit", point);
         }
 
@@ -354,10 +405,12 @@ namespace RexMagnum
             {
                 case DeathStyle.Leak:          // knife: leaks and shrinks like a balloon
                     if (animator != null) animator.CrossFadeInFixedTime("Hit", 0.05f);
+                    float nextDrip = 0f;
                     for (float k = 0; k < 1.2f; k += Time.deltaTime)
                     {
                         t.localScale *= 1f - Time.deltaTime * 0.9f;
-                        if (Random.value < 0.3f) SlimePuddle.Spawn(t.position, BaseColor(), 0.25f);
+                        // a drip every 0.15 s (not a chance per frame: at high frame rates that was dozens of puddles)
+                        if (k >= nextDrip) { nextDrip = k + 0.15f; SlimePuddle.Spawn(t.position, BaseColor(), 0.25f); }
                         t.Rotate(0, 600 * Time.deltaTime, 0);
                         yield return null;
                     }

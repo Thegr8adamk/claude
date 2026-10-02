@@ -55,7 +55,7 @@ namespace RexMagnum.EditorTools
             }
             var urp = (UniversalRenderPipelineAsset)GraphicsSettings.defaultRenderPipeline;
             urp.supportsCameraDepthTexture = true;
-            // shadow defaults = High tier (QualityAuto lowers them at start on weaker hardware)
+            // shadow defaults = Ultra tier (QualityAuto sets the real tier at start)
             // (reflection helper: some of these setters are internal in URP 17)
             RexMagnum.QualityAuto.SetUrp(urp, "shadowCascadeCount", "m_ShadowCascadeCount", 4);
             RexMagnum.QualityAuto.SetUrp(urp, "mainLightShadowmapResolution", "m_MainLightShadowmapResolution", 4096);

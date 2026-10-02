@@ -44,9 +44,9 @@ namespace RexMagnum
 
         // ---- keyboard remap (brief section 7): action -> key, saved in PlayerPrefs "RexMagnum_Key_<action>"
         public static readonly string[] Actions = { "Forward", "Back", "Left", "Right", "Run", "Jump", "Taunt", "Photo",
-                                                    "Hands", "Use", "Camera", "Shoulder", "NextWeapon", "PrevWeapon", "Pause", "Wheel" };
+                                                    "Hands", "Use", "Camera", "Shoulder", "NextWeapon", "PrevWeapon", "Pause", "Wheel", "Dodge" };
         static readonly Key[] Defaults = { Key.W, Key.S, Key.A, Key.D, Key.LeftShift, Key.Space, Key.T, Key.P,
-                                           Key.H, Key.F, Key.V, Key.C, Key.E, Key.Q, Key.Escape, Key.Tab };
+                                           Key.H, Key.F, Key.V, Key.C, Key.E, Key.Q, Key.Escape, Key.Tab, Key.LeftCtrl };
         static Key[] keys;
         public static Key KeyFor(string action)
         {
@@ -141,7 +141,7 @@ namespace RexMagnum
         {
             { "Use", "X" }, { "Jump", "A" }, { "Taunt", "D-pad up" }, { "Photo", "D-pad right" }, { "Hands", "D-pad down" },
             { "Camera", "R-stick click" }, { "Shoulder", "D-pad left" }, { "Pause", "Menu" }, { "Wheel", "hold Y" },
-            { "Run", "L-stick click" }, { "Action", "RT" }, { "Aim", "LT" }, { "NextWeapon", "RB" }, { "PrevWeapon", "LB" },
+            { "Run", "L-stick click" }, { "Dodge", "B" }, { "Action", "RT" }, { "Aim", "LT" }, { "NextWeapon", "RB" }, { "PrevWeapon", "LB" },
         };
 
         /// <summary>The name to show for an action's button on the device used last ("F", "X", "Use").</summary>
@@ -163,10 +163,10 @@ namespace RexMagnum
         }
 
         // ---- controller remap (brief section 7: button lists per device, swap on conflict)
-        public static readonly string[] PadActions = { "Jump", "Use", "Wheel", "Taunt", "Photo", "Hands", "Shoulder", "Camera", "Run", "Pause" };
+        public static readonly string[] PadActions = { "Jump", "Use", "Wheel", "Taunt", "Photo", "Hands", "Shoulder", "Camera", "Run", "Pause", "Dodge" };
         static readonly GamepadButton[] PadDefaults = { GamepadButton.South, GamepadButton.West, GamepadButton.North,
             GamepadButton.DpadUp, GamepadButton.DpadRight, GamepadButton.DpadDown, GamepadButton.DpadLeft,
-            GamepadButton.RightStick, GamepadButton.LeftStick, GamepadButton.Start };
+            GamepadButton.RightStick, GamepadButton.LeftStick, GamepadButton.Start, GamepadButton.East };
         /// <summary>Buttons that can be given to an action (sticks and triggers have their own swap options).</summary>
         public static readonly GamepadButton[] PadChoices = { GamepadButton.South, GamepadButton.East, GamepadButton.West,
             GamepadButton.North, GamepadButton.DpadUp, GamepadButton.DpadDown, GamepadButton.DpadLeft, GamepadButton.DpadRight,
@@ -281,12 +281,42 @@ namespace RexMagnum
             }
         }
         public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame);
+        public static bool Dodge => TouchState.Down("Dodge") || (KDown("Dodge")) || (G != null && PB("Dodge").wasPressedThisFrame);
+
+        // ---- controller rumble: short motor pulses on hits and shots. Only when the controller was used last and the
+        // setting (PlayerPrefs "RexMagnum_Rumble", default on) allows it. RexCameraRig calls TickRumble every frame.
+        static float rumbleUntil, rumbleLow, rumbleHigh;
+        static bool rumbling;
+        /// <summary>Rumble the controller (motor speeds 0..1) for a short time; a stronger pulse wins over a weaker one.</summary>
+        public static void Rumble(float low, float high, float seconds)
+        {
+            if (G == null || LastDevice != DeviceKind.Gamepad || PlayerPrefs.GetInt("RexMagnum_Rumble", 1) == 0) return;
+            bool on = Time.unscaledTime < rumbleUntil;
+            rumbleLow = on ? Mathf.Max(rumbleLow, low) : low;
+            rumbleHigh = on ? Mathf.Max(rumbleHigh, high) : high;
+            rumbleUntil = Mathf.Max(rumbleUntil, Time.unscaledTime + seconds);
+        }
+        /// <summary>Drive the motors (unscaled time: a hit-stop does not stretch the pulse). Off when done or paused.</summary>
+        public static void TickRumble()
+        {
+            bool want = Time.unscaledTime < rumbleUntil && !PauseMenu.Open && Time.timeScale > 0f && G != null;
+            if (want) { G.SetMotorSpeeds(rumbleLow, rumbleHigh); rumbling = true; }
+            else if (rumbling) StopRumble();
+        }
+        public static void StopRumble()
+        {
+            rumbleUntil = 0f;
+            rumbling = false;
+            if (G != null) G.SetMotorSpeeds(0f, 0f);
+        }
         /// <summary>The kill cam is on screen, or was skipped this frame: the skip click does not also attack.</summary>
         public static int ActionBlockedFrame = -1;
         public static bool ActionDown => !KillCam.Active && Time.frameCount != ActionBlockedFrame && (TouchState.Down("Action") || (M != null && M.leftButton.wasPressedThisFrame) ||
                                          (G != null && ActTrig.wasPressedThisFrame));
         public static bool ActionHeld => TouchState.Held("Action") || (M != null && M.leftButton.isPressed) || (G != null && ActTrig.isPressed);
-        public static bool ActionUp => (!KillCam.Active && Time.frameCount - ActionBlockedFrame > 30 && TouchState.Up("Action")) ||   // a tap that skipped the kill cam does not fire (M != null && M.leftButton.wasReleasedThisFrame) ||
+        // touch: a tap that skipped the kill cam does not fire on release
+        public static bool ActionUp => (!KillCam.Active && Time.frameCount - ActionBlockedFrame > 30 && TouchState.Up("Action")) ||
+                                       (M != null && M.leftButton.wasReleasedThisFrame) ||
                                        (G != null && ActTrig.wasReleasedThisFrame);
         public static bool Aim
         {
@@ -335,7 +365,12 @@ namespace RexMagnum
         public static bool LookBlocked;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { LookBlocked = false; ActionBlockedFrame = -1; }      // editor with Domain Reload off
+        static void ResetStatics()       // editor with Domain Reload off
+        {
+            LookBlocked = false; ActionBlockedFrame = -1; rumbleUntil = 0f; rumbling = false;
+            Application.quitting -= StopRumble;          // a pad must not keep buzzing after the game closes
+            Application.quitting += StopRumble;
+        }
         public static bool NextWeapon => (TouchState.Up("Weapon") && TouchState.HeldFor("Weapon") < WheelHoldTime) || (KDown("NextWeapon")) || (M != null && M.scroll.ReadValue().y < -0.1f) ||
                                          (G != null && NextBtn.wasPressedThisFrame);
         public static bool PrevWeapon => (KDown("PrevWeapon")) || (M != null && M.scroll.ReadValue().y > 0.1f) ||
