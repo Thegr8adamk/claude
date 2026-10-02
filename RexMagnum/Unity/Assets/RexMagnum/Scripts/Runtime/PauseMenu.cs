@@ -68,16 +68,22 @@ namespace RexMagnum
                 if (tab != 3 && g != null)
                     scroll.y += -g.leftStick.ReadValue().y * 900f * Time.unscaledDeltaTime;   // scroll the lists with the stick
                 // arrows / W S / D-pad scroll the long lists (accomplishments, album, map info); the scroll view clamps the end
-                if (tab == 0 && travelOk && travel.Count > 0)
+                // PageUp / PageDown always scroll (also past the MAP's travel buttons)
+                if (tab != 3 && k != null && k[Key.PageUp].wasPressedThisFrame) scroll.y = Mathf.Max(0f, scroll.y - 420f * Screen.height / 1080f);
+                if (tab != 3 && k != null && k[Key.PageDown].wasPressedThisFrame) scroll.y += 420f * Screen.height / 1080f;
+                if (tab == 0 && travelOk && travel.Count > 0 && travelSel < travel.Count)
                 {
-                    // MAP with fast travel: Up / Down pick a TRAVEL button, OK goes (the stick still scrolls)
-                    if (MenuNav.Up) { travelSel = (travelSel + travel.Count - 1) % travel.Count; MenuNav.Click(); }
-                    if (MenuNav.Down) { travelSel = (travelSel + 1) % travel.Count; MenuNav.Click(); }
-                    if (MenuNav.Ok) { MenuNav.Consume(); pendingTravel = travelSel; }
+                    // MAP with fast travel: Up / Down pick a TRAVEL button, OK goes (the stick still scrolls). Down
+                    // past the last button goes on to scrolling the lists below (zones, big goals, clues)
+                    if (MenuNav.Up && travelSel > 0) { travelSel--; travelConfirm = -1; MenuNav.Click(); }
+                    if (MenuNav.Down) { travelSel++; travelConfirm = -1; if (travelSel >= travel.Count) scroll.y += 140f * Screen.height / 1080f; MenuNav.Click(); }
+                    if (travelSel < travel.Count && MenuNav.Ok) { MenuNav.Consume(); pendingTravel = travelSel; }
                 }
                 else
                 {
-                    if (tab != 3 && MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 140f * Screen.height / 1080f);
+                    // the MAP scrolled back to the top: Up picks the last TRAVEL button again
+                    if (tab == 0 && travelOk && travel.Count > 0 && MenuNav.Up && scroll.y <= 0.5f) { travelSel = travel.Count - 1; MenuNav.Click(); }
+                    else if (tab != 3 && MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 140f * Screen.height / 1080f);
                     if (tab != 3 && MenuNav.Down) scroll.y += 140f * Screen.height / 1080f;
                 }
                 if (tab != 3 && (MenuNav.Left || MenuNav.PagePrev)) SetTab(tab - 1);
@@ -106,6 +112,7 @@ namespace RexMagnum
         {
             tab = (t + Tabs.Length) % Tabs.Length;
             scroll = Vector2.zero;
+            travelSel = 0; travelConfirm = -1;      // back on the MAP: the first TRAVEL button, the list at the top
             tabSince = Time.unscaledTime;
             MenuNav.Click();
         }
@@ -293,7 +300,18 @@ namespace RexMagnum
             }
             foreach (var z in GameGuide.Zones)
                 Dot(P(z.at), 16 * s, GameGuide.Visited(z.id) ? new Color(0.3f, 1f, 0.35f) : new Color(0.55f, 0.55f, 0.55f));
+            // fast travel stops: small white pins (greyed while blocked)
+            foreach (var ts in travel)
+                Dot(P(ts.at), 9 * s, ts.why == null ? Color.white : new Color(0.6f, 0.6f, 0.6f));
             var old = GUI.matrix;
+            if (objectiveHas && GameGuide.SideHasTarget)
+            {
+                // a side event's spot (the cave siege at night): a smaller blue diamond
+                var sp = P(GameGuide.SideTarget);
+                GUIUtility.RotateAroundPivot(45f, sp);
+                Dot(sp, 15 * s, new Color(0.35f, 0.7f, 1f));
+                GUI.matrix = old;
+            }
             if (objectiveHas)
             {
                 // the next goal: a yellow diamond that pulses
@@ -339,7 +357,7 @@ namespace RexMagnum
             if (!string.IsNullOrEmpty(objective)) GUILayout.Label("NEXT: " + objective, label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Side != null) GUILayout.Label("<color=#B8E6A0>" + GameGuide.Side + "</color>", label);
-            GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
+            GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.  Blue = night event.  White = fast travel.", small);
             TravelSection();
             Section("ISLAND ZONES");
             foreach (var z in GameGuide.Zones)
@@ -454,11 +472,12 @@ namespace RexMagnum
 
         // ------------------------------------------------------------ fast travel (MAP tab)
 
-        struct TravelSpot { public string name; public Vector3 at; public float yaw; }
+        /// <summary>why: this stop is off now (blobs there), else null. siege: the cave stop while the night siege can start.</summary>
+        struct TravelSpot { public string name, why; public Vector3 at; public float yaw; public bool siege; }
         readonly List<TravelSpot> travel = new List<TravelSpot>();
         bool travelOk, traveling;
         string travelWhy;
-        int travelSel, pendingTravel = -1;
+        int travelSel, pendingTravel = -1, travelConfirm = -1;
         float travelFade;
 
         /// <summary>The fast travel stops when the menu opens (nothing moves while paused): per visited zone the cart
@@ -469,6 +488,7 @@ namespace RexMagnum
             travel.Clear();
             travelSel = 0;
             pendingTravel = -1;
+            travelConfirm = -1;
             travelWhy = TravelBlock(FindAnyObjectByType<RexController>());
             travelOk = travelWhy == null;
             var best = new Dictionary<string, Vector3>();
@@ -486,13 +506,55 @@ namespace RexMagnum
                 if (best.TryGetValue(z.id, out Vector3 station))
                 {
                     Vector3 at = FreeSpot(station, out float yaw);
-                    travel.Add(new TravelSpot { name = StopName(z.id), at = at, yaw = yaw });
+                    travel.Add(new TravelSpot { name = StopName(z.id), at = at, yaw = yaw, why = StopBlock(at) });
                 }
             if (GameGuide.Visited("cave"))
             {
                 var ex = GameObject.Find("Cave_ExitA");        // outside the cave door, facing away from it (IslandBuilder.DoorPair)
-                if (ex != null) travel.Add(new TravelSpot { name = "Cave mouth (north-west)", at = ex.transform.position, yaw = ex.transform.eulerAngles.y });
+                if (ex != null)
+                {
+                    Vector3 cave = CaveStop(ex.transform);
+                    bool siege = GameGuide.CaveSiegeOpen();
+                    travel.Add(new TravelSpot { name = "Cave mouth (north-west)" + (siege ? "  (night siege!)" : ""), at = cave,
+                                                yaw = ex.transform.eulerAngles.y, why = StopBlock(cave), siege = siege });
+                }
             }
+        }
+
+        static string SiegeWarning => NightSiege.Hint ?? "The cave is besieged at night: fight, or come back at dawn.";
+
+        /// <summary>Why this stop is off right now (Rex would land among blobs), or null: a living blob within 25 m,
+        /// or within reach of an active blob spawner (radius + 5 m: it would fill up around him).</summary>
+        static string StopBlock(Vector3 at)
+        {
+            if (Blob.LivingNear(at, 25f) > 0) return "blobs there";
+            foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
+            {
+                if (sp == null || !sp.isActiveAndEnabled || sp.prefabs == null || sp.prefabs.Length == 0) continue;
+                Vector3 f = sp.transform.position - at; f.y = 0f;
+                float r = sp.radius + 5f;
+                if (f.sqrMagnitude < r * r && Mathf.Abs(sp.transform.position.y - at.y) < 20f) return "blobs there";
+            }
+            return null;
+        }
+
+        /// <summary>The cave stop: ~15 m out from the cave door along its way out (the exit faces away from the door),
+        /// on the ground and the NavMesh, clear of the night siege's fight right at the mouth. Else the exit itself.</summary>
+        static Vector3 CaveStop(Transform exit)
+        {
+            Vector3 fwd = exit.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.01f) return exit.position;
+            fwd.Normalize();
+            for (float d = 15f; d >= 5f; d -= 5f)
+            {
+                Vector3 p = exit.position + fwd * d;
+                if (!Physics.Raycast(p + Vector3.up * 15f, Vector3.down, out RaycastHit hit, 40f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                if (Mathf.Abs(hit.point.y - exit.position.y) > 6f) continue;            // a cliff or a ledge on the way
+                if (!UnityEngine.AI.NavMesh.SamplePosition(hit.point, out UnityEngine.AI.NavMeshHit nav, 2f, UnityEngine.AI.NavMesh.AllAreas)) continue;
+                if (WaterVolume.Depth(nav.position + Vector3.up * 0.1f) > 0.2f) continue;  // the waterfall pool
+                return nav.position + Vector3.up * 0.1f;
+            }
+            return exit.position;
         }
 
         /// <summary>Why fast travel is off right now, or null.</summary>
@@ -564,16 +626,21 @@ namespace RexMagnum
             Section("FAST TRAVEL");
             if (travel.Count == 0) { GUILayout.Label("Find the golf cart charge stations (resort, golf course, ruins) and the cave: you can travel there from here.", small); return; }
             if (!travelOk) GUILayout.Label("<color=#FF9C80>" + travelWhy + "</color>", small);
+            // the cave stop at night (siege can start): one more OK first, with the warning
+            if (travelOk && travelConfirm >= 0 && travelConfirm < travel.Count)
+                GUILayout.Label("<color=#9CCBFF>" + SiegeWarning + "  Press TRAVEL again to go.</color>", small);
             for (int i = 0; i < travel.Count; i++)
             {
                 var r = GUILayoutUtility.GetRect(10f, 54f * ui, GUILayout.ExpandWidth(true));
+                bool can = travelOk && travel[i].why == null;
                 bool hover = travelOk && r.Contains(Event.current.mousePosition);
-                if (hover && travelSel != i && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) travelSel = i;
+                if (hover && travelSel != i && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) { travelSel = i; travelConfirm = -1; }
                 if (Event.current.type == EventType.Repaint)
                 {
                     var old = GUI.color;
-                    if (!travelOk) GUI.color = new Color(old.r, old.g, old.b, old.a * 0.45f);      // greyed: not now
-                    button.Draw(r, "TRAVEL:  " + travel[i].name, hover, false, travelOk && travelSel == i && MenuNav.PadOrKeys, false);
+                    if (!can) GUI.color = new Color(old.r, old.g, old.b, old.a * 0.45f);      // greyed: not now
+                    string text = "TRAVEL:  " + travel[i].name + (travel[i].why != null ? "  (" + travel[i].why + ")" : "");
+                    button.Draw(r, travelConfirm == i ? "AGAIN TO GO:  " + travel[i].name : text, hover, false, travelOk && travelSel == i && MenuNav.PadOrKeys, false);
                     GUI.color = old;
                 }
                 if (travelOk && Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
@@ -589,9 +656,13 @@ namespace RexMagnum
         void StartTravel(int i)
         {
             if (i < 0 || i >= travel.Count || !travelOk || traveling || !Open) return;
+            var spot = travel[i];
+            if (spot.why != null) return;                          // greyed: blobs there
+            // into the night siege: a warning and one more OK first
+            if (spot.siege && travelConfirm != i) { travelConfirm = i; return; }
+            travelConfirm = -1;
             var rex = FindAnyObjectByType<RexController>();
             if (rex == null) return;
-            var spot = travel[i];
             SetOpen(false);
             StartCoroutine(Travel(rex, spot));
         }
@@ -615,6 +686,9 @@ namespace RexMagnum
             yield return new WaitForSecondsRealtime(0.15f);
             for (float t = 1f; t > 0f; t -= Time.unscaledDeltaTime / 0.4f) { travelFade = t; yield return null; }
             travelFade = 0f;
+            // a short breather after the arrival: the night siege does not start while the screen fades in
+            NightSiege.Breather(60f);
+            if (spot.siege) RexTestHUD.Notice(SiegeWarning, 5f);
             // input back as the menu's resume gives it (not at the cart's wheel, not in the ending)
             if (rex != null && GolfCart.Driven == null && !Open && !EndingSequence.Playing) rex.InputEnabled = true;
             traveling = false;

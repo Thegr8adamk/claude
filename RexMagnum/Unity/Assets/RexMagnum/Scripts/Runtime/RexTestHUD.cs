@@ -105,8 +105,8 @@ namespace RexMagnum
         Text notice, objectiveText, compassDist;
         float noticeUntil;
         Image flash, arc, hpFillImg;
-        RectTransform compass, compassMarker, hpBar, hpFill, hpGhost;
-        CanvasGroup markerGroup, hitGroup;
+        RectTransform compass, compassMarker, sideMarker, hpBar, hpFill, hpGhost;
+        CanvasGroup markerGroup, sideGroup, hitGroup;
         readonly Text[] compassLabels = new Text[8];
         static readonly string[] Dirs = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
         const float HpW = 420f, CompassRange = 150f;      // health bar width; compass shows 150 degrees
@@ -155,6 +155,17 @@ namespace RexMagnum
             compassDist = MakeText(compassMarker, font, new Vector2(0.5f, 0.5f), new Vector2(0, -42), 18, TextAnchor.MiddleCenter);
             compassDist.rectTransform.sizeDelta = new Vector2(140, 24);
             compassDist.color = new Color(1f, 0.85f, 0.3f);
+            // the side event's marker (the cave siege at night while the main goal is elsewhere): a smaller blue diamond
+            var sm = new GameObject("SideGoal", typeof(RectTransform), typeof(CanvasGroup));
+            sm.transform.SetParent(compass, false);
+            sideMarker = sm.GetComponent<RectTransform>();
+            sideGroup = sm.GetComponent<CanvasGroup>();
+            sideGroup.alpha = 0f;
+            var sd = MakeImage(sideMarker, "Diamond", new Color(0.35f, 0.7f, 1f));
+            sd.rectTransform.sizeDelta = new Vector2(11, 11);
+            sd.rectTransform.anchoredPosition = new Vector2(0, -22);
+            sd.rectTransform.localEulerAngles = new Vector3(0, 0, 45f);
+            sd.gameObject.AddComponent<Outline>().effectColor = Color.black;
         }
 
         RectTransform hudRoot, worldGoal;
@@ -503,8 +514,8 @@ namespace RexMagnum
         // ------------------------------------------------------------ objective + compass
 
         string objective;
-        Vector3 objectiveAt;
-        bool objectiveHas;
+        Vector3 objectiveAt, sideAt;
+        bool objectiveHas, sideHas;
         float nextObjective;
 
         Transform RexT => actions != null && actions.controller != null ? actions.controller.transform : rig != null ? rig.target : null;
@@ -513,12 +524,16 @@ namespace RexMagnum
         {
             if (Time.unscaledTime < nextObjective) return;
             // the bar defense marker follows a moving wave blob: refreshed 5 times a second while it runs
-            nextObjective = Time.unscaledTime + (BarActive(out _, out _) ? 0.2f : 0.5f);
+            nextObjective = Time.unscaledTime + (BarDefense.Active || NightSiege.Active ? 0.2f : 0.5f);
             var rex = RexT;
             // no goal over the title / intro or the room hints: the first goal is announced when the tutorial ends
             string warning = null, side = null;
-            if (GameFlow.Busy || GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
-            else { objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; side = GameGuide.Side; }
+            if (GameFlow.Busy || GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; sideHas = false; }
+            else
+            {
+                objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; side = GameGuide.Side;
+                sideHas = GameGuide.SideHasTarget; sideAt = GameGuide.SideTarget;      // a side event's own (blue) marker
+            }
             // the bar defense set piece: its own line while the waves come (the step id stays: no NEW GOAL after it)
             if (objective != null && BarActive(out int wave, out int waves))
             {
@@ -531,7 +546,7 @@ namespace RexMagnum
             if (side != null && layoutTouch)
                 side = side == GameGuide.BarSide ? "Side: blobs head for the lounge bar!"
                      : side == GameGuide.SniperSide ? "Side: sniper rifle on the hotel roof."
-                     : side == GameGuide.CaveSide ? "Night: defend the cave mouth (NW)!" : side;
+                     : side == GameGuide.CaveSide ? "Night: cave siege (NW). Fight, or wait for day." : side;
             // built only when one of the parts changed (twice a second otherwise: small garbage, but none needed)
             if (objective != shownObjective || warning != shownWarning || side != shownSide)
             {
@@ -547,28 +562,11 @@ namespace RexMagnum
             AnnounceGoal(objective != null ? GameGuide.StepId : null);
         }
 
-        static System.Type barType;
-        static bool barLooked;
-
-        /// <summary>BarDefense.Active / Wave / Waves, read by name (static field or property): the HUD compiles and
-        /// works without the bar set piece in the build.</summary>
+        /// <summary>BarDefense.Active, with its Wave / Waves.</summary>
         static bool BarActive(out int wave, out int waves)
         {
-            wave = 0; waves = 0;
-            if (!barLooked) { barLooked = true; barType = System.Type.GetType("RexMagnum.BarDefense"); }
-            if (barType == null || !(BarStatic("Active") is bool on) || !on) return false;
-            if (BarStatic("Wave") is int wv) wave = wv;
-            if (BarStatic("Waves") is int wn) waves = wn;
-            return true;
-        }
-
-        static object BarStatic(string name)
-        {
-            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
-            var pi = barType.GetProperty(name, F);
-            if (pi != null) return pi.GetValue(null, null);
-            var fi = barType.GetField(name, F);
-            return fi != null ? fi.GetValue(null) : null;
+            wave = BarDefense.Wave; waves = BarDefense.Waves;
+            return BarDefense.Active;
         }
 
         string goalShown, goalPending, shownObjective, shownWarning, shownSide;
@@ -631,6 +629,13 @@ namespace RexMagnum
             var rex = RexT;
             WorldGoal(cam, rex);
             markerGroup.alpha = objectiveHas && rex != null ? 1f : 0f;
+            sideGroup.alpha = sideHas && objectiveHas && rex != null ? 1f : 0f;
+            if (sideHas && rex != null)
+            {
+                Vector3 sto = sideAt - rex.position;
+                float sb = Mathf.Atan2(sto.x, sto.z) * Mathf.Rad2Deg;
+                sideMarker.anchoredPosition = new Vector2(Mathf.Clamp(Mathf.DeltaAngle(yaw, sb), -CompassRange * 0.5f, CompassRange * 0.5f) * px, 0f);
+            }
             if (!objectiveHas || rex == null) return;
             Vector3 to = objectiveAt - rex.position;
             to.y = 0f;

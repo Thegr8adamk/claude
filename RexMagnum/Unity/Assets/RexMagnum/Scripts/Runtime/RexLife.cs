@@ -65,7 +65,11 @@ namespace RexMagnum
             RexTestHUD.Notice("CHECKPOINT", 1.2f);
             // kept across sessions (GameFlow wakes a returning player here), but never the boss one: a returning
             // player must not wake beside King Glorp. Nor one whose goal is already done.
-            if (key != "boss" && !Stale(key)) WriteSaved(checkpointPos, checkpointYaw, key);
+            if (key != "boss" && !Stale(key))
+            {
+                PlayerPrefs.DeleteKey(SavedSpotKey);       // the newest place wins the wake after PLAY: an older quit spot goes
+                WriteSaved(SavedCheckpointKey, checkpointPos, checkpointYaw, key);
+            }
         }
 
         /// <summary>A checkpoint whose zone no longer matters: the ruins once the factory is stopped, the cave, ship
@@ -77,11 +81,11 @@ namespace RexMagnum
             return false;       // "spot" (where Rex was when the game quit): always fine
         }
 
-        /// <summary>"x,y,z,yaw,zone" in the invariant culture.</summary>
-        static void WriteSaved(Vector3 p, float yaw, string zone)
+        /// <summary>"x,y,z,yaw,zone" in the invariant culture, under prefKey (rm_cp zone checkpoint, rm_spot quit spot).</summary>
+        static void WriteSaved(string prefKey, Vector3 p, float yaw, string zone)
         {
             var ic = System.Globalization.CultureInfo.InvariantCulture;
-            PlayerPrefs.SetString(SavedCheckpointKey, string.Format(ic, "{0:0.###},{1:0.###},{2:0.###},{3:0.#},{4}",
+            PlayerPrefs.SetString(prefKey, string.Format(ic, "{0:0.###},{1:0.###},{2:0.###},{3:0.#},{4}",
                 p.x, p.y, p.z, yaw, zone));
             PlayerPrefs.Save();
         }
@@ -103,7 +107,12 @@ namespace RexMagnum
         void DropStaleCheckpoints()
         {
             if (hasCheckpoint && Stale(checkpointZone)) { hasCheckpoint = false; checkpointKey = null; }
-            if (ParseSaved(out Vector3 sp, out float sy, out string sz) && (sz == "boss" || Stale(sz))) ClearSavedCheckpoint();
+            MigrateOldSpot();
+            if (ParseSaved(SavedCheckpointKey, out Vector3 sp, out float sy, out string sz) && (sz == "boss" || Stale(sz)))
+            {
+                PlayerPrefs.DeleteKey(SavedCheckpointKey);        // only the zone one: the quit spot is never stale
+                PlayerPrefs.Save();
+            }
         }
 
         /// <summary>QUIT TO TITLE / app quit: remember where Rex is, so a returning player wakes there. Only a calm
@@ -118,7 +127,8 @@ namespace RexMagnum
             Vector3 p = r.transform.position;
             if (Blob.LivingNear(p, 20f) > 0) return;
             if (!CalmGround(r.transform, p) || NearActiveSpawner(p)) return;
-            WriteSaved(p, r.transform.eulerAngles.y, "spot");
+            // its own key: an alt-tab (OnApplicationPause) must not overwrite the cave / ruins / ship checkpoint deaths use
+            WriteSaved(SavedSpotKey, p, r.transform.eulerAngles.y, "spot");
         }
 
         /// <summary>A quit spot Rex can wake at again: not on something that moves (an elevator cab wakes him in the
@@ -145,13 +155,26 @@ namespace RexMagnum
             if (instance != null && instance.health != null) instance.health.Invulnerable(s);
         }
 
-        /// <summary>PlayerPrefs key of the last saved checkpoint (cave, ruins, ship, or the quit spot):
-        /// "x,y,z,yaw,zone" (older saves: "x,y,z,yaw").</summary>
+        /// <summary>PlayerPrefs key of the last saved zone checkpoint (cave, ruins, ship):
+        /// "x,y,z,yaw,zone" (older saves: "x,y,z,yaw", or the quit spot with zone "spot").</summary>
         public const string SavedCheckpointKey = "rm_cp";
-        /// <summary>NEW GAME: forget the saved checkpoint.</summary>
+        /// <summary>PlayerPrefs key of the quit spot (QUIT TO TITLE / app quit / backgrounded): "x,y,z,yaw,spot".</summary>
+        public const string SavedSpotKey = "rm_spot";
+        /// <summary>NEW GAME (and the boss win): forget the saved checkpoint and the quit spot.</summary>
         public static void ClearSavedCheckpoint()
         {
-            if (!PlayerPrefs.HasKey(SavedCheckpointKey)) return;
+            if (!PlayerPrefs.HasKey(SavedCheckpointKey) && !PlayerPrefs.HasKey(SavedSpotKey)) return;
+            PlayerPrefs.DeleteKey(SavedCheckpointKey);
+            PlayerPrefs.DeleteKey(SavedSpotKey);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>Older saves kept the quit spot in rm_cp (zone "spot"): move it to rm_spot (unless a newer one is
+        /// there), so rm_cp holds only zone checkpoints.</summary>
+        static void MigrateOldSpot()
+        {
+            if (!ParseSaved(SavedCheckpointKey, out Vector3 op, out float oy, out string oz) || oz != "spot") return;
+            if (!PlayerPrefs.HasKey(SavedSpotKey)) WriteSaved(SavedSpotKey, op, oy, "spot");
             PlayerPrefs.DeleteKey(SavedCheckpointKey);
             PlayerPrefs.Save();
         }
@@ -161,19 +184,28 @@ namespace RexMagnum
         /// (GameFlow calls this right before the wake teleport).</summary>
         public static bool TryLoadSavedCheckpoint(out Vector3 pos, out float yaw)
         {
-            if (!ParseSaved(out pos, out yaw, out string zone)) return false;
-            if (zone == "boss" || Stale(zone)) { ClearSavedCheckpoint(); return false; }
+            MigrateOldSpot();
+            // the quit spot first (where the player left off), else the last zone checkpoint
+            if (ParseSaved(SavedSpotKey, out pos, out yaw, out string spotZone) && spotZone == "spot" && !NearActiveSpawner(pos))
+            { WakeGrace(3f); return true; }
+            if (!ParseSaved(SavedCheckpointKey, out pos, out yaw, out string zone)) return false;
+            if (zone == "boss" || Stale(zone))
+            {
+                PlayerPrefs.DeleteKey(SavedCheckpointKey);
+                PlayerPrefs.Save();
+                return false;
+            }
             if (NearActiveSpawner(pos)) return false;
             WakeGrace(3f);
             return true;
         }
 
-        /// <summary>Parse the saved checkpoint (invariant culture). Older 4-part saves get their zone from the
+        /// <summary>Parse a saved checkpoint / quit spot (invariant culture). Older 4-part saves get their zone from the
         /// position; one outside every checkpoint zone was the boss checkpoint.</summary>
-        static bool ParseSaved(out Vector3 pos, out float yaw, out string zone)
+        static bool ParseSaved(string prefKey, out Vector3 pos, out float yaw, out string zone)
         {
             pos = Vector3.zero; yaw = 0f; zone = null;
-            var parts = PlayerPrefs.GetString(SavedCheckpointKey, "").Split(',');
+            var parts = PlayerPrefs.GetString(prefKey, "").Split(',');
             if (parts.Length != 4 && parts.Length != 5) return false;
             var ic = System.Globalization.CultureInfo.InvariantCulture;
             var f = new float[4];
@@ -210,7 +242,7 @@ namespace RexMagnum
             UpdateMaxHealth();
             // a returning player: a death near the saved checkpoint wakes there too (not only in this session).
             // Not the quit "spot": that is only for the one wake after PLAY (GameFlow); deaths use cave / ruins / ship or 304.
-            if (!hasCheckpoint && ParseSaved(out Vector3 cp, out float cpYaw, out string cpZone) && cpZone != "boss"
+            if (!hasCheckpoint && ParseSaved(SavedCheckpointKey, out Vector3 cp, out float cpYaw, out string cpZone) && cpZone != "boss"
                 && cpZone != "spot" && !Stale(cpZone) && !NearActiveSpawner(cp))
             { hasCheckpoint = true; checkpointPos = cp; checkpointYaw = cpYaw; checkpointZone = cpZone; }
         }
@@ -239,7 +271,7 @@ namespace RexMagnum
             health.Damaged += (a, p, by) =>
             {
                 if (health.IsDead || health.Current <= 0f) return;    // the killing blow: no flinch saved for the respawn
-                ctrl.Hurt();
+                ctrl.Hurt(RexController.HitWeight(a, by));     // heavy hits (bouncer, King Glorp) stagger him a moment
                 if (health.Fraction < 0.25f && !lowSaid) { lowSaid = true; RexVoice.Say(gameObject, "LowHealth", true); }
                 else RexVoice.Say(gameObject, "Hurt");
             };

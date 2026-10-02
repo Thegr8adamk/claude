@@ -47,6 +47,9 @@ namespace RexMagnum
         const float SweepRange = 7.5f, SweepHalfAngle = 60f, SweepWarn = 0.8f, SweepDamage = 14f;
         const float HopWarn = 0.6f, HopTime = 0.6f, HopMax = 8f, HopRing = 8f, HopDamage = 14f;
         float nextSweep, nextHop;
+        // the first sweep / hop of the fight teaches the move: 0.6x speed (longer wind-up, slower ring) and a notice
+        const float TeachSlow = 0.6f, TeachSweepWarn = 1.3f;
+        bool sweepTaught, hopTaught;
         bool inMove;
         // slime pools (phase 2/3): 2-3 marked spots near Rex turn into burning slime for PoolTime seconds
         const float PoolWarn = 1.1f, PoolTime = 6f, PoolRadius = 1.6f, PoolDamage = 5f, PoolTick = 0.5f;
@@ -480,11 +483,11 @@ namespace RexMagnum
         static Mesh fanMesh;
 
         /// <summary>A flat orange fan on the ground: the sweep's 120 degrees out to SweepRange (blinks in the wind-up).</summary>
-        GameObject WarnFan(Vector3 at, Vector3 fwd)
+        GameObject WarnFan(Vector3 at, Vector3 fwd, float warn)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(go.GetComponent<Collider>());
-            Destroy(go, SweepWarn + 0.5f);                           // gone even if the coroutine stops (Glorp popped)
+            Destroy(go, warn + 0.5f);                           // gone even if the coroutine stops (Glorp popped)
             if (fanMesh == null)
             {
                 const int Seg = 12;
@@ -517,24 +520,29 @@ namespace RexMagnum
         {
             if (rex == null) yield break;
             inMove = true;
-            blob.Hold(SweepWarn + 0.6f);
+            bool teach = !sweepTaught;                              // the first sweep of the fight: slow, with a notice
+            sweepTaught = true;
+            float warn = teach ? TeachSweepWarn : SweepWarn;
+            float blink = teach ? 6f * TeachSlow : 6f;
+            if (teach) RexTestHUD.Notice("Jump or dodge the sweep!", 2.5f);
+            blob.Hold(warn + 0.6f);
             Vector3 to = rex.position - transform.position; to.y = 0f;
             if (to.sqrMagnitude < 0.01f) to = transform.forward;
             Vector3 fwd = to.normalized;                            // locked at the wind-up: moving round him works
             transform.rotation = Quaternion.LookRotation(fwd);
-            var fan = WarnFan(transform.position, fwd);
+            var fan = WarnFan(transform.position, fwd, warn);
             var fanR = fan.GetComponent<Renderer>();
             int pulses = 0;
-            for (float t = 0f; t < SweepWarn; t += Time.deltaTime)
+            for (float t = 0f; t < warn; t += Time.deltaTime)
             {
                 if (dead || blob.IsDead || blob.IsStunned) { if (fan != null) Destroy(fan); inMove = false; yield break; }
                 if (t >= pulses * Blob.TelegraphTime) { pulses++; blob.Telegraph(); }    // back-to-back pulses: a long glow
-                if (fanR != null) fanR.enabled = Mathf.Repeat(t * 6f, 1f) < 0.6f;
+                if (fanR != null) fanR.enabled = Mathf.Repeat(t * blink, 1f) < 0.6f;
                 yield return null;
             }
             if (fan != null) Destroy(fan);
             blob.Play("Whip");
-            Sfx.Play("blob_whip", transform.position, 1f, 0.7f);    // the whip, deeper
+            Sfx.Play("blob_whip", transform.position, 1f, teach ? 0.7f * TeachSlow : 0.7f);    // the whip, deeper (slower when taught)
             Vector3 at = transform.position;
             for (int i = -2; i <= 2; i++)
             {
@@ -566,35 +574,40 @@ namespace RexMagnum
             var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (rex == null || agent == null || !agent.enabled || !agent.isOnNavMesh) yield break;
             inMove = true;
-            nextWave = Mathf.Max(nextWave, Time.time + HopWarn + HopTime + 3f);   // not on top of the big shockwave
-            blob.Hold(HopWarn + HopTime + 0.8f);
+            bool teach = !hopTaught;                                // the first hop of the fight: slow, with a notice
+            hopTaught = true;
+            float slow = teach ? TeachSlow : 1f;
+            float warn = HopWarn / slow, hopFor = HopTime / slow;
+            if (teach) RexTestHUD.Notice("Jump the ring!", 2.5f);
+            nextWave = Mathf.Max(nextWave, Time.time + warn + hopFor + 3f);   // not on top of the big shockwave
+            blob.Hold(warn + hopFor + 0.8f);
             Vector3 to = rex.position - transform.position; to.y = 0f;
             if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
             Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 2f, 0f, HopMax);
             var mark = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(mark.GetComponent<Collider>());
-            Destroy(mark, HopWarn + HopTime + 0.5f);
+            Destroy(mark, warn + hopFor + 0.5f);
             mark.transform.position = transform.position + step + Vector3.up * 0.04f;
             var markR = mark.GetComponent<Renderer>();
             markR.sharedMaterial = WarnMat(markR);
             markR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             blob.Telegraph();
             bool second = false;
-            for (float t = 0f; t < HopWarn; t += Time.deltaTime)
+            for (float t = 0f; t < warn; t += Time.deltaTime)
             {
                 if (dead || blob.IsDead || blob.IsStunned || mark == null) { if (mark != null) Destroy(mark); inMove = false; yield break; }
-                if (!second && t >= Blob.TelegraphTime) { second = true; blob.Telegraph(); }
-                float s = Mathf.Lerp(1f, 4f, t / HopWarn);
+                if (!second && t >= warn * 0.5f) { second = true; blob.Telegraph(); }
+                float s = Mathf.Lerp(1f, 4f, t / warn);
                 mark.transform.localScale = new Vector3(s, 0.01f, s);
-                markR.enabled = Mathf.Repeat(t * 6f, 1f) < 0.6f;
+                markR.enabled = Mathf.Repeat(t * 6f * slow, 1f) < 0.6f;
                 yield return null;
             }
             Sfx.Play("blob_slide", transform.position, 1f, 0.6f);
             float baseOff = agent.baseOffset, done = 0f;
-            for (float t = 0f; t < HopTime; t += Time.deltaTime)
+            for (float t = 0f; t < hopFor; t += Time.deltaTime)
             {
                 if (dead || blob.IsDead || !agent.enabled || !agent.isOnNavMesh) break;
-                float k = Mathf.Clamp01((t + Time.deltaTime) / HopTime);
+                float k = Mathf.Clamp01((t + Time.deltaTime) / hopFor);
                 agent.Move(step * (k - done));                      // Move keeps him on the NavMesh
                 done = k;
                 agent.baseOffset = baseOff + Mathf.Sin(k * Mathf.PI) * 2.2f;   // the whole body (armor too) goes up
@@ -616,7 +629,7 @@ namespace RexMagnum
             var rc = rex.GetComponent<RexController>();
             var rh = rex.GetComponent<Health>();
             bool hit = false;
-            for (float r = 1f; r < HopRing; r += Time.deltaTime * 14f)
+            for (float r = 1f; r < HopRing; r += Time.deltaTime * 14f * slow)
             {
                 if (ring == null || rex == null) break;
                 ring.transform.localScale = new Vector3(r * 2f, 0.05f, r * 2f);

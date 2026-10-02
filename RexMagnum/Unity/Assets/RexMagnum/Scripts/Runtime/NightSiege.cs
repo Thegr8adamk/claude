@@ -7,7 +7,9 @@ namespace RexMagnum
 {
     /// <summary>
     /// "Cave siege" (set piece between the factory and the boss, one time). After the blob factory is stopped, at night,
-    /// when Rex comes within StartRadius of the cave mouth (ZoneDoor "Cave_DoorA"): two waves of glowing blobs come out
+    /// when Rex walks toward the cave mouth (ZoneDoor "Cave_DoorA") within StartRadius, or stands within NearCenter of
+    /// the fight's centre (never within 60 s of a respawn / fast travel: Breather; MaxFails deaths in one night: the
+    /// blobs give up till dawn, SkippedTonight): two waves of glowing blobs come out
     /// of the cave (at most MaxAlive at once; bouncer halves count to their wave); the spawners near the cave hold off
     /// meanwhile (BlobSpawner). Reward: coconuts + ammo for every owned gun, Progress "cave_siege" (saved: never again).
     /// Rex dies, goes more than AbortRadius away (or 15 m up/down: the tunnels) or the night ends: the event stops
@@ -24,6 +26,10 @@ namespace RexMagnum
         /// <summary>Spawners closer than this to the cave mouth do not spawn while the event runs.</summary>
         public const float HoldRadius = 70f;
         const float StartRadius = 25f, AbortRadius = 60f, RetryAfter = 30f, SpawnEvery = 1.8f, StartNight = 0.6f, EndNight = 0.25f;
+        // not a trap on the boss route: it starts only when Rex heads for the door (or stands at the fight's centre),
+        // never right after a respawn / fast travel, and after MaxFails deaths in one night the blobs give up till dawn
+        const float NearCenter = 10f, TowardSpeed = 0.5f, BreatherAfterJump = 60f, JumpDistance = 25f;
+        const int MaxFails = 2;
         const float StuckAfter = 20f, StuckRexDistance = 15f;
         const float MouthOut = 9f, DoorClear = 4f, AbortHeight = 15f;
         const int MaxAlive = 4;
@@ -42,6 +48,16 @@ namespace RexMagnum
         public static string Objective => Active ? $"CAVE SIEGE! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
         /// <summary>Done before (saved).</summary>
         public static bool Done => Progress.Value(DoneKey) > 0;
+        /// <summary>No auto-start for this many seconds (fast travel, respawn; a big jump of Rex sets it too).</summary>
+        public static void Breather(float seconds) => breatherUntil = Mathf.Max(breatherUntil, Time.time + seconds);
+        static float breatherUntil;
+        /// <summary>Rex died in it MaxFails times tonight: no siege till the next night (the cave doors are open).</summary>
+        public static bool SkippedTonight { get; private set; }
+        static int failsTonight;
+        /// <summary>The siege can start tonight (night, the factory stopped, not done, not running, not given up).</summary>
+        public static bool Open => !Active && !Done && !SkippedTonight && FactoryCore.Stopped && DayNight.Night >= StartNight;
+        /// <summary>Objective / side line while the siege can start tonight, else null.</summary>
+        public static string Hint => Open ? "The cave is besieged at night: fight, or come back at dawn." : null;
         /// <summary>One line about the last won siege ("Cave held in 2:41 - 17 blobs popped") for the UI, else null.</summary>
         public static string LastSummary { get; private set; }
 
@@ -66,7 +82,11 @@ namespace RexMagnum
         public static Vector3 Target { get { var b = NearestBlob(); return b != null ? b.transform.position : Center; } }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; Wave = 0; Left = 0; Center = CaveZone; LastSummary = null; }   // editor with Domain Reload off
+        static void ResetStatics()
+        {
+            Active = false; Wave = 0; Left = 0; Center = CaveZone; LastSummary = null;
+            breatherUntil = 0f; SkippedTonight = false; failsTonight = 0;
+        }   // editor with Domain Reload off
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -87,6 +107,9 @@ namespace RexMagnum
         Health rexHealth;
         RexWeapons weapons;
         float nextCheck, retryAt, startedAt;
+        Vector3 lastPos, checkPos;                                            // last frame (jump check) / last 0.5 s check (heading)
+        bool hasLastPos;
+        QualityAuto quality;
         int popped;
         bool mouthFound;
         Vector3 doorAt;                                                       // the cave door's trigger (spawns stay clear of it)
@@ -98,6 +121,7 @@ namespace RexMagnum
         {
             rexHealth = GetComponent<Health>();
             weapons = GetComponent<RexWeapons>();
+            quality = FindAnyObjectByType<QualityAuto>();
         }
 
         void OnEnable() { inst = this; Blob.Split += OnSplit; }
@@ -145,15 +169,30 @@ namespace RexMagnum
 
         void Update()
         {
+            // a big jump of Rex (fast travel, respawn, a door): a breather, he does not fade in into a siege
+            Vector3 pos = transform.position;
+            if (hasLastPos && (pos - lastPos).sqrMagnitude > JumpDistance * JumpDistance) { Breather(BreatherAfterJump); checkPos = pos; }
+            if (!hasLastPos) checkPos = pos;
+            lastPos = pos;
+            hasLastPos = true;
+            if (DayNight.Night < EndNight && (failsTonight > 0 || SkippedTonight)) { failsTonight = 0; SkippedTonight = false; }   // a new day
             if (Active || Time.time < nextCheck) return;
             nextCheck = Time.time + 0.5f;
-            if (Time.time < retryAt || Done || !FactoryCore.Stopped || DayNight.Night < StartNight) return;
+            Vector3 moved = pos - checkPos;                                  // the last 0.5 s
+            checkPos = pos;
+            if (Time.time < retryAt || Time.time < breatherUntil || SkippedTonight || Done || !FactoryCore.Stopped || DayNight.Night < StartNight) return;
             if (KingGlorpBoss.Fighting || BarDefense.Active || GameFlow.Busy || (rexHealth != null && rexHealth.IsDead)) return;
             FindMouth();
-            Vector3 off = transform.position - Center;
+            Vector3 off = pos - Center;
             if (Mathf.Abs(off.y) > 15f) return;                              // not from the tunnels under the island
             off.y = 0f;
             if (off.sqrMagnitude > StartRadius * StartRadius) return;
+            // heading for the cave: walking toward the centre (or already at it); passing by / walking away: no siege
+            if (off.sqrMagnitude > NearCenter * NearCenter)
+            {
+                moved.y = 0f;
+                if (moved.magnitude < TowardSpeed * 0.5f || Vector3.Dot(moved, -off) <= 0f) return;
+            }
             if (!FindPrefabs()) return;
             StartCoroutine(Run());
         }
@@ -205,9 +244,20 @@ namespace RexMagnum
                     SlimeFX.Splat(b.transform.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 8);
                     Destroy(b.gameObject);
                 }
+            bool died = rexHealth != null && rexHealth.IsDead;
             mine.Clear();
             DropLight();
             retryAt = Time.time + RetryAfter;
+            if (died)
+            {
+                Breather(BreatherAfterJump);                                   // the respawn: not straight back into it
+                if (++failsTonight >= MaxFails)
+                {
+                    SkippedTonight = true;                                     // the boss route is not a death loop
+                    RexTestHUD.Notice("The blobs went back in. The cave is open — for now.", 5f);
+                    return;
+                }
+            }
             RexTestHUD.Notice("The cave siege is off. Come back at night to finish it.", 4f);
         }
 
@@ -279,7 +329,7 @@ namespace RexMagnum
                 var b = Instantiate(PrefabFor(wave), hit.position, Quaternion.identity);
                 b.Alert(6f);
                 // the wave's glow: one light in the first blob's colour (readable in the dark cave mouth)
-                if (waveLight == null)
+                if (waveLight == null && !LowTier())                          // Low tier: no extra light (DayNight's budget)
                 {
                     waveLight = new GameObject("SiegeGlow").AddComponent<Light>();
                     waveLight.type = LightType.Point;
@@ -307,6 +357,8 @@ namespace RexMagnum
             Vector3 to = sum / n + Vector3.up * 1.5f;
             waveLight.transform.position = Vector3.Lerp(waveLight.transform.position, to, Mathf.Clamp01(Time.deltaTime * 3f));
         }
+
+        bool LowTier() => quality != null && quality.Tier == QualityTier.Low;
 
         void DropLight()
         {
@@ -348,9 +400,11 @@ namespace RexMagnum
             Progress.Set(DoneKey, 1);
             int secs = Mathf.RoundToInt(Time.time - startedAt);
             LastSummary = $"Cave held in {secs / 60}:{secs % 60:00} - {popped} blob{(popped == 1 ? "" : "s")} popped";
-            // the reward: coconuts (kept even before Rex has found one) + half a load for every gun he owns
+            // the reward: coconuts (+ the coconut itself when he never found one) + half a load for every gun he owns
             if (weapons != null)
             {
+                // never found a coconut: he gets the throw too, so the reward is usable (Give equips it, + its start ammo)
+                if (!weapons.Has(WeaponId.Coconut)) weapons.Give(WeaponId.Coconut);
                 weapons.AddAmmo(WeaponId.Coconut, 5);
                 foreach (var id in weapons.OwnedInOrder())
                 {

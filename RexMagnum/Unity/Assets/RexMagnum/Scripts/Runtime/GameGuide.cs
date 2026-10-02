@@ -48,6 +48,7 @@ namespace RexMagnum
         public static string Objective(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget)
         {
             string s = Step(w, rex, out target, out hasTarget, out StepId);
+            SideHasTarget = false;
             // a running set piece leads (the step id stays: no NEW GOAL when it ends). The bar: the marker on the
             // nearest wave blob (a stuck one far off is found, not hunted for); the cave siege: its own line and spot
             if (BarDefense.Active)
@@ -76,12 +77,19 @@ namespace RexMagnum
                 Side = BarSide;
                 if (InZone(Zones[0], rex) && StepId != "rescue") { target = BarDefense.Center; hasTarget = true; }   // a guest to save comes first
             }
-            // the cave siege starts only at night near the cave mouth (after the factory): a night side line says so and
-            // the marker leads to the cave mouth (not from the tunnels or the ship: those have their own way out)
+            // the cave siege starts only at night near the cave mouth (after the factory): a night side line says so. The
+            // main marker stays; the cave mouth gets a second (blue) one, or the main one when the step has no target
+            // (not from the tunnels or the ship: those have their own way out)
             if (CaveSiegeOpen())
             {
                 Side = CaveSide;
-                if (!InTunnels(rex) && !InZone(Zones[7], rex) && SiegeStatic("Center") is Vector3 caveAt) { target = caveAt; hasTarget = true; }
+                bool outside = !InTunnels(rex) && !InZone(Zones[7], rex);
+                // the boss route through the cave mouth meets the siege: say so on the goal line itself (fight, or come
+                // back by day); the temple's back door from the ruins does not pass the mouth
+                if (outside && StepId == "glorp" && !InZone(Zones[5], rex)) { s = SiegeHint; Side = null; }
+                Vector3 caveAt = NightSiege.Center;
+                if (outside && !hasTarget) { target = caveAt; hasTarget = true; }
+                else if (outside && (target - caveAt).sqrMagnitude > 20f * 20f) { SideTarget = caveAt; SideHasTarget = true; }
             }
             // a set piece just won: its summary (LastSummary) as the side line for ~8 s
             string won = EventSummary();
@@ -89,42 +97,38 @@ namespace RexMagnum
             return s;
         }
 
-        public const string CaveSide = "Night: the cave is stirring. Defend the cave mouth (north-west)!";
+        public const string CaveSide = "Night: the cave is stirring. Defend the cave mouth (north-west), or come back by day.";
 
-        /// <summary>The cave siege can start: night, the factory stopped, not done, not running (NightSiege, by name).</summary>
-        static bool CaveSiegeOpen()
-        {
-            if (DayNight.Night <= 0.6f || !FactoryCore.Stopped || Progress.Value("cave_siege") > 0 || KingGlorpBoss.Fighting || BarDefense.Active) return false;
-            LookSiege();
-            return siegeType != null && !(SiegeStatic("Active") is bool running && running);
-        }
+        /// <summary>A second marker (blue on the compass and the map) for a side event while the main step keeps its
+        /// own: the cave mouth while the siege can start. SideHasTarget is false otherwise.</summary>
+        public static Vector3 SideTarget;
+        public static bool SideHasTarget;
+
+        /// <summary>The cave siege can start: night, the factory stopped, not done, not running (pause map: the cave
+        /// fast travel stop warns).</summary>
+        public static bool CaveSiegeOpen() => NightSiege.Open && !KingGlorpBoss.Fighting && !BarDefense.Active;
+
+        /// <summary>The boss route's goal line while the siege can start (the cave mouth is on the way).</summary>
+        static string SiegeHint => NightSiege.Hint ?? CaveSide;
 
         /// <summary>A set piece running now (Defend the Bar, the cave siege): no fast travel.</summary>
-        public static bool EventRunning => BarDefense.Active || SiegeObjective(out _, out _, out _);
+        public static bool EventRunning => BarDefense.Active || NightSiege.Active;
 
-        // ------------------------------------------------------------ event summaries (read by name, if present)
+        // ------------------------------------------------------------ event summaries
 
-        static readonly string[] SummaryTypes = { "RexMagnum.BarDefense", "RexMagnum.NightSiege" };
-        static readonly string[] SummaryDoneKeys = { "bar_defended", "cave_siege" };
+        static readonly string[] SummaryDoneKeys = { BarDefense.DoneKey, NightSiege.DoneKey };
         static readonly string[] summarySeen = new string[2];
-        static System.Type[] summaryTypes;
         static bool summaryLooked;
         static string summaryShown;
         static float summaryUntil;
 
-        /// <summary>The static LastSummary of BarDefense / NightSiege when it changed after a win (its goal is saved
+        /// <summary>The LastSummary of BarDefense / NightSiege when it changed after a win (its goal is saved
         /// done), for 8 s; else null. The first look after a load only notes the old text (not news).</summary>
         static string EventSummary()
         {
-            if (summaryTypes == null)
+            for (int i = 0; i < summarySeen.Length; i++)
             {
-                summaryTypes = new System.Type[SummaryTypes.Length];
-                for (int i = 0; i < SummaryTypes.Length; i++) summaryTypes[i] = typeof(GameGuide).Assembly.GetType(SummaryTypes[i]);
-            }
-            for (int i = 0; i < summaryTypes.Length; i++)
-            {
-                if (summaryTypes[i] == null) continue;
-                string v = StaticOf(summaryTypes[i], "LastSummary") as string;
+                string v = i == 0 ? BarDefense.LastSummary : NightSiege.LastSummary;
                 if (!summaryLooked) { summarySeen[i] = v; continue; }
                 // a new text counts once the goal is saved done (the event may write the text and the save in either order)
                 if (v == summarySeen[i] || (!string.IsNullOrEmpty(v) && Progress.Value(SummaryDoneKeys[i]) <= 0)) continue;
@@ -135,15 +139,6 @@ namespace RexMagnum
             return Time.unscaledTime < summaryUntil ? summaryShown : null;
         }
 
-        static object StaticOf(System.Type t, string name)
-        {
-            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
-            var pi = t.GetProperty(name, F);
-            if (pi != null) return pi.GetValue(null, null);
-            var fi = t.GetField(name, F);
-            return fi != null ? fi.GetValue(null) : null;
-        }
-
         public const string SniperSide = "Side: the sniper rifle is on the hotel roof (stairs or elevator to the top).";
         public const string BarSide = "Side: Blobs are heading for the lounge bar! (hotel, ground floor)";
 
@@ -151,88 +146,26 @@ namespace RexMagnum
         static bool BarOpen(RexWeapons w) =>
             w != null && w.Has(WeaponId.Pistol) && !FactoryCore.Stopped && !BarDefense.Done && !KingGlorpBoss.Fighting;
 
-        static System.Reflection.MethodInfo barNearest;
-        static bool barNearestLooked;
-
-        /// <summary>The living wave blob nearest Rex while the bar is defended: BarDefense.NearestBlob if it is there
-        /// (read by name: Blob, Component or Vector3, with or without a Vector3 argument), else the nearest living,
-        /// undisguised blob within 60 m of the bar.</summary>
+        /// <summary>The living wave blob nearest Rex while the bar is defended (BarDefense.NearestBlob), if any.</summary>
         static bool NearestBarBlob(Vector3 rex, out Vector3 at)
         {
-            at = Vector3.zero;
-            if (!barNearestLooked)
-            {
-                barNearestLooked = true;
-                const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
-                foreach (var m in typeof(BarDefense).GetMethods(F))
-                {
-                    if (m.Name != "NearestBlob") continue;
-                    var ps = m.GetParameters();
-                    if (ps.Length == 0 || (ps.Length == 1 && ps[0].ParameterType == typeof(Vector3))) { barNearest = m; break; }
-                }
-                if (barNearest == null)
-                {
-                    var pi = typeof(BarDefense).GetProperty("NearestBlob", F);
-                    if (pi != null) barNearest = pi.GetGetMethod(true);
-                }
-            }
-            if (barNearest != null)
-            {
-                object r = null;
-                try { r = barNearest.Invoke(null, barNearest.GetParameters().Length == 1 ? new object[] { rex } : null); }
-                catch (System.Exception) { barNearest = null; }
-                if (r is Vector3 v && v != Vector3.zero) { at = v; return true; }
-                if (r is Component c && c != null) { at = c.transform.position; return true; }
-                if (barNearest != null && r == null) return false;       // no wave blob alive right now
-            }
-            float best = float.MaxValue;
-            bool found = false;
-            foreach (var b in Blob.All)
-            {
-                if (b == null || b.IsDead || b.Disguised) continue;
-                Vector3 f = b.transform.position - BarDefense.Center; f.y = 0f;
-                if (f.sqrMagnitude > 60f * 60f) continue;
-                float d = (b.transform.position - rex).sqrMagnitude;
-                if (d < best) { best = d; at = b.transform.position; found = true; }
-            }
-            return found;
+            var b = BarDefense.NearestBlob();
+            at = b != null ? b.transform.position : Vector3.zero;
+            return b != null;
         }
 
-        // ------------------------------------------------------------ cave siege (another set piece, read by name)
+        // ------------------------------------------------------------ cave siege (another set piece)
 
-        static readonly string[] SiegeTypes = { "RexMagnum.NightSiege", "RexMagnum.CaveSiege", "RexMagnum.SiegeEvent" };
-        static System.Type siegeType;
-        static bool siegeLooked;
-
-        /// <summary>The cave siege's HUD line while it runs (static Active + Objective, and Center / Target /
-        /// Position for the marker if it has one). Read by name: compiles and works without it in the build.</summary>
+        /// <summary>The cave siege's HUD line while it runs (NightSiege.Objective) and its marker (the nearest wave
+        /// blob, else the cave mouth).</summary>
         public static bool SiegeObjective(out string line, out Vector3 at, out bool hasAt)
         {
             line = null; at = Vector3.zero; hasAt = false;
-            LookSiege();
-            if (siegeType == null || !(SiegeStatic("Active") is bool on) || !on) return false;
-            line = SiegeStatic("Objective") as string;
+            if (!NightSiege.Active) return false;
+            line = NightSiege.Objective;
             if (string.IsNullOrEmpty(line)) line = "Hold out at the cave until the blobs stop coming!";
-            foreach (var n in new[] { "Target", "Center", "Position" })
-                if (SiegeStatic(n) is Vector3 v) { at = v; hasAt = true; break; }
+            at = NightSiege.Target; hasAt = true;
             return true;
-        }
-
-        static void LookSiege()
-        {
-            if (siegeLooked) return;
-            siegeLooked = true;
-            foreach (var n in SiegeTypes) { siegeType = typeof(GameGuide).Assembly.GetType(n); if (siegeType != null) break; }
-        }
-
-        static object SiegeStatic(string name)
-        {
-            if (siegeType == null) return null;
-            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
-            var pi = siegeType.GetProperty(name, F);
-            if (pi != null) return pi.GetValue(null, null);
-            var fi = siegeType.GetField(name, F);
-            return fi != null ? fi.GetValue(null) : null;
         }
 
         /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "cart", "clubs", "cave", "factory",
@@ -249,8 +182,8 @@ namespace RexMagnum
         static bool rescueCalm;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { siegeLooked = false; siegeType = null; barNearestLooked = false; barNearest = null; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null;
-                                     summaryTypes = null; summaryLooked = false; summaryShown = null; summaryUntil = 0f; summarySeen[0] = summarySeen[1] = null; }   // editor with Domain Reload off
+        static void ResetStatics() { SideHasTarget = false; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null;
+                                     summaryLooked = false; summaryShown = null; summaryUntil = 0f; summarySeen[0] = summarySeen[1] = null; }   // editor with Domain Reload off
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
         {

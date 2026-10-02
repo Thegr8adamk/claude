@@ -152,7 +152,10 @@ namespace RexMagnum
         {
             busyUntil = Mathf.Max(busyUntil, Time.time + seconds);
             nextAttack = Mathf.Max(nextAttack, Time.time + seconds + 0.4f);
+            if (kind != Kind.KingGlorp) staggeredAt = Time.time;           // on a normal blob a Hold is RexWeapons' stagger
         }
+        /// <summary>Last stagger (Hold on a non-boss blob): a jump-slam started before it is called off.</summary>
+        float staggeredAt = -10f;
 
         // group fight: at most MaxAttackers blobs attack Rex at once; the others circle at 4-6 m and wait their turn
         const int MaxAttackers = 2;
@@ -589,8 +592,20 @@ namespace RexMagnum
                 rexHealth.Damage(damage * 1.2f, rex.position + Vector3.up, gameObject);
         }
 
+        /// <summary>Staggered mid-slam (3 quick hits): the hop / landing is called off with the hit reaction.</summary>
+        bool SlamStaggered(float since)
+        {
+            if (staggeredAt < since) return false;
+            if (squashT != null) squashT.localPosition = jellyBasePos;
+            if (!health.IsDead) Play("Hit", 0.03f);
+            squashUntil = Time.time + SquashTime; squashAmount = 0.3f;
+            busyUntil = Mathf.Max(busyUntil, staggeredAt + 0.4f);
+            return true;
+        }
+
         IEnumerator JumpSlam()
         {
+            float slamFrom = Time.time;
             busyUntil = Time.time + TelegraphTime * 2f + 0.9f;
             nextAttack = Mathf.Max(nextAttack, Time.time + 2.2f);
             // two warning pulses (longer than a whip's): the slam hits hard
@@ -601,6 +616,7 @@ namespace RexMagnum
             squashUntil = Time.time + SquashTime; squashAmount = 0.35f;    // crouch before the hop
             yield return new WaitForSeconds(TelegraphTime);
             if (health.IsDead || IsStunned || rex == null || !agent.isOnNavMesh) yield break;
+            if (SlamStaggered(slamFrom)) yield break;                      // staggered in the wind-up: no hop
             Vector3 to = rex.position - transform.position; to.y = 0f;
             if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
             Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 1.5f, 0f, 3f);
@@ -620,6 +636,7 @@ namespace RexMagnum
                 yield return null;
             }
             if (squashT != null) squashT.localPosition = jellyBasePos;
+            if (SlamStaggered(slamFrom)) yield break;                      // staggered in the air: it flops down, no shockwave
             // landing: squash, slime, the king's shockwave sound (higher) and a slime ring out to SlamRadius
             squashUntil = Time.time + SquashTime; squashAmount = 0.4f;
             Sfx.Play("shockwave", transform.position, 0.8f, 1.3f);

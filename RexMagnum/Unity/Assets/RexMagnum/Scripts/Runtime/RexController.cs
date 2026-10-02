@@ -119,7 +119,22 @@ namespace RexMagnum
             }
         }
 
-        public void Hurt() => SetTrigger(HitHash);
+        /// <summary>Hit flinch (animator Hit). weight from HitWeight: 2 (bouncer slam / whip, King Glorp's big hits) also
+        /// staggers Rex for 0.2 s (slower; a dodge still gets him out).</summary>
+        public void Hurt(int weight = 0)
+        {
+            SetTrigger(HitHash);
+            if (weight >= 2) staggerUntil = Time.time + 0.2f;
+        }
+        float staggerUntil;
+
+        /// <summary>How hard a hit on Rex lands: 0 light (tourist spit, slime pool tick), 1 medium, 2 heavy (14+ damage:
+        /// bouncer, King Glorp's sweep / hop; and any of the king's own 10+ hits). Rex's flinch and the camera use it.</summary>
+        public static int HitWeight(float amount, GameObject by)
+        {
+            if (amount >= 14f || (amount >= 10f && by != null && by.GetComponent<KingGlorpBoss>() != null)) return 2;
+            return amount >= 10f ? 1 : 0;
+        }
 
         public void Die()
         {
@@ -161,6 +176,7 @@ namespace RexMagnum
         void Update()
         {
             UpdateSlimeLook();
+            DrawGhosts();
             if (!cc.enabled) return;              // driving the golf cart
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
@@ -174,6 +190,7 @@ namespace RexMagnum
             UpdateWater();
             float target = IsSwimming ? (run ? swimFastSpeed : swimSpeed) * input.magnitude
                                       : (run ? runSpeed : walkSpeed) * (HandsDown ? handsDownBonus : 1f) * input.magnitude;
+            if (Time.time < staggerUntil) target *= 0.3f;                          // heavy hit: a short stagger
             if (Limping && !IsSwimming) target = Mathf.Min(target, LimpSpeed);    // the limp: no sliding feet
             else if (HurtInFight && !IsSwimming) target = Mathf.Min(target, run ? HurtRunSpeed : walkSpeed);
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
@@ -189,6 +206,7 @@ namespace RexMagnum
                 }
             }
             bool dodging = Time.time < dodgeUntil;
+            if (ghostsLeft > 0 && Time.time >= nextGhost) { ghostsLeft--; nextGhost = Time.time + 0.09f; DropGhost(); }
             if (dodging) planar = dodgeDir * Mathf.Lerp(18f, 8.7f, 1f - (dodgeUntil - Time.time) / DodgeTime);   // avg ~13.3 m/s = 4 m
             velocity.x = planar.x;
             velocity.z = planar.z;
@@ -272,6 +290,85 @@ namespace RexMagnum
             if (hp != null) hp.Invulnerable(0.35f);
             SetTrigger(DodgeHash);
             Sfx.Play("swing", transform.position + Vector3.up, 0.5f, 0.7f);    // low whoosh
+            if (cameraRig != null) cameraRig.DodgeKick(5f);                    // the view widens for a moment (not in VR)
+            if (GhostsAllowed) { ghostsLeft = Ghosts; nextGhost = Time.time; }
+        }
+
+        // ---- dodge afterimages: 3 fading see-through copies of Rex along the dodge. His skinned meshes are baked into
+        // reused meshes and drawn with Graphics.DrawMesh (no new objects). Third person only; never in VR (sickness, cost).
+        const int Ghosts = 3;
+        const float GhostLife = 0.22f;
+        SkinnedMeshRenderer[] ghostSkins;
+        Mesh[,] ghostMesh;
+        Matrix4x4[,] ghostAt;
+        bool[,] ghostOn;
+        readonly float[] ghostBorn = { -10f, -10f, -10f };
+        int ghostsLeft, ghostNext;
+        float nextGhost;
+        static Material ghostMat;
+        MaterialPropertyBlock ghostBlock;
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+        bool GhostsAllowed => cameraRig != null && !cameraRig.VRControlled && !VRMode.Active
+                              && cameraRig.Mode == RexCameraRig.CameraMode.ThirdPerson;
+
+        void DropGhost()
+        {
+            if (!GhostsAllowed) return;
+            if (ghostSkins == null)
+            {
+                ghostSkins = GetComponentsInChildren<SkinnedMeshRenderer>();
+                ghostMesh = new Mesh[Ghosts, ghostSkins.Length];
+                ghostAt = new Matrix4x4[Ghosts, ghostSkins.Length];
+                ghostOn = new bool[Ghosts, ghostSkins.Length];
+            }
+            int g = ghostNext;
+            ghostNext = (ghostNext + 1) % Ghosts;
+            for (int i = 0; i < ghostSkins.Length; i++)
+            {
+                var r = ghostSkins[i];
+                // only what is seen now (not the hidden-near-a-wall body, not a hidden weapon)
+                ghostOn[g, i] = r != null && r.enabled && r.gameObject.activeInHierarchy
+                                && r.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+                if (!ghostOn[g, i]) continue;
+                if (ghostMesh[g, i] == null) ghostMesh[g, i] = new Mesh();
+                r.BakeMesh(ghostMesh[g, i]);                  // baked with the bones' scale: drawn at scale 1
+                ghostAt[g, i] = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
+            }
+            ghostBorn[g] = Time.time;
+        }
+
+        void DrawGhosts()
+        {
+            if (ghostSkins == null || !GhostsAllowed) return;
+            if (ghostMat == null)
+            {
+                var sh = Shader.Find("Universal Render Pipeline/Unlit");
+                if (sh == null) return;
+                ghostMat = new Material(sh);
+                ghostMat.SetFloat("_Surface", 1f);
+                ghostMat.SetFloat("_Blend", 0f);
+                ghostMat.SetOverrideTag("RenderType", "Transparent");
+                ghostMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                ghostMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                ghostMat.SetInt("_ZWrite", 0);
+                ghostMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                ghostMat.renderQueue = 3000;
+            }
+            if (ghostBlock == null) ghostBlock = new MaterialPropertyBlock();
+            for (int g = 0; g < Ghosts; g++)
+            {
+                float age = Time.time - ghostBorn[g];
+                if (age < 0f || age >= GhostLife) continue;
+                ghostBlock.SetColor(BaseColorId, new Color(0.65f, 0.85f, 1f, 0.35f * (1f - age / GhostLife)));
+                for (int i = 0; i < ghostSkins.Length; i++)
+                {
+                    if (!ghostOn[g, i] || ghostSkins[i] == null) continue;
+                    var m = ghostMesh[g, i];
+                    for (int sub = 0; sub < m.subMeshCount; sub++)
+                        Graphics.DrawMesh(m, ghostAt[g, i], ghostMat, ghostSkins[i].gameObject.layer, null, sub, ghostBlock);
+                }
+            }
         }
 
         /// <summary>Start swimming when the water reaches Rex's chest; stop when he can stand (hysteresis).</summary>
@@ -302,6 +399,15 @@ namespace RexMagnum
             transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
             cc.enabled = true;
             velocity = Vector3.zero;
+            // no dodge burst, stagger or afterimages carried to the new place
+            dodgeUntil = 0f;
+            dodgeBack = false;
+            staggerUntil = 0f;
+            ghostsLeft = 0;
+            for (int g = 0; g < Ghosts; g++) ghostBorn[g] = -10f;
+            // the water state of the new place now (a wake on land must not start the first frame swimming)
+            IsSwimming = false;
+            UpdateWater();
         }
     }
 }

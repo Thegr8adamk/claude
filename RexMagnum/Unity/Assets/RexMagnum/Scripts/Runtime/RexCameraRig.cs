@@ -68,7 +68,9 @@ namespace RexMagnum
         float kick;
         /// <summary>Heavy attack wind-up cue: the view pushes in by this many degrees of FOV and eases back (~0.35 s).</summary>
         public void FovPush(float degrees) => fovPush = Mathf.Max(fovPush, degrees);
-        float fovPush;
+        float fovPush;          // < 0: a dodge kick (the view widens)
+        /// <summary>Dodge cue: the view widens by this many degrees of FOV and eases back (~0.4 s). Not in VR / the scope.</summary>
+        public void DodgeKick(float degrees) => fovPush = Mathf.Min(fovPush, -degrees);
         /// <summary>Melee soft aim: turn the view (and so Rex) this many degrees over ~0.1 s. Not in VR (sickness).</summary>
         public void NudgeYaw(float degrees) { if (!VRControlled) nudge = degrees; }
         float nudge;
@@ -100,9 +102,17 @@ namespace RexMagnum
             int def = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);     // settings: 0 FP, 1 TP, 2 remember last
             bool fp = def == 0 || (def == 2 && PlayerPrefs.GetInt(PrefKey, 1) == 0);
             SetMode(fp ? CameraMode.FirstPerson : CameraMode.ThirdPerson, true);
-            // Rex is hit: a small shake (bigger hits shake more)
+            // Rex is hit: a shake by the hit's weight (RexController.HitWeight): a tick for light hits, a hard
+            // jolt and a longer rumble for a bouncer slam or King Glorp's big hits
             var hp = target.GetComponent<Health>();
-            if (hp != null) hp.Damaged += (a, p, by) => { if (!hp.IsDead) { Shake(Mathf.Clamp(a * 0.012f, 0.08f, 0.3f)); RMInput.Rumble(0.5f, 0.8f, 0.18f); } };
+            if (hp != null) hp.Damaged += (a, p, by) =>
+            {
+                if (hp.IsDead) return;
+                int w = RexController.HitWeight(a, by);
+                if (w >= 2) { Shake(0.45f); RMInput.Rumble(0.9f, 1f, 0.3f); }
+                else if (w == 1) { Shake(Mathf.Clamp(a * 0.012f, 0.1f, 0.3f)); RMInput.Rumble(0.5f, 0.8f, 0.18f); }
+                else { Shake(0.06f); RMInput.Rumble(0.3f, 0.5f, 0.1f); }
+            };
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -255,7 +265,7 @@ namespace RexMagnum
                 float ak = aimT * aimT * (3f - 2f * aimT);
                 cam.fieldOfView = scoped ? 12f : Mathf.Lerp(Mathf.Lerp(fov, aimFov, ak), fpFov, b) - fovPush;
             }
-            if (fovPush > 0f)
+            if (fovPush != 0f)
             {
                 if (VRControlled || scoped) fovPush = 0f;
                 fovPush = Mathf.MoveTowards(fovPush, 0f, Time.unscaledDeltaTime * 12f);
