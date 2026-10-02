@@ -192,8 +192,8 @@ def clean_hems(ob, thickness=0.003):
                 v.co -= nrm * (v.co - cv).dot(nrm)
             continue
         n = len(loop)                               # curved loop: Taubin smoothing (no shrinking)
-        for it in range(40):
-            k = 0.5 if it % 2 == 0 else -0.53
+        for it in range(140):
+            k = 0.6 if it % 2 == 0 else -0.63
             new = [(loop[i - 1].co + loop[(i + 1) % n].co) * 0.5 for i in range(n)]
             for i, v in enumerate(loop):
                 v.co = v.co + (new[i] - v.co) * k
@@ -221,7 +221,7 @@ def make_top(body, L, kind, colour, name, look):
             sx = abs(L["sh_l"].x)
             e = min(1.0, max(0.0, (abs(c.x) - 0.5 * sx) / (0.45 * sx)))
             top = 0.05 if c.y < cy else 0.09           # neckline height: front, back
-            return c.z < chest + top + (-0.07 - top) * e * e * (3 - 2 * e)   # front + back meet under the arm
+            return c.z < chest + top + (-0.015 - top) * e * e * (3 - 2 * e)  # front + back meet under the arm (covers the bust side)
         if kind in ("tshirt", "polo"):
             if t is not None:
                 return t < (0.45 if kind == "tshirt" else 0.4)
@@ -241,7 +241,7 @@ def make_top(body, L, kind, colour, name, look):
     clean_hems(ob)
     look.smooth_shell(ob, 6 if kind == "dress" else 3, 0.5)
     if kind in ("tank", "dress"):
-        make_straps(body, L, mat, name, cy, width=0.016 if kind == "dress" else 0.045)
+        make_straps(body, L, mat, name, cy, width=0.016 if kind == "dress" else 0.032)
     if kind == "dress":
         make_skirt(body, L, mat, name, ob)
     return ob
@@ -261,14 +261,26 @@ def make_straps(body, L, mat, name, cy, width, segs=24):
         ang = np.arctan2(sl[:, 2] - zc, cy - sl[:, 1])   # 0 = front, pi/2 = up, pi = back
         rad = np.hypot(sl[:, 2] - zc, sl[:, 1] - cy)
         # arc from below the front neckline, over the shoulder, to below the back neckline
-        a0, a1 = 0.3, math.pi - 0.5             # both ends tuck into the bodice
+        a0, a1 = 0.12, math.pi - 0.35           # wide arc; cut below to the neckline heights
         prev = None
-        for i in range(segs + 1):
-            a = a0 + (a1 - a0) * i / segs
+        angs = [a0 + (a1 - a0) * i / segs for i in range(segs + 1)]
+        rs = []
+        for a in angs:
             m = np.abs(ang - a) < 0.12
-            r = float(rad[m].max()) if m.any() else float(rad.max())
-            r += 0.006
+            rs.append(float(rad[m].max()) if m.any() else float(rad.max()))
+        rs = np.array(rs)
+        for _ in range(4):                      # smooth the path (a raw max per angle makes a saw-tooth strap)
+            rs = np.maximum(rs, np.convolve(np.pad(rs, 2, mode="edge"), np.ones(5) / 5, mode="valid"))
+            rs = np.convolve(np.pad(rs, 2, mode="edge"), np.ones(5) / 5, mode="valid")
+        for a, r in zip(angs, rs):
+            r = float(r) + 0.006
             y, z = cy - math.cos(a) * r, zc + math.sin(a) * r
+            # end just under the neckline (front ~chest+5 cm, back ~chest+9 cm): the strap meets the top's edge
+            # instead of lying on top of the cloth over the bust
+            if a < math.pi / 2 and z < chest + 0.03:
+                continue
+            if a > math.pi / 2 and z < chest + 0.07:
+                break
             pair = [bm.verts.new((xp - width / 2, y, z)), bm.verts.new((xp + width / 2, y, z))]
             if prev:
                 bm.faces.new((prev[0], prev[1], pair[1], pair[0]))
@@ -282,9 +294,7 @@ def make_straps(body, L, mat, name, cy, width, segs=24):
     me.materials.append(mat)
     ob = bpy.data.objects.new(f"{name}_Straps", me)
     bpy.context.scene.collection.objects.link(ob)
-    sm = ob.modifiers.new("Smooth", "SMOOTH")
-    sm.iterations = 3
-    so = ob.modifiers.new("Thickness", "SOLIDIFY")
+    so = ob.modifiers.new("Thickness", "SOLIDIFY")     # no Smooth modifier: it rolled the flat ribbon into a tube
     so.thickness = 0.003
     so.offset = 1.0
     return ob
