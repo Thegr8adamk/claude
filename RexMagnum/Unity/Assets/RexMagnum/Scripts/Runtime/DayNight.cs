@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace RexMagnum
 {
@@ -17,13 +18,17 @@ namespace RexMagnum
         public float sunAzimuth = -145f;
         public Gradient sunColor, fogColor;
         public List<Light> nightLights = new List<Light>();  // torches, lamps, street lights
+        public Renderer cloudDome;                          // RexMagnum/Clouds sphere (IslandBuilder.CloudDome); found by name if empty
         public static float Night { get; private set; }
         float baseSun, baseAmbient, baseFog, baseExposure;
         Color baseSkyTint, baseGround;
         // night floor: away from the lamps the island stays readable (it was near-black at 0.25 ambient / 0.12 sky)
         const float NightAmbient = 0.5f, NightExposure = 0.35f;
         static readonly Color MoonSkyTint = new Color(0.22f, 0.32f, 0.62f), MoonGround = new Color(0.12f, 0.15f, 0.24f);
-        Material sky;
+        static readonly Color DuskSkyTint = new Color(0.75f, 0.5f, 0.42f);     // warm peach sky around sunrise / sunset
+        Material sky, clouds;
+        float baseCover = 0.45f;
+        QualityAuto quality;
         float nextLine, nextEnv, nextProbe = 30f, probeTime = -1f, glowNight = -1f;
         ReflectionProbe islandProbe;
         BlobSpawner[] spawners;
@@ -42,6 +47,15 @@ namespace RexMagnum
             if (sky != null && sky.HasProperty("_Exposure")) baseExposure = sky.GetFloat("_Exposure");
             if (sky != null && sky.HasProperty("_SkyTint")) baseSkyTint = sky.GetColor("_SkyTint");
             if (sky != null && sky.HasProperty("_GroundColor")) baseGround = sky.GetColor("_GroundColor");
+            // the cloud layer: a copy of its material too (DayNight writes to it every frame)
+            if (cloudDome == null) { var cd = GameObject.Find("CloudDome"); if (cd != null) cloudDome = cd.GetComponent<Renderer>(); }
+            if (cloudDome != null && cloudDome.sharedMaterial != null)
+            {
+                clouds = new Material(cloudDome.sharedMaterial);
+                cloudDome.sharedMaterial = clouds;
+                if (clouds.HasProperty("_Cover")) baseCover = clouds.GetFloat("_Cover");
+            }
+            quality = FindAnyObjectByType<QualityAuto>();
             spawners = FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None);   // every zone, not only the first
             foreach (var sp in spawners) if (sp.baseMax < 0) sp.baseMax = sp.maxAlive;
             if (sunColor == null || sunColor.colorKeys.Length < 2)
@@ -90,7 +104,17 @@ namespace RexMagnum
             RenderSettings.fogDensity = baseFog * Mathf.Lerp(1.6f, 1f, day);
             if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(Mathf.Min(NightExposure, baseExposure), baseExposure, day));
             // cool moonlit sky (and so a cool skybox ambient) at night; the day colours stay exactly as built
-            if (sky != null && sky.HasProperty("_SkyTint")) sky.SetColor("_SkyTint", Color.Lerp(MoonSkyTint, baseSkyTint, day));
+            // sunrise / sunset: 1 with the sun at the horizon, 0 from ~15 deg up (and in deep night)
+            float dusk = Mathf.Clamp01(1f - Mathf.Abs(elev) * 4f);
+            if (sky != null && sky.HasProperty("_SkyTint"))
+                sky.SetColor("_SkyTint", Color.Lerp(Color.Lerp(MoonSkyTint, baseSkyTint, day), DuskSkyTint, dusk * 0.35f));
+            if (clouds != null)
+            {
+                clouds.SetFloat("_Dusk", dusk);
+                clouds.SetFloat("_Night", Night);
+                // the weather drifts: the coverage wanders slowly (a few changes per hour)
+                clouds.SetFloat("_Cover", Mathf.Clamp01(baseCover + (Mathf.PerlinNoise(Time.time * 0.002f, 3.1f) - 0.5f) * 0.4f));
+            }
             if (sky != null && sky.HasProperty("_GroundColor")) sky.SetColor("_GroundColor", Color.Lerp(MoonGround, baseGround, day));
             if (Time.time > nextLights) { nextLights = Time.time + 0.5f; NightLights(Night > 0.3f); }
             FadeLights();
@@ -123,6 +147,14 @@ namespace RexMagnum
                     envSun = sc;
                     DynamicGI.UpdateEnvironment();
                 }
+                // the ambient probe may update a frame late: checked every 2 s, applied when it really changed
+                ScaleProbes();
+                // the cloud layer is ~10 noise lookups per sky pixel: off on the Low (phone) tier
+                if (cloudDome != null)
+                {
+                    bool cloudsOn = quality == null || quality.Tier != QualityTier.Low;
+                    if (cloudDome.enabled != cloudsOn) cloudDome.enabled = cloudsOn;
+                }
                 if (islandProbe == null)
                 {
                     var go = GameObject.Find("ReflectionProbe");
@@ -143,6 +175,50 @@ namespace RexMagnum
                 var rex = FindAnyObjectByType<RexController>();
                 if (rex != null) RexVoice.Say(rex.gameObject, "Night", true);
             }
+        }
+
+        // ---- baked light probes vs day / night
+        // Bake Lighting fills the probes with a flat dim ambient (all lights are realtime), so a probe only holds how
+        // open it is (sky visibility / AO). Used as is, the baked SH replaced the live sky ambient: characters, LOD1
+        // and trees on probes kept one fixed brightness day and night. Each probe's openness (its L0 against the open-
+        // air probes) is kept from the original data; the live ambient probe times that openness is written back
+        // whenever the ambient changes. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
+        float[] probeOpen;
+        SphericalHarmonicsL2[] probeLive;
+        Vector3 probeAmb = new Vector3(-1f, -1f, -1f);
+
+        static float L0(SphericalHarmonicsL2 sh) => sh[0, 0] * 0.3f + sh[1, 0] * 0.59f + sh[2, 0] * 0.11f;
+
+        void InitProbes(LightProbes lp)
+        {
+            probeOpen = null;
+            var baked = lp.bakedProbes;                  // a copy: the original data stays with the scene
+            if (baked == null || baked.Length == 0) return;
+            var lum = new float[baked.Length];
+            for (int i = 0; i < baked.Length; i++) lum[i] = L0(baked[i]);
+            var sorted = (float[])lum.Clone();
+            System.Array.Sort(sorted);
+            // the 90th percentile = open air (most of the grid is outdoors); brighter ones (ground bounce) cap at 1.2
+            float open = Mathf.Max(1e-4f, sorted[Mathf.Min(sorted.Length - 1, (int)(sorted.Length * 0.9f))]);
+            probeOpen = new float[baked.Length];
+            for (int i = 0; i < baked.Length; i++) probeOpen[i] = Mathf.Clamp(lum[i] / open, 0.05f, 1.2f);
+            probeLive = new SphericalHarmonicsL2[baked.Length];
+            probeAmb = new Vector3(-1f, -1f, -1f);
+        }
+
+        void ScaleProbes()
+        {
+            var lp = LightmapSettings.lightProbes;
+            if (lp == null || lp.count == 0) return;     // not baked: everything already uses the live ambient probe
+            if (probeOpen == null || probeOpen.Length != lp.count) InitProbes(lp);   // first time, or a zone scene added probes
+            if (probeOpen == null) return;
+            var amb = RenderSettings.ambientProbe;
+            var a = new Vector3(amb[0, 0], amb[1, 0], amb[2, 0]);
+            // only on a noticeable change (2%): writing the probes re-uploads them
+            if (Mathf.Abs(a.x - probeAmb.x) + Mathf.Abs(a.y - probeAmb.y) + Mathf.Abs(a.z - probeAmb.z) < 0.02f * Mathf.Max(0.05f, a.x + a.y + a.z)) return;
+            probeAmb = a;
+            for (int i = 0; i < probeLive.Length; i++) probeLive[i] = amb * probeOpen[i];
+            lp.bakedProbes = probeLive;
         }
 
         float envAmbient = -1f, envExposure = -1f, nextLights;

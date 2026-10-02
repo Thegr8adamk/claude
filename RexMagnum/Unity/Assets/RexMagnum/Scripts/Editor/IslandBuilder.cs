@@ -120,6 +120,8 @@ namespace RexMagnum.EditorTools
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
                 var dn = game.AddComponent<DayNight>();
                 dn.sun = RenderSettings.sun;
+                var dome = GameObject.Find("CloudDome");          // made in Lighting(); DayNight drives its glow / coverage
+                if (dome != null) dn.cloudDome = dome.GetComponent<Renderer>();
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
                 if (hasRoom) Room304(room, rex, game);
@@ -2303,7 +2305,8 @@ namespace RexMagnum.EditorTools
         /// bake uses a dim flat ambient instead of the noon sky, so the lightmaps hold soft AO-darkened fill light only
         /// (a lightmapped wall ignores DayNight's ambient: a day-sky bake glowed all night). The scene's sky ambient
         /// comes back when the bake ends. Slow (GPU lightmapper, minutes); the game works without it. Buildings get
-        /// lightmap UVs (FBX reimport) first.</summary>
+        /// lightmap UVs (FBX reimport) first. The light probes bake with the same flat ambient: they keep only each
+        /// spot's openness, and DayNight.ScaleProbes multiplies the live sky ambient by it (they follow day / night).</summary>
         [MenuItem("Rex Magnum/Bake Lighting (slow, optional)", priority = 30)]
         public static void BakeLighting()
         {
