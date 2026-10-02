@@ -98,6 +98,7 @@ namespace RexMagnum
             rex.InputEnabled = false;
             var cc = rex.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
+            if (rex.bodyAnimator != null) rex.bodyAnimator.SetBool("Drive", true);   // sit at the wheel
         }
 
         void Exit()
@@ -108,6 +109,7 @@ namespace RexMagnum
             var cc = rex.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = true;
             rex.InputEnabled = true;
+            if (rex.bodyAnimator != null) rex.bodyAnimator.SetBool("Drive", false);
             speed = 0f;
         }
 

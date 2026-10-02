@@ -397,6 +397,77 @@ def p_comb(P, t):
     P.fist("Right", 0.15, 0.3)                                           # flat fingers, combing
 
 
+def p_throw(P, t):
+    """Coconut: overhand throw. Left hand points at the target, right arm winds back behind the head, whips over."""
+    wind = seg(t, 0.0, 0.35) * (1 - seg(t, 0.35, 0.5))
+    rel = seg(t, 0.4, 0.55) * (1 - seg(t, 0.75, 1.0))
+    P.hips(yaw=20 * wind - 20 * rel, pitch=-3 * wind + 8 * rel)
+    P.spine(bend=-4 * wind + 14 * rel, twist=30 * wind - 35 * rel)
+    P.head(nod=4 * rel)
+    P.leg("Left", 6 + 14 * rel, 10 + 12 * rel, spread=0.13)
+    P.leg("Right", -6 - 10 * rel, 10, spread=0.11)
+    P.arm_dirs("Left", d(0.3, -0.3, -0.9).lerp(d(0.3, -0.9, 0.2), wind).lerp(d(0.4, -0.2, -0.8), rel),
+               d(0.2, -0.5, -0.8).lerp(d(0.2, -0.95, 0.15), wind).lerp(d(0.3, -0.4, -0.8), rel))
+    P.fist("Left", 0.3)
+    up = d(-0.2, -0.3, -0.9).lerp(d(-0.6, 0.5, 0.5), wind)
+    fore = d(-0.1, -0.6, -0.8).lerp(d(-0.2, 0.6, 0.75), wind)
+    up = up.lerp(d(-0.25, -0.9, 0.25), rel)
+    fore = fore.lerp(d(-0.1, -0.95, 0.05), rel)
+    P.arm_dirs("Right", up, fore, fore)
+    P.fist("Right", 0.7 * (1 - rel) + 0.1)
+
+
+def p_stab(P, t):
+    """Knife / broken bottle: short lunge and a straight forward thrust."""
+    pull = seg(t, 0.0, 0.25) * (1 - seg(t, 0.25, 0.35))
+    hit = seg(t, 0.3, 0.45) * (1 - seg(t, 0.7, 1.0))
+    P.hips((0, -0.12 * hit, -0.05 * hit), pitch=8 * hit)        # lean into the stab
+    P.spine(bend=4 + 12 * hit, twist=12 * pull - 18 * hit)
+    P.leg("Left", 8 + 22 * hit, 12 + 25 * hit, spread=0.13)
+    P.leg("Right", -6 - 14 * hit, 10, spread=0.1)
+    P.arm_swing("Left", 15, 50, 0.25)
+    P.fist("Left", 0.6)
+    up = d(-0.3, -0.3, -0.8).lerp(d(-0.45, 0.3, -0.6), pull).lerp(d(-0.15, -0.97, -0.05), hit)
+    fore = d(-0.1, -0.6, -0.8).lerp(d(-0.2, -0.5, 0.2), pull).lerp(d(-0.05, -1.0, 0.0), hit)
+    P.arm_dirs("Right", up, fore, fore)
+    P.fist("Right", 1.0)
+
+
+def p_golf(P, t):
+    """Golf club, hold: full two-handed swing. Address, backswing over the right shoulder, swing through to a high
+    finish over the left shoulder."""
+    back = seg(t, 0.05, 0.4) * (1 - seg(t, 0.4, 0.55))
+    thru = seg(t, 0.45, 0.65) * (1 - seg(t, 0.85, 1.0))
+    P.hips(yaw=25 * back - 45 * thru, pitch=12 - 8 * thru)      # bent over the ball
+    P.spine(bend=22 - 14 * thru, twist=55 * back - 70 * thru)
+    P.head(nod=10 - 6 * thru, turn=-20 * back + 25 * thru)
+    P.leg("Left", 12, 18, spread=0.16)
+    P.leg("Right", 12, 18 + 10 * thru, spread=0.16)
+    addr_r, addr_l = d(-0.12, -0.45, -0.88), d(0.12, -0.45, -0.88)
+    ru = addr_r.lerp(d(-0.65, 0.15, 0.6), back).lerp(d(0.35, -0.45, 0.55), thru)
+    lu = addr_l.lerp(d(-0.35, -0.45, 0.5), back).lerp(d(0.65, 0.15, 0.6), thru)
+    rf = d(-0.05, -0.5, -0.86).lerp(d(-0.3, 0.3, 0.8), back).lerp(d(0.3, 0.2, 0.8), thru)
+    lf = d(0.05, -0.5, -0.86).lerp(d(-0.4, 0.0, 0.8), back).lerp(d(0.45, 0.35, 0.7), thru)
+    P.arm_dirs("Right", ru, rf, rf)
+    P.arm_dirs("Left", lu, lf, lf)
+    P.fist("Right", 1.0)
+    P.fist("Left", 1.0)
+
+
+def p_drive(P, t):
+    """Golf cart: sitting, both hands on the wheel, small steering sway, belly out."""
+    sway = math.sin(math.tau * t) * 0.08
+    P.hips((0, 0.05, -0.42), pitch=4)
+    P.spine(bend=-6, side=6 * sway)
+    P.head(nod=-2, turn=10 * sway)
+    P.leg("Left", 85, 80, spread=0.16)
+    P.leg("Right", 85, 80, spread=0.12)
+    P.arm_dirs("Right", d(-0.25, -0.6, -0.65 + sway), d(-0.08, -0.95, 0.1 + sway))
+    P.arm_dirs("Left", d(0.25, -0.6, -0.65 - sway), d(0.08, -0.95, 0.1 - sway))
+    P.fist("Right", 0.85)
+    P.fist("Left", 0.85)
+
+
 def p_hit(P, t):
     k = seg(t, 0.0, 0.15) * (1 - seg(t, 0.3, 1.0))
     P.hips((0, 0.04 * k, -0.02 * k), pitch=-6 * k)
@@ -480,6 +551,10 @@ ACTIONS = [
     ("Rex_Taunt", 1.8, p_taunt, False),
     ("Rex_Photo", 2.0, p_photo, False),
     ("Rex_Comb", 2.4, p_comb, False),
+    ("Rex_Throw", 1.0, p_throw, False),
+    ("Rex_Stab", 0.7, p_stab, False),
+    ("Rex_GolfSwing", 1.5, p_golf, False),
+    ("Rex_Drive", 2.0, p_drive, True),
     ("Rex_Hit", 0.5, p_hit, False),
     ("Rex_Slip", 1.6, p_slip, False),
     ("Rex_Death", 1.6, p_death, False),

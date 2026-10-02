@@ -412,7 +412,7 @@ namespace RexMagnum
             Sfx.Play("coconut", transform.position);
             if (Ammo(WeaponId.Coconut) <= 0) return;
             ammo[WeaponId.Coconut]--;
-            controller.SetTrigger(Animator.StringToHash("Swing"));
+            controller.SetTrigger(Animator.StringToHash("Throw"));       // overhand coconut throw
             controller.FaceAimFor(0.6f);
             busyUntil = Time.time + 0.7f;
             var prefab = prefabs[(int)WeaponId.Coconut];

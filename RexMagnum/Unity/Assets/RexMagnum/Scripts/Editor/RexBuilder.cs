@@ -214,6 +214,9 @@ namespace RexMagnum.EditorTools
 
         /// <summary>Swim clips (Rex_Tread, Rex_Paddle) come in a small extra FBX (Blender/swim_export.py):
         /// armature only, Humanoid with Rex's own avatar, so they retarget exactly like his other clips.</summary>
+        /// <summary>Clips in Rex_Swim.fbx (Blender/swim_export.py EXTRA).</summary>
+        static readonly string[] ExtraClips = { "Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive" };
+
         static void ImportSwimClips()
         {
             string path = Char + "/Rex_Swim.fbx";
@@ -232,9 +235,9 @@ namespace RexMagnum.EditorTools
             foreach (var c in mi.defaultClipAnimations)
             {
                 string n = c.takeName.Contains("|") ? c.takeName.Substring(c.takeName.LastIndexOf('|') + 1) : c.takeName;
-                if (n != "Rex_Tread" && n != "Rex_Paddle" && n != "Rex_Comb") continue;
+                if (!ExtraClips.Contains(n)) continue;
                 c.name = n;
-                c.loopTime = c.loopPose = n != "Rex_Comb";        // the mirror comb plays once
+                c.loopTime = c.loopPose = n == "Rex_Tread" || n == "Rex_Paddle" || n == "Rex_Drive";   // the rest play once
                 c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true;
                 c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
                 clips.Add(c);
@@ -261,7 +264,8 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("Grounded", AnimatorControllerParameterType.Bool);
             ac.AddParameter("HandsDown", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Swim", AnimatorControllerParameterType.Bool);
-            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb" };
+            ac.AddParameter("Drive", AnimatorControllerParameterType.Bool);
+            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
             var layers = ac.layers;
@@ -297,11 +301,28 @@ namespace RexMagnum.EditorTools
                 toLand.duration = 0.3f;
             }
 
+            // golf cart: sitting at the wheel while Drive is on
+            var driveClip = Clip("Rex_Drive");
+            if (driveClip != null)
+            {
+                var drive = sm.AddState("Drive");
+                drive.motion = driveClip;
+                var toDrive = sm.AddAnyStateTransition(drive);
+                toDrive.AddCondition(AnimatorConditionMode.If, 0, "Drive");
+                toDrive.canTransitionToSelf = false;
+                toDrive.duration = 0.25f;
+                var outDrive = drive.AddTransition(loco);
+                outDrive.AddCondition(AnimatorConditionMode.IfNot, 0, "Drive");
+                outDrive.hasExitTime = false;
+                outDrive.duration = 0.25f;
+            }
+
             var map = new Dictionary<string, string>
             {
                 { "Jump", "Rex_Jump" }, { "Jab", "Rex_PunchJab" }, { "Heavy", "Rex_PunchHeavy" }, { "Swing", "Rex_Swing" },
                 { "Whip", "Rex_Whip" }, { "Taunt", "Rex_Taunt" }, { "Photo", "Rex_Photo" }, { "Hit", "Rex_Hit" },
                 { "Slip", "Rex_Slip" }, { "Death", "Rex_Death" }, { "Comb", "Rex_Comb" },
+                { "Throw", "Rex_Throw" }, { "Stab", "Rex_Stab" }, { "GolfSwing", "Rex_GolfSwing" },
             };
             foreach (var kv in map)
             {

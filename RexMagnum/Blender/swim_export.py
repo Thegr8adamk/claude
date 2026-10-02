@@ -15,6 +15,7 @@ import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+EXTRA = ("Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive")   # clips in this FBX
 OUT = os.path.join(HERE, "..", "Unity", "Assets", "RexMagnum", "Characters", "Rex", "Rex_Swim.fbx")
 
 
@@ -27,7 +28,7 @@ def main():
     bpy.context.scene.render.fps = rex_anim.FPS
     P = rex_anim.Poser(arm)
     acts = [rex_anim.make_action(arm, P, n, sec, fn, loop)
-            for n, sec, fn, loop in rex_anim.ACTIONS if n in ("Rex_Tread", "Rex_Paddle", "Rex_Comb")]
+            for n, sec, fn, loop in rex_anim.ACTIONS if n in EXTRA]
     if "--render" in sys.argv:
         render(arm, acts, os.path.abspath(sys.argv[sys.argv.index("--render") + 1]))
     # only the swim actions go into this FBX
