@@ -1403,8 +1403,8 @@ namespace RexMagnum.EditorTools
         /// (34.52) ends 2 m in front of the door (z 47) in a plain face down into the ground (32.4 - 32.6 there), and the
         /// FBX has no stair: Rex met a 2 m wall. Finds the platform edge from the door (rays along the axis nearest to
         /// outward: the platform is axis-aligned) and builds a 6 m wide flight of TempleStone steps (0.25 m rise, 0.4 m
-        /// tread: ~11 steps, ending ~4.4 m out, clear of the charge station 8 m out) down to the ground, a box collider
-        /// per step (stepOffset 0.35, NavMesh climb 0.4).</summary>
+        /// tread: ~11 steps, ending ~4.4 m out, clear of the charge station 8 m out) down to the ground. The steps are
+        /// looks only: one smooth wedge collider (a ramp through the nosings) carries Rex, the walk check and the NavMesh.</summary>
         static void RuinsSteps(Vector3 door, Vector3 outward, Transform parent)
         {
             Physics.SyncTransforms();
@@ -1455,9 +1455,6 @@ namespace RexMagnum.EditorTools
                         }
                         tris.AddRange(new[] { i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3 });
                     }
-                var bc = go.AddComponent<BoxCollider>();
-                bc.center = c;
-                bc.size = s;
             }
             int steps = 0;
             float lastTop = floorY;
@@ -1479,6 +1476,45 @@ namespace RexMagnum.EditorTools
                 steps++;
                 lastTop = top;
             }
+            // collision: one solid wedge, not a box per step. The walk check's capsule (and Rex's) reaches ~0.55 m ahead,
+            // over two 0.4 m treads, and caught the second nosing as a wall (round 3: blocked at 33.02 / 34.02, step
+            // nosings, not the platform edge). The ramp runs through the nosings (32 deg: slopeLimit 45, NavMesh 40),
+            // its top is the platform floor at the edge (no lip) and it runs on until it is 0.15 m under the ground
+            // all across, so the terrain takes over at its foot. Solid down under the ground: stepping off a side
+            // does not drop Rex into the stone.
+            float slope = Rise / Tread, len = Tread * steps, lowG = float.MaxValue;
+            for (int k = 0; k < 120 && len < 16f; k++, len += 0.1f)
+            {
+                float lowHere = float.MaxValue;
+                for (int si = -2; si <= 2; si++) lowHere = Mathf.Min(lowHere, Ground(edge + dir * len + side * (HalfW * si / 2f)));
+                if (floorY - slope * len <= lowHere - 0.15f) break;
+            }
+            for (float dd = 0f; dd <= len + 0.01f; dd += 0.25f)
+                for (int si = -2; si <= 2; si++) lowG = Mathf.Min(lowG, Ground(edge + dir * dd + side * (HalfW * si / 2f)));
+            var wv = new List<Vector3>();
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = 0; sy <= 1; sy++)
+                    for (int sz = 0; sz <= 1; sz++)
+                    {
+                        Vector3 wp = edge + dir * (len * sz) + side * (HalfW * sx);
+                        wp.y = sy == 1 ? floorY - slope * len * sz : lowG - 0.5f;
+                        wv.Add(wp);                                     // index sx(0/1) * 4 + sy * 2 + sz
+                    }
+            var wt = new List<int>();
+            foreach (var f in new[] { new[] { 0, 1, 3, 2 }, new[] { 4, 6, 7, 5 }, new[] { 0, 4, 5, 1 }, new[] { 2, 3, 7, 6 }, new[] { 0, 2, 6, 4 }, new[] { 1, 5, 7, 3 } })
+                wt.AddRange(new[] { f[0], f[1], f[2], f[0], f[2], f[3] });
+            var wedge = new Mesh { name = "RuinsDoorRamp" };
+            wedge.SetVertices(wv);
+            wedge.SetTriangles(wt, 0);
+            // winding depends on dir / side: face every triangle away from the wedge's centre (a collider only)
+            var wc = wv.Aggregate(Vector3.zero, (acc, v) => acc + v) / wv.Count;
+            for (int t = 0; t < wt.Count; t += 3)
+                if (Vector3.Dot(Vector3.Cross(wv[wt[t + 1]] - wv[wt[t]], wv[wt[t + 2]] - wv[wt[t]]), wv[wt[t]] - wc) < 0f)
+                { int sw = wt[t + 1]; wt[t + 1] = wt[t + 2]; wt[t + 2] = sw; }
+            wedge.SetTriangles(wt, 0);
+            wedge.RecalculateNormals();
+            wedge.RecalculateBounds();
+            go.AddComponent<MeshCollider>().sharedMesh = wedge;
             var mesh = new Mesh { name = "RuinsDoorSteps" };
             mesh.SetVertices(verts);
             mesh.SetNormals(nrms);
@@ -1494,7 +1530,8 @@ namespace RexMagnum.EditorTools
             go.AddComponent<MeshRenderer>().sharedMaterial = stone;
             GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.OccludeeStatic | StaticEditorFlags.BatchingStatic);
             Debug.Log($"[Rex Magnum] Ruins steps: platform edge {edge.x:F1}, {edge.z:F1} (floor {floorY:F2}, {drop:F2} m over the ground): " +
-                      $"{steps} steps of {Rise:F2} m, {HalfW * 2f:F0} m wide, last top {lastTop:F2} at {Tread * steps:F1} m out.");
+                      $"{steps} steps of {Rise:F2} m, {HalfW * 2f:F0} m wide, last top {lastTop:F2} at {Tread * steps:F1} m out; " +
+                      $"collider: one {Mathf.Atan(slope) * Mathf.Rad2Deg:F0} deg ramp, {len:F1} m out, foot {floorY - slope * len:F2}.");
         }
 
         /// <summary>A hanging board at the cave fork, read when walking in from the cave mouth: which way to the ship and

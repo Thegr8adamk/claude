@@ -1684,11 +1684,6 @@
    "tris": 1488
   },
   {
-   "name": "Cave",
-   "fbx": "Buildings/Cave.fbx",
-   "tris": 148474
-  },
-  {
    "name": "Ship",
    "fbx": "Buildings/Ship.fbx",
    "tris": 12996
@@ -1724,9 +1719,9 @@
    "tris": 186856
   },
   {
-   "name": "PoolArea",
-   "fbx": "Buildings/PoolArea.fbx",
-   "tris": 98230
+   "name": "GolfCart",
+   "fbx": "Buildings/GolfCart.fbx",
+   "tris": 3428
   },
   {
    "name": "Room304",
@@ -1734,9 +1729,14 @@
    "tris": 4808
   },
   {
-   "name": "GolfCart",
-   "fbx": "Buildings/GolfCart.fbx",
-   "tris": 3428
+   "name": "PoolArea",
+   "fbx": "Buildings/PoolArea.fbx",
+   "tris": 98230
+  },
+  {
+   "name": "Cave",
+   "fbx": "Buildings/Cave.fbx",
+   "tris": 148474
   }
  ],
  "vegetation": {

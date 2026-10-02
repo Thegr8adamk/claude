@@ -41,7 +41,7 @@ namespace RexMagnum
 
         [Header("First person")]
         public Vector3 eyeOffset = new Vector3(0f, 0.07f, 0.11f);   // from the head bone
-        public Vector3 armsOffset = new Vector3(0f, -0.04f, -0.06f);
+        public Vector3 armsOffset = new Vector3(0f, 0f, -0.05f);    // arms' head bone from the eye: the jab reaches into view
 
         public CameraMode Mode { get; private set; } = CameraMode.ThirdPerson;
         public float Yaw { get; private set; }

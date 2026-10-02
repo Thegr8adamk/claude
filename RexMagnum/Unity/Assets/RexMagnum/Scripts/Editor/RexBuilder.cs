@@ -66,6 +66,12 @@ namespace RexMagnum.EditorTools
             // the arms file has the full skeleton but only arm skin: Unity cannot auto-map its legs,
             // so it copies Rex's avatar (same "Rex_Rig" hierarchy) instead of making its own
             ImportModel(Char + "/Rex_FPArms.fbx", mats, AssetDatabase.LoadAllAssetsAtPath(Char + "/Rex.fbx").OfType<Avatar>().FirstOrDefault());
+            if (!HumanAvatar(Char + "/Rex_FPArms.fbx"))
+            {
+                // the copy still does not fit: let Unity map the arms file's own (full, unstripped) Mixamo skeleton
+                Debug.LogWarning("[Rex Magnum] Rex_FPArms.fbx: copied avatar not valid, mapping its own skeleton");
+                ImportModel(Char + "/Rex_FPArms.fbx", mats);
+            }
             ImportSwimClips();
             var controller = BuildController();
             return (BuildRexPrefab(controller), controller);
@@ -194,6 +200,12 @@ namespace RexMagnum.EditorTools
             mi.animationType = ModelImporterAnimationType.Human;
             mi.avatarSetup = copyFrom != null ? ModelImporterAvatarSetup.CopyFromOther : ModelImporterAvatarSetup.CreateFromThisModel;
             if (copyFrom != null) mi.sourceAvatar = copyFrom;
+            // "Strip Bones" (on by default) drops bones without skin weights: the arms file has no leg / hip skin,
+            // so its legs vanished, the copied humanoid avatar did not fit ("avatar is not humanoid") and no clip moved the arms
+            // (set by reflection: the property is newer than the compile check's reference DLLs)
+            var stripBones = typeof(ModelImporter).GetProperty("optimizeBones");
+            if (stripBones != null) stripBones.SetValue(mi, false, null);
+            else Debug.LogWarning("[Rex Magnum] ModelImporter.optimizeBones not found: Strip Bones stays on");
             mi.importAnimation = true;
             mi.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
             mi.materialLocation = ModelImporterMaterialLocation.InPrefab;
@@ -222,7 +234,14 @@ namespace RexMagnum.EditorTools
             }
             mi.clipAnimations = clips.ToArray();
             mi.SaveAndReimport();
-            Debug.Log($"[Rex Magnum] {Path.GetFileName(path)}: {clips.Count} clips, avatar human: {mi.animationType}");
+            var av = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Avatar>().FirstOrDefault();
+            Debug.Log($"[Rex Magnum] {Path.GetFileName(path)}: {clips.Count} clips, rig {mi.animationType}, avatar valid: {av != null && av.isValid}, human: {av != null && av.isHuman}");
+        }
+
+        static bool HumanAvatar(string path)
+        {
+            var av = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Avatar>().FirstOrDefault();
+            return av != null && av.isValid && av.isHuman;
         }
 
         /// <summary>Swim clips (Rex_Tread, Rex_Paddle) come in a small extra FBX (Blender/swim_export.py):
@@ -545,6 +564,27 @@ namespace RexMagnum.EditorTools
             armsRoot.SetParent(camGo.transform, false);
             var arms = Instance(Char + "/Rex_FPArms.fbx", armsRoot, controller);
             arms.name = "ArmsModel";
+            // skinned bounds come from the bind pose (arms down at the sides, below the view): bounds per frame, so the
+            // raised fists are never culled; the arms are the camera's own layer (Default) and cast no shadow
+            foreach (var fpSkin in arms.GetComponentsInChildren<SkinnedMeshRenderer>(true)) fpSkin.updateWhenOffscreen = true;
+            foreach (var fpR in arms.GetComponentsInChildren<Renderer>(true))
+            {
+                fpR.gameObject.layer = 0;
+                fpR.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            {
+                // build log: where the arms sit under the camera (RexCameraRig puts their head bone at the eye)
+                var fpAnim = arms.GetComponent<Animator>();
+                var fpHead = fpAnim != null && fpAnim.avatar != null && fpAnim.avatar.isHuman ? fpAnim.GetBoneTransform(HumanBodyBones.Head) : null;
+                Vector3 fpLocal = (fpHead != null ? -armsRoot.InverseTransformPoint(fpHead.position) : Vector3.zero) + rig.armsOffset;
+                var fpRends = arms.GetComponentsInChildren<Renderer>(true);
+                Bounds fpB = fpRends.Length > 0 ? fpRends[0].bounds : new Bounds();
+                foreach (var fpR in fpRends) fpB.Encapsulate(fpR.bounds);
+                Debug.Log($"[Rex Magnum] FP arms: local pos under camera {fpLocal} (head bone {(fpHead != null ? "found" : "MISSING")}), " +
+                          $"bounds size {fpB.size}, layer {LayerMask.LayerToName(arms.layer)} (in camera mask: {(cam.cullingMask & (1 << arms.layer)) != 0}), " +
+                          $"renderers {fpRends.Length}, controller {(fpAnim != null && fpAnim.runtimeAnimatorController != null ? fpAnim.runtimeAnimatorController.name : "NONE")}, " +
+                          $"avatar valid {fpAnim != null && fpAnim.avatar != null && fpAnim.avatar.isValid}, human {fpAnim != null && fpAnim.avatar != null && fpAnim.avatar.isHuman}");
+            }
             rig.fpArms = armsRoot.gameObject;
             rig.bodyRenderers = rex.GetComponentsInChildren<Renderer>();
             ctrl.cameraRig = rig;

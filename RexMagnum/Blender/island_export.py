@@ -490,6 +490,11 @@ def joined_mesh(objs, name, mats_out, lod1=False):
             poly.material_index = idx[min(poly.material_index, len(idx) - 1)]
         bm.from_mesh(me)
         bpy.data.meshes.remove(me)
+    # n-gons (5+ corners: caps, arches, pool edges) as triangles: Unity's own triangulation discarded the ones with
+    # collinear corners ("A polygon of Mesh ... is self-intersecting and has been discarded"). Quads stay.
+    ngons = [f for f in bm.faces if len(f.verts) > 4]
+    if ngons:
+        bmesh.ops.triangulate(bm, faces=ngons, quad_method="BEAUTY", ngon_method="BEAUTY")
     out = bpy.data.meshes.new(name)
     bm.to_mesh(out)
     bm.free()
@@ -571,6 +576,13 @@ def export_assets(mats_used, names=None):
             tmp.objects.link(mid)
             decimate(mid, int(tris0 * 0.35))
             lods = [lod0, mid, lod1]
+        if not lod1.data.polygons:
+            # nothing left far away (Room304: every part is in LOD1_DROP): no empty mesh in the FBX, Unity warned
+            # "Can't calculate tangents, because mesh 'Room304_LOD1' doesn't contain normals" on it
+            lods.remove(lod1)
+            me = lod1.data
+            bpy.data.objects.remove(lod1)
+            bpy.data.meshes.remove(me)
         extra = []
         for g, gobjs in groups.items():
             eo = bpy.data.objects.new(f"{name}_{g}", joined_mesh(gobjs, f"{name}_{g}", mats_used))

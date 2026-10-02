@@ -176,11 +176,13 @@ namespace RexMagnum
 
         GameObject Attach(GameObject prefab, Animator anim)
         {
-            if (anim == null || !anim.isHuman) return null;
-            var hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
-            var index = anim.GetBoneTransform(HumanBodyBones.RightIndexProximal);
-            var little = anim.GetBoneTransform(HumanBodyBones.RightLittleProximal);
-            var middle = anim.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (anim == null) return null;
+            // not humanoid (an old arms import): the same Mixamo bones by name
+            bool hu = anim.isHuman;
+            var hand = hu ? anim.GetBoneTransform(HumanBodyBones.RightHand) : BoneByName(anim.transform, "mixamorig:RightHand");
+            var index = hu ? anim.GetBoneTransform(HumanBodyBones.RightIndexProximal) : BoneByName(anim.transform, "mixamorig:RightHandIndex1");
+            var little = hu ? anim.GetBoneTransform(HumanBodyBones.RightLittleProximal) : BoneByName(anim.transform, "mixamorig:RightHandPinky1");
+            var middle = hu ? anim.GetBoneTransform(HumanBodyBones.RightMiddleProximal) : BoneByName(anim.transform, "mixamorig:RightHandMiddle1");
             if (hand == null || index == null || little == null || middle == null) return null;
             var go = Instantiate(prefab);
             var w = go.GetComponent<Weapon>();
@@ -823,6 +825,13 @@ namespace RexMagnum
         }
 
         void OnDestroy() { if (muzzleLight != null) Destroy(muzzleLight.gameObject); }
+
+        static Transform BoneByName(Transform t, string name)
+        {
+            if (t.name == name) return t;
+            foreach (Transform c in t) { var f = BoneByName(c, name); if (f != null) return f; }
+            return null;
+        }
 
         static Transform MuzzleOf(GameObject held)
         {
