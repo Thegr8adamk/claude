@@ -66,8 +66,10 @@ namespace RexMagnum
                 RexVoice.Say(gameObject, "Taunt");
                 Progress.Add("taunts");
                 // Blobs that see it get angry and answer with a rude tentacle
+                bool answered = false;
                 foreach (var b in FindObjectsByType<Blob>(FindObjectsSortMode.None))
-                    if (Vector3.Distance(b.transform.position, transform.position) < 30f) b.OnTaunted();
+                    if (Vector3.Distance(b.transform.position, transform.position) < 30f) { b.OnTaunted(); answered = true; }
+                if (answered && Random.value < 0.5f) StartCoroutine(SayLater("TauntAnswer", 2.8f));   // after the rude tentacle
             }
             if (RMInput.Photo && !busy)
             {
@@ -85,6 +87,12 @@ namespace RexMagnum
                 PhotoAlbum.Take(this, nearest == null ? "" : nearest.GetComponent<KingGlorpBoss>() != null ? "KingGlorp" : nearest.kind.ToString());
             }
             controller.FaceAim = Time.time < faceAimUntil;
+        }
+
+        System.Collections.IEnumerator SayLater(string group, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            RexVoice.Say(gameObject, group, true);
         }
 
         System.Collections.IEnumerator HitAfter(float delay, float damage, float reach, bool heavy)

@@ -45,11 +45,43 @@ namespace RexMagnum
             { "GlorpWin", new[] { "Long live the king. Nah.", "And... cut. Print it. Somebody print it. Anybody?" } },
             { "WeaponFound", new[] { "Oh, that'll do.", "Finders keepers. Losers get goo'd." } },
             { "Tourist", new[] { "Vacation's over, booger.", "Three eyes and you still didn't see that coming." } },
+            { "Lifeguard", new[] { "No running by the pool.", "Adult swim, pal." } },
+            { "Bouncer", new[] { "I've been thrown out by bigger. Last night." } },
+            { "BouncerSplit", new[] { "Great. Twins. My third wife had a twin. Long story." } },
+            { "Disguise", new[] { "Nice dress. Your slime is showing.", "I knew it. Nobody at this resort looks that good." } },
+            { "Fight", new[] { "Clean-up at the pool.", "You're all wet.", "You look like something I coughed up in '87.", "I've seen scarier things in the hot tub filter.", "Smells like the buffet on a Sunday.", "Who sneezed you out?", "Next!" } },
+            { "LowHealth", new[] { "I need a drink. And a medic. Drink first.", "I'm seeing two of you. Both ugly." } },
+            { "TauntAnswer", new[] { "Oh, real mature." } },
         };
 
         static readonly Dictionary<string, int> last = new Dictionary<string, int>();
         static float nextAllowed;
         public static System.Action<string> Subtitle;   // UI hook
+
+        /// <summary>Voice mail to Marty (brief section 9): played in order, one per call.</summary>
+        public static readonly string[] VoiceMail =
+        {
+            "Marty. It's Rex. Aliens. Call me.",
+            "Marty. I'm killing aliens with a fish. This is a franchise.",
+            "Marty, I know you're there. I can hear you breathing. No, wait. That's me.",
+            "Marty. If I die, I want a big funeral. If I live, I want ten percent more.",
+            "Marty. You're dead to me. Call me back.",
+            "Marty. It's Rex. I forgot why I called. I'm covered in something.",
+            "Marty. Your mailbox is full. That's the most action either of us has had all year.",
+        };
+        public const string MartyGreeting = "Hey, hey, hey! You've reached Marty at Big Star Talent. I'm on the other line with somebody " +
+            "more famous than you. Leave a message. If this is Rex, stop calling. Love ya, babe!";
+
+        /// <summary>A line with its own speaker name and clip path (Marty, voice mail).</summary>
+        public static float SayLine(GameObject speaker, string who, string text, string clipPath)
+        {
+            Subtitle?.Invoke(who + ": " + text);
+            nextAllowed = Time.time + 2.5f;
+            var clip = Resources.Load<AudioClip>(clipPath);
+            var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
+            if (clip != null && src != null) { src.PlayOneShot(clip); return clip.length; }
+            return Mathf.Clamp(text.Length * 0.06f, 2f, 7f);     // reading time for the subtitle
+        }
 
         public static void Say(GameObject speaker, string group, bool force = false)
         {

@@ -8,6 +8,7 @@ namespace RexMagnum
     /// Rex's weapons (brief section 5): inventory, equip in the right hand (third-person body AND
     /// first-person arms), one Action button (tap = light, hold = heavy / aim), ammo, special effects.
     /// </summary>
+    [RequireComponent(typeof(WeaponWheel))]
     public class RexWeapons : MonoBehaviour
     {
         public RexController controller;
@@ -39,6 +40,68 @@ namespace RexMagnum
         };
 
         void Start() => Equip(WeaponId.Fists);
+
+        /// <summary>Owned weapons in the fixed wheel / cycle order.</summary>
+        public List<WeaponId> OwnedInOrder()
+        {
+            var list = new List<WeaponId>();
+            foreach (var id in Order) if (owned.Contains(id)) list.Add(id);
+            return list;
+        }
+
+        // ---------------------------------------------------------------- wet towel (brief section 5)
+
+        /// <summary>Dip the towel in water: darker, drips, hits harder. Dries after a while.</summary>
+        public bool TowelWet => Time.time < towelWetUntil;
+        public float wetTowelDamage = 1.5f;
+        public float wetTowelSeconds = 90f;
+        float towelWetUntil, nextDrip;
+        bool towelShownWet;
+        MaterialPropertyBlock wetBlock;
+
+        void UpdateTowel()
+        {
+            if (current == WeaponId.Towel && controller.WaterDepth > 0.9f)   // the hand is under the surface
+            {
+                if (!TowelWet) Progress.Add("wet_towels");
+                towelWetUntil = Time.time + wetTowelSeconds;
+            }
+            bool wet = TowelWet && current == WeaponId.Towel;
+            if (wet != towelShownWet) { towelShownWet = wet; TintTowel(wet); }
+            if (wet && !controller.HandsDown && Time.time > nextDrip && heldBody != null && heldBody.activeInHierarchy)
+            {
+                nextDrip = Time.time + Random.Range(0.25f, 0.6f);
+                SlimeFX.Splat(heldBody.transform.position + Vector3.down * 0.3f, Vector3.down, new Color(0.7f, 0.85f, 1f), 1);
+            }
+        }
+
+        void TintTowel(bool wet)
+        {
+            if (wetBlock == null) wetBlock = new MaterialPropertyBlock();
+            foreach (var held in new[] { heldBody, heldArms })
+            {
+                if (held == null) continue;
+                foreach (var r in held.GetComponentsInChildren<Renderer>())
+                {
+                    r.GetPropertyBlock(wetBlock);
+                    wetBlock.SetColor("_BaseColor", wet ? new Color(0.55f, 0.55f, 0.6f) : Color.white);
+                    wetBlock.SetFloat("_Smoothness", wet ? 0.75f : 0.2f);
+                    r.SetPropertyBlock(wetBlock);
+                }
+            }
+        }
+
+        /// <summary>A line after a kill: the weapon's line, or sometimes one about the blob type or the fight.</summary>
+        void KillLine(WeaponDef d, Blob blob)
+        {
+            string group = d.id == WeaponId.Fists ? "Fists" : d.id.ToString();
+            float roll = Random.value;
+            if (blob != null && roll < 0.3f)
+                group = blob.kind == Blob.Kind.Lifeguard ? "Lifeguard" : blob.kind == Blob.Kind.Bouncer ? "Bouncer" :
+                        blob.kind == Blob.Kind.Tourist ? "Tourist" : group;
+            else if (roll < 0.45f) group = "Fight";
+            RexVoice.Say(gameObject, group);
+        }
 
         // ---------------------------------------------------------------- inventory
 
@@ -75,6 +138,7 @@ namespace RexMagnum
         {
             current = id;
             bottleHits = 0;
+            towelShownWet = false;
             if (heldBody) Destroy(heldBody);
             if (heldArms) Destroy(heldArms);
             var prefab = prefabs != null && (int)id < prefabs.Length ? prefabs[(int)id] : null;
@@ -122,12 +186,17 @@ namespace RexMagnum
 
         // ---------------------------------------------------------------- input
 
+        WeaponWheel wheel;
+
         void Update()
         {
             if (!controller.InputEnabled) return;
+            if (wheel == null) wheel = GetComponent<WeaponWheel>();
+            if (wheel != null && wheel.IsOpen) return;            // choosing a weapon: no attacks
             if (RMInput.NextWeapon) Cycle(1);
             if (RMInput.PrevWeapon) Cycle(-1);
             UpdateVisibility();
+            UpdateTowel();
             var d = Current;
             Aiming = !controller.HandsDown && d.isGun && RMInput.Aim;
             Scoped = Aiming && current == WeaponId.Sniper;
@@ -186,12 +255,13 @@ namespace RexMagnum
                     blob.flingDirection = transform.forward + Vector3.up * 0.6f;
                     if (d.id == WeaponId.Towel && heavy) blob.Stun(2f);          // brief: wind-up snap stuns 2 s
                 }
-                h.Damage(heavy ? d.holdDamage : d.tapDamage, col.ClosestPoint(c), gameObject);
+                float dmg = (heavy ? d.holdDamage : d.tapDamage) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
+                h.Damage(dmg, col.ClosestPoint(c), gameObject);
                 if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
                 if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
                 if (h.IsDead)
                 {
-                    RexVoice.Say(gameObject, d.id == WeaponId.Fists ? "Fists" : d.id.ToString());
+                    KillLine(d, blob);
                     if (heavy && d.killCamOnHold) KillCam.Show(h.transform, transform.position, false);
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
@@ -239,7 +309,7 @@ namespace RexMagnum
                     h.Damage(d.tapDamage * (brain ? 2f : 1f), hit.point, gameObject);
                     if (h.IsDead)
                     {
-                        RexVoice.Say(gameObject, d.id.ToString());
+                        KillLine(d, blob);
                         if (d.id == WeaponId.Sniper) KillCam.Show(h.transform, from, true);   // full bullet cam
                         else if (blob != null && Blob.AliveCount() == 0) KillCam.Show(h.transform, from, true);
                     }

@@ -13,6 +13,9 @@ namespace RexMagnum
         RexController ctrl;
         Vector3 startPos;
         float startYaw;
+        bool lowSaid;      // the low-health line once per drop below 25 %
+
+        void Update() { if (lowSaid && health.Fraction > 0.5f) lowSaid = false; }
 
         void Awake()
         {
@@ -22,7 +25,10 @@ namespace RexMagnum
             startYaw = transform.eulerAngles.y;
             health.Damaged += (a, p, by) =>
             {
-                if (!health.IsDead) { ctrl.Hurt(); RexVoice.Say(gameObject, "Hurt"); }
+                if (health.IsDead) return;
+                ctrl.Hurt();
+                if (health.Fraction < 0.25f && !lowSaid) { lowSaid = true; RexVoice.Say(gameObject, "LowHealth", true); }
+                else RexVoice.Say(gameObject, "Hurt");
             };
             health.Died += by => StartCoroutine(DieRoutine());
         }

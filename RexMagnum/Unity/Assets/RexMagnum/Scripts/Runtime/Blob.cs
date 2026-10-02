@@ -211,8 +211,11 @@ namespace RexMagnum
             Sfx.Play("blob_hit", point);
         }
 
+        GameObject lastKiller;
+
         void OnDied(GameObject killer)
         {
+            lastKiller = killer;
             if (killer != null && killer.GetComponent<RexController>() != null)
             {
                 Progress.Add("kills");
@@ -280,6 +283,8 @@ namespace RexMagnum
                     half.transform.localScale = transform.localScale * 0.5f;
                     half.ApplyKind();
                 }
+                if (lastKiller != null && lastKiller.GetComponent<RexController>() != null)
+                    RexVoice.Say(lastKiller, "BouncerSplit", true);
             }
             Destroy(gameObject, 0.15f);
         }
