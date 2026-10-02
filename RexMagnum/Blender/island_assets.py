@@ -1568,7 +1568,7 @@ def blob_factory(k, m):
         k.tube([(vx, vy, 3.5), (vx, vy, 5.5), (vx * 0.5 + core_c[0] * 0.5, vy * 0.5 + core_c[1] * 0.5, 6.2),
                 (core_c[0], core_c[1], 5.6)], 0.18, m["darkmetal"], base="VatPipe")
     egg = principled("A_BlobEgg", (0.3, 0.9, 0.25), 0.15, **{"Transmission Weight": 0.5,
-                     "Emission Color": (0.3, 1.0, 0.2, 1), "Emission Strength": 0.7})
+                     "Emission Color": (0.3, 1.0, 0.2, 1), "Emission Strength": 0.35})
     for j in range(24):
         ex, ey = -11 + (j % 6) * 1.2, -4.5 + (j // 6) * 1.1
         k.rock((ex, ey, 0.3), (0.22, 0.22, 0.3), egg, seed=600 + j, base="Egg", detail=2)
