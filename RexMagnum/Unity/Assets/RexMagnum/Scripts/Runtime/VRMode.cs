@@ -35,6 +35,7 @@ namespace RexMagnum
         bool zeroed;
         float yawZero;
         int viewBefore = 1;
+        bool entered;
 
         void Awake()
         {
@@ -142,7 +143,8 @@ namespace RexMagnum
             if (dev != null && cam != null) dev.Invoke(null, new object[] { cam, true });
             if (rig != null)
             {
-                viewBefore = PlayerPrefs.GetInt("RexMagnum_CameraMode", 1);     // SetMode below saves first person
+                viewBefore = PlayerPrefs.GetInt("RexMagnum_CameraMode", 1);
+                entered = true;     // SetMode below saves first person
                 rig.SetMode(RexCameraRig.CameraMode.FirstPerson, true);
                 rig.VRControlled = true;
             }
@@ -152,8 +154,9 @@ namespace RexMagnum
 
         void Leave()
         {
-            if (rig != null)
+            if (rig != null && entered)      // only undo what Enter did (a failed start never entered)
             {
+                entered = false;
                 rig.VRControlled = false;
                 // back to the view the player had chosen (VR forced first person)
                 rig.SetModeFromSettings(viewBefore == 0 ? RexCameraRig.CameraMode.FirstPerson : RexCameraRig.CameraMode.ThirdPerson);

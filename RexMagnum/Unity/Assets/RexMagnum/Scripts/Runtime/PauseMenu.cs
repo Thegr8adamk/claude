@@ -81,7 +81,8 @@ namespace RexMagnum
             panel.CancelWait();
             Open = o;
             if (o) scaleBefore = Time.timeScale;
-            Time.timeScale = o ? 0f : (scaleBefore > 0f ? scaleBefore : 1f);      // back to the weapon wheel / kill cam slow motion
+            // back to the kill cam's slow motion only while it still runs (else normal speed: no slow motion left behind)
+            Time.timeScale = o ? 0f : (KillCam.Active && scaleBefore > 0f ? scaleBefore : 1f);
             AudioListener.pause = o;
             Cursor.lockState = o ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = o;

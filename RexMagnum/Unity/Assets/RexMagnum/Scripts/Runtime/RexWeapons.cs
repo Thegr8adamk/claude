@@ -391,6 +391,8 @@ namespace RexMagnum
             return w != null ? w.muzzle : null;
         }
 
+        static Material tracerMat;
+
         static void Tracer(Vector3 a, Vector3 b)
         {
             var go = new GameObject("Tracer");
@@ -400,8 +402,12 @@ namespace RexMagnum
             lr.SetPosition(1, b);
             lr.startWidth = 0.015f;
             lr.endWidth = 0.004f;
-            lr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
-            lr.material.SetColor("_BaseColor", new Color(1f, 0.85f, 0.5f));
+            if (tracerMat == null)          // one shared material (a new one per shot was never freed)
+            {
+                tracerMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
+                tracerMat.SetColor("_BaseColor", new Color(1f, 0.85f, 0.5f));
+            }
+            lr.sharedMaterial = tracerMat;
             Destroy(go, 0.05f);
         }
 

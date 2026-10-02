@@ -240,10 +240,11 @@ namespace RexMagnum
         {
             Ray ray = new Ray(transform.position, transform.forward);
             // aim assist (phone + controller, setting): pull the aim to the nearest blob within 4 degrees
-            if (RMInput.AimAssist && (TouchState.Active || RMInput.LookIsStick))      // not for mouse players
+            // not for mouse players, not through the scope (precise brain shots), only for blobs in clear view
+            if (RMInput.AimAssist && (TouchState.Active || RMInput.LookIsStick) && !(weapons != null && weapons.Scoped))
             {
                 Blob best = null;
-                float bestAng = 4f;
+                float bestAng = 4f * cam.fieldOfView / 65f;
                 foreach (var b in Blob.All)
                 {
                     if (b == null || b.IsDead) continue;
@@ -251,7 +252,8 @@ namespace RexMagnum
                     float d = Vector3.Distance(c, transform.position);
                     if (d > range) continue;
                     float ang = Vector3.Angle(transform.forward, c - transform.position);
-                    if (ang < bestAng) { bestAng = ang; best = b; }
+                    if (ang < bestAng && !Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore)
+                        || ang < bestAng && wall.collider.GetComponentInParent<Blob>() == b) { bestAng = ang; best = b; }
                 }
                 if (best != null) return best.transform.position + Vector3.up * 1.0f;
             }

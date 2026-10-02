@@ -88,6 +88,7 @@ namespace RexMagnum
             float t = 0f;
             while (c != null && t < 6.5f)          // the 3 s fuse is 6 s at half speed: stay on it until the blast
             {
+                if (PauseMenu.Open) { yield return null; continue; }     // waits behind the pause menu (Esc is not a skip)
                 t += Time.unscaledDeltaTime;
                 Vector3 v = rb != null ? rb.linearVelocity : Vector3.zero;
                 if (v.sqrMagnitude > 1f) dir = Vector3.Lerp(dir, v.normalized, Time.unscaledDeltaTime * 6f);
@@ -125,6 +126,7 @@ namespace RexMagnum
             Vector3 flat = Vector3.ProjectOnPlane(target - from, Vector3.up).normalized;
             while (t < dur)
             {
+                if (PauseMenu.Open) { yield return null; continue; }
                 t += Time.unscaledDeltaTime;
                 float k = Mathf.Clamp01(t / (dur * 0.6f));
                 if (tr != null && style == Style.Follow) target = tr.position + Vector3.up * 0.8f;   // the blob is flying

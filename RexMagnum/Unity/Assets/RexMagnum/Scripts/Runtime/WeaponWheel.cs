@@ -28,6 +28,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (PauseMenu.Open) return;
             // opens only at normal speed (not in the pause menu, not during the kill cam slow motion)
             bool want = controller != null && controller.InputEnabled && RMInput.WheelHeld;
             if (want && !IsOpen && Mathf.Approximately(Time.timeScale, 1f)) Open();

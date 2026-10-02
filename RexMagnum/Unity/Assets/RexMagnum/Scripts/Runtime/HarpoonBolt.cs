@@ -5,6 +5,7 @@ namespace RexMagnum
     /// <summary>Harpoon: fast steel spear with a rope back to the gun. Pins blobs (to the wall if close).</summary>
     public class HarpoonBolt : MonoBehaviour
     {
+        static Material ropeMat;     // shared by every rope (one new material per bolt was never freed)
         Vector3 velocity;
         float damage, life;
         GameObject owner;
@@ -30,8 +31,12 @@ namespace RexMagnum
             h.owner = owner;
             h.rope = go.AddComponent<LineRenderer>();
             h.rope.startWidth = h.rope.endWidth = 0.006f;
-            h.rope.material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
-            h.rope.material.SetColor("_BaseColor", new Color(0.85f, 0.8f, 0.65f));
+            if (ropeMat == null)
+            {
+                ropeMat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
+                ropeMat.SetColor("_BaseColor", new Color(0.85f, 0.8f, 0.65f));
+            }
+            h.rope.sharedMaterial = ropeMat;
         }
 
         void Update()
