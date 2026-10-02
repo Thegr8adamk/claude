@@ -365,6 +365,9 @@ namespace RexMagnum
 
         const float ComboWindow = 0.8f;
         int tapCount;
+        // big blob stagger: 3 light hits on a full-size bouncer within 2 s make it reel (x = hits, y = first hit time)
+        readonly Dictionary<Blob, Vector2> bigHits = new Dictionary<Blob, Vector2>();
+        static bool IsBig(Blob b) => b.kind == Blob.Kind.Bouncer && !b.isHalf;   // King Glorp has his own dizzy
         float lastTapTime = -10f;
 
         IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay, bool combo = false)
@@ -377,7 +380,7 @@ namespace RexMagnum
             Vector3 chest = transform.position + Vector3.up * 1.1f;
             float arc = heavy ? 85f : 55f, reach = d.reach * (heavy ? 1.25f : 1.15f);
             var struck = new HashSet<Health>();
-            bool any = false, anyBlob = false, camShown = false, lineSaid = false;
+            bool any = false, anyBlob = false, camShown = false, lineSaid = false, anyBig = false;
             foreach (var col in Physics.OverlapSphere(chest, reach, ~0, QueryTriggerInteraction.Ignore))
             {
                 var h = col.GetComponentInParent<Health>();
@@ -416,6 +419,24 @@ namespace RexMagnum
                 if (blob != null) { RexTestHUD.HitMarker(); anyBlob = true; }
                 if (blob != null && !h.IsDead)        // pushed away from Rex (a cleave scatters the group)
                     blob.Knockback(flat.sqrMagnitude > 0.01f ? flat.normalized : transform.forward, hard ? 1.5f : 0.4f);
+                if (blob != null && !heavy && IsBig(blob))
+                {
+                    anyBig = true;
+                    if (!h.IsDead)
+                    {
+                        Vector2 bh = bigHits.TryGetValue(blob, out Vector2 prev) && Time.time - prev.y <= 2f ? prev : new Vector2(0f, Time.time);
+                        bh.x += 1f;
+                        if (bh.x >= 3f)
+                        {
+                            bigHits.Remove(blob);
+                            blob.Hold(0.4f);                  // stagger: no chase / attack for a moment, shoved a little more
+                            blob.Knockback(flat.sqrMagnitude > 0.01f ? flat.normalized : transform.forward, 0.8f);
+                            Sfx.Play("blob_hit", blob.transform.position, 0.6f, 0.6f);
+                        }
+                        else bigHits[blob] = bh;
+                    }
+                    else bigHits.Remove(blob);
+                }
                 if (h.IsDead && blob != null)       // blobs only: the stuck door also has Health (no kill cam for a door)
                 {
                     // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group (one per swing)
@@ -438,7 +459,7 @@ namespace RexMagnum
             if (anyBlob)          // light hits get a smaller kick too (the jab should not feel like air); a cleave a bit more
             {
                 if (cameraRig != null) cameraRig.Shake((hard ? 0.18f : 0.06f) * (struck.Count > 1 ? 1.3f : 1f));
-                StartCoroutine(HitStop(hard ? 0.06f : 0.025f));
+                StartCoroutine(HitStop(hard ? 0.06f : anyBig ? 0.035f : 0.025f));   // a jab into a big blob feels weighty
                 if (hard) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
             }
             if (d.id == WeaponId.Bottle && current == WeaponId.Bottle && ++bottleHits >= 3)   // brief: breaks after 3 hits (swings that land)
