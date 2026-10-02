@@ -252,8 +252,11 @@ namespace RexMagnum
                     float d = Vector3.Distance(c, transform.position);
                     if (d > range) continue;
                     float ang = Vector3.Angle(transform.forward, c - transform.position);
-                    if (ang < bestAng && !Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore)
-                        || ang < bestAng && wall.collider.GetComponentInParent<Blob>() == b) { bestAng = ang; best = b; }
+                    if (ang >= bestAng) continue;
+                    // in clear view: nothing between the camera and the blob, or the first thing hit is this blob
+                    bool seen = !Physics.Linecast(transform.position, c, out RaycastHit wall, collisionMask, QueryTriggerInteraction.Ignore)
+                                || wall.collider.GetComponentInParent<Blob>() == b;
+                    if (seen) { bestAng = ang; best = b; }
                 }
                 if (best != null) return best.transform.position + Vector3.up * 1.0f;
             }
