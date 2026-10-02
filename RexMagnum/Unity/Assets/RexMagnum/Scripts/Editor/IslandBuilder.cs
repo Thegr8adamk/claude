@@ -769,7 +769,8 @@ namespace RexMagnum.EditorTools
                 Vector3 outward = Vector3.ProjectOnPlane(door[0] - hallPt[0], Vector3.up).normalized;
                 Vector3 at = door[0] + outward * 8f;
                 Physics.SyncTransforms();
-                if (Physics.Raycast(at + Vector3.up * 2f, Vector3.down, out RaycastHit ground, 30f)) at = ground.point;   // from 2 m: not onto the ruins roof
+                var hits = Physics.RaycastAll(at + Vector3.up * 30f, Vector3.down, 60f);
+                if (hits.Length > 0) at = hits.OrderBy(h => h.point.y).First().point;   // lowest hit: the ground, not the ruins roof
                 var ch = new GameObject("ChargeStation").transform;
                 ch.SetParent(root, false);
                 ch.position = at + Vector3.up * 0.05f;

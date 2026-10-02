@@ -62,3 +62,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 15:00 | Phone speed: heavy buildings (hotel, cave, tiki bar, dive shop, pool area, waterfall) now have a middle detail level at ~35 %; island re-exported | (code + export) |
 | 2026-10-02 15:30 | Owner's first Unity test: Rex walks through objects. Fix: boulders get colliders (only trees/palms had them) | (code) |
 | 2026-10-02 17:20 | Owner bug report fixed (room walls, FP arms, rig errors, HUD, glare, pick-up, audio sync); new title screen (hotel + beach picture, PLAY / SETTINGS / QUIT), shared settings (graphics, camera, VR, sound, controls), controller menus, VR mode | 2026-10-02_1720_title_screen.png |
+| 2026-10-02 18:10 | Full bug check before play test: 4 reviewers + 1 verify pass over all scripts; about 45 bugs fixed (menus, weapons, FP arms, blobs, guests, cart, boss, ending, builders, build shaders); hotel re-exported | (code) |

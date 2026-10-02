@@ -94,7 +94,7 @@ namespace RexMagnum
                 last = c.position;
                 cam.transform.position = last - dir * 2.0f + Vector3.up * 0.6f;
                 cam.transform.LookAt(last + dir * 1.5f);
-                if (t > 0.3f && RMInput.AnyKey) break;
+                if (t > 0.3f && RMInput.AnyKey) { RMInput.ActionBlockedFrame = Time.frameCount; break; }     // skippable; the skip click does not attack
                 yield return null;
             }
             // blast: hold on the spot, then a short X-ray orbit if it killed (slime rain falls)

@@ -38,7 +38,7 @@ namespace RexMagnum
                 rex.InputEnabled = false;
                 // Rex cannot move in the cutscene: blobs still near him stop for its length (about 26 s)
                 foreach (var b in Blob.All)
-                    if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) b.Stun(30f);
+                    if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) { b.Stun(30f); stunned.Add(b); }
             }
             var main = Camera.main;
             cam = new GameObject("EndingCam").AddComponent<Camera>();
@@ -46,9 +46,12 @@ namespace RexMagnum
             cam.fieldOfView = 50f;
         }
 
+        readonly System.Collections.Generic.List<Blob> stunned = new System.Collections.Generic.List<Blob>();
+
         void OnDestroy()
         {
             if (cam != null) Destroy(cam.gameObject);
+            foreach (var b in stunned) if (b != null && !b.IsDead) b.Stun(0f);     // ending skipped: blobs move again with Rex
             // still off if he is at the golf cart's wheel or the pause menu is open (either may change during the ending)
             if (rex != null) rex.InputEnabled = GolfCart.Driven == null && !PauseMenu.Open;
         }
