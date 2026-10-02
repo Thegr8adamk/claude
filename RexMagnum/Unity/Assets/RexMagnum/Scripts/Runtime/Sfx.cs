@@ -110,6 +110,9 @@ namespace RexMagnum
                 if (pool[i] != null && pool[i].isPlaying) pool[i].volume = baseVolume[i] * g;
         }
 
+        /// <summary>Forget the cached bus gain (AudioMix.ResetSnapshot): the next FollowBus sets the gain again.</summary>
+        public static void ResetBusGain() => lastGain = -1f;
+
         // a few UI sources: the pitch is per source, so a cue at another pitch takes another source (setting the
         // pitch on a playing one would re-pitch the cue still ringing out)
         const int UISize = 3;

@@ -24,6 +24,7 @@ namespace RexMagnum
 
         void OnTriggerEnter(Collider other)
         {
+            if (!other.CompareTag("Player")) return;                         // only Rex's capsule (blobs, coconuts: no parent search each frame)
             var rex = other.GetComponentInParent<RexController>();
             if (rex == null || exit == null || Time.time < busyUntil || GolfCart.Driven != null) return;
             if (NightSiege.Active)                                           // no running from the cave siege into the tunnels
@@ -40,7 +41,7 @@ namespace RexMagnum
         // Rex still standing in the door when the siege ends (or the last fade is over): no new Enter comes, so go now
         void OnTriggerStay(Collider other)
         {
-            if (Time.time < busyUntil || NightSiege.Active) return;
+            if (Time.time < busyUntil || NightSiege.Active || !other.CompareTag("Player")) return;
             OnTriggerEnter(other);
         }
 

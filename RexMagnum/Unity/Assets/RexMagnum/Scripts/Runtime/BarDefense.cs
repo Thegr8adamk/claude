@@ -37,7 +37,7 @@ namespace RexMagnum
         const float StuckAfter = 20f, StuckRexDistance = 15f;
         const float UpstairsAbort = 20f;                                  // this long above the ground floor: he left the bar
         // start: this long near the counter, slower than a run (running past on the way to the pool doors is no start)
-        const float StartDwell = 1.5f, StartMaxSpeed = 4f;
+        const float StartDwell = 1.5f, StartMaxSpeed = 1.5f;     // a deliberate stand (walking past is ~3 m/s)
         // replay: a small fixed spot at the counter, and no other Use target close by
         const float ReplayRadius = 2.5f, OtherUseRadius = 3f;
         static readonly int[] WaveSize = { 4, 6, 7 };
@@ -216,13 +216,14 @@ namespace RexMagnum
             float speed = moved.magnitude / Mathf.Max(0.01f, Time.time - lastCheckTime);
             lastCheckPos = p; lastCheckTime = Time.time;
             Vector3 flat = p - Center; flat.y = 0f;
-            if (p.y > StartTop || flat.sqrMagnitude > StartRadius * StartRadius || speed > StartMaxSpeed)
-            { nearSince = -1f; return; }                                       // left (or just passing): cancelled quietly
+            if (p.y > StartTop || flat.sqrMagnitude > StartRadius * StartRadius)
+            { nearSince = -1f; return; }                                       // left: cancelled quietly
+            if (speed > StartMaxSpeed) { if (nearSince >= 0f) nearSince = Time.time; return; }   // moving: the dwell starts over
             if (!FindPrefabs()) return;
             if (nearSince < 0f)
             {
                 nearSince = Time.time;
-                if (Time.time > noticeAgainAt) RexTestHUD.Notice("Blobs are coming for the bar! Stay to defend it.", 3f);
+                if (Time.time > noticeAgainAt) RexTestHUD.Notice("Stand at the bar to defend it.", 3f);
                 noticeAgainAt = Time.time + 15f;                              // in and out at the edge: no notice spam
                 return;
             }
@@ -370,7 +371,7 @@ namespace RexMagnum
                 foreach (var wp in FindObjectsByType<WeaponPickup>(FindObjectsSortMode.None))
                     if (wp.ammoOnly && wp.weapon == WeaponId.Pistol) { src = wp.gameObject; fromWorld = true; break; }
             if (src == null) return;
-            var go = Instantiate(src, Center + Vector3.up * 1.2f, Quaternion.identity);   // on the counter top
+            var go = Instantiate(src, Center + new Vector3(0f, 1.0f, 1.9f), Quaternion.identity);   // on the counter top (its centre ~1.9 m +z; in the 2 m reach)
             barAmmo = go.GetComponent<WeaponPickup>();
             barAmmo.respawnSeconds = 0f;                                  // one time (Start does it too after the first 2 s)
             if (fromWorld)

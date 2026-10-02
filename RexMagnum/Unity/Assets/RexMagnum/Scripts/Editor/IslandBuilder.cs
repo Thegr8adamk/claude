@@ -2376,25 +2376,41 @@ namespace RexMagnum.EditorTools
                 foreach (var fh in Physics.RaycastAll(new Vector3(bb.center.x, bb.min.y + 1.6f, bb.center.z), Vector3.down, 2f, ~0, QueryTriggerInteraction.Ignore))
                     if (fh.collider.transform.IsChildOf(bt)) floorY = Mathf.Max(floorY, fh.point.y);
                 bool slabFloor = floorY > bb.min.y + 0.2f;
-                float top = slabFloor ? floorY - 0.08f : floorY - 0.03f;
-                // tiki bar: the base estimate (lowest renderer) can sit under the dune at the side counters (the sand
-                // falls 3 m across it): the pad top is at least the ground at both counters (raise-only, never buried)
-                if (!slabFloor)
-                {
-                    float tcell = ti.size / (ti.res - 1);
-                    foreach (float counterX in new[] { bb.center.x - 3.1f, bb.center.x + 3.1f })
-                    {
-                        int tr = Mathf.Clamp(Mathf.RoundToInt((bb.center.z - 0.5f + ti.size / 2) / tcell), 0, ti.res - 1);
-                        int tc = Mathf.Clamp(Mathf.RoundToInt((counterX + ti.size / 2) / tcell), 0, ti.res - 1);
-                        top = Mathf.Max(top, ti.minH + hts[tr, tc] * (ti.maxH - ti.minH));
-                    }
-                }
+                // tiki bar: the ground is set to the bar's base (posts / counters start at ~3.05): a pad raised to the
+                // higher counter's sand (~3.45, the dune falls 3 m across it) half-buried the bar (review, round 16)
+                float top = slabFloor ? floorY - 0.08f : bb.min.y + 0.02f;
+                float tcell = ti.size / (ti.res - 1), trange = ti.maxH - ti.minH;
+                float GroundAt(float wx, float wz) =>
+                    ti.minH + hts[Mathf.Clamp(Mathf.RoundToInt((wz + ti.size / 2) / tcell), 0, ti.res - 1),
+                                  Mathf.Clamp(Mathf.RoundToInt((wx + ti.size / 2) / tcell), 0, ti.res - 1)] * trange;
+                float counterW0 = GroundAt(bb.center.x - 3.1f, bb.center.z - 0.5f), counterE0 = GroundAt(bb.center.x + 3.1f, bb.center.z - 0.5f);
                 // tiki bar: the whole footprint + 1.5 m (stools on the sea side), 1:2 back to the sand (the shore moves
                 // ~1.5 m). Dive shop: its sea-side door is 2 m from the water line (a pad there pushed the shore 5 -
                 // 10 m out to sea): only the land (north) side, a strip over the slab's back edge + 1 m, 1:2.5.
                 float px0 = bb.min.x - (slabFloor ? 1f : 1.5f), px1 = bb.max.x + (slabFloor ? 1f : 1.5f);
                 float pz0 = slabFloor ? bb.max.z - 1.5f : bb.min.z - 1.5f, pz1 = bb.max.z + (slabFloor ? 1f : 1.5f);
+                int cut = 0;
+                if (!slabFloor)
+                {
+                    // the dune side: lowered to the base inside the footprint, rising 1:2 over the 1.5 m margin (the only
+                    // place the ground is lowered); the sea side is raised by the pad below
+                    for (int tr = Mathf.RoundToInt((pz0 + ti.size / 2) / tcell); tr <= Mathf.RoundToInt((pz1 + ti.size / 2) / tcell); tr++)
+                        for (int tc = Mathf.RoundToInt((px0 + ti.size / 2) / tcell); tc <= Mathf.RoundToInt((px1 + ti.size / 2) / tcell); tc++)
+                        {
+                            if (tr < 0 || tc < 0 || tr >= ti.res || tc >= ti.res) continue;
+                            float wx = tc * tcell - ti.size / 2, wz = tr * tcell - ti.size / 2;
+                            float ddx = Mathf.Max(0f, Mathf.Max(bb.min.x - wx, wx - bb.max.x)), ddz = Mathf.Max(0f, Mathf.Max(bb.min.z - wz, wz - bb.max.z));
+                            float cap = top + Mathf.Sqrt(ddx * ddx + ddz * ddz) / 2f;
+                            if (ti.minH + hts[tr, tc] * trange <= cap) continue;
+                            hts[tr, tc] = Mathf.Clamp01((cap - ti.minH) / trange);
+                            cut++;
+                        }
+                }
                 var (cells, fill) = RaisePad(hts, ti, px0, px1, pz0, pz1, top, slabFloor ? 2.5f : 2f);
+                if (!slabFloor)
+                    Debug.Log($"[Rex Magnum] Access {bn}: base {bb.min.y:F2}, ground at the counters (x {bb.center.x - 3.1f:F1} / {bb.center.x + 3.1f:F1}, " +
+                              $"z {bb.center.z - 0.5f:F1}) {counterW0:F2} / {counterE0:F2} -> {GroundAt(bb.center.x - 3.1f, bb.center.z - 0.5f):F2} / " +
+                              $"{GroundAt(bb.center.x + 3.1f, bb.center.z - 0.5f):F2} (RAW ~2.1 / 3.45), {cut} cells lowered.");
                 Debug.Log($"[Rex Magnum] Access {bn}: floor {floorY:F2}, ground pad at {top:F2} over x {px0:F1} .. {px1:F1}, " +
                           $"z {pz0:F1} .. {pz1:F1}: {cells} cells raised, up to {fill:F2} m.");
                 float cx = bb.center.x, cz = bb.center.z;

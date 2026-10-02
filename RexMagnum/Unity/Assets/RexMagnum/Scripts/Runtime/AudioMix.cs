@@ -84,6 +84,7 @@ namespace RexMagnum
             Underwater = Indoor = Combat = false;
             for (int i = 0; i < Buses; i++) { bus[i] = 1f; busFrom[i] = 1f; }
             Current = Snapshot.Normal; blend = 1f;
+            Sfx.ResetBusGain();                                 // (Domain Reload off: a stale cached gain skipped the first follow)
         }
 
         /// <summary>Which snapshot fits now: the pause menu, then the ending, under water, a fight, a roof, else Normal.</summary>

@@ -35,6 +35,7 @@ namespace RexMagnum
         float fade = 1f, fadeTarget;
         AudioSource music, fight;
         float fightLevel, dayLevel = DayVolume, dayMix = 1f;
+        bool dayMixSet;           // dayMix starts at the hand-over on the first update of play (no swell at night)
         Texture2D titleBg;
         int menuSel;
         bool inSettings;
@@ -422,6 +423,7 @@ namespace RexMagnum
                 sting.loop = false;
                 sting.spatialBlend = 0f;
                 sting.playOnAwake = false;
+                sting.ignoreListenerPause = true;    // like the music: plays quietly under the pause menu (not cut / resumed)
             }
             sting.clip = clip;
             sting.time = 0f;
@@ -473,7 +475,8 @@ namespace RexMagnum
             // without the fight clip the day music still follows night, the boss and the voice duck
             // the hand-over to the fight / night / boss music is a ~1 s crossfade (no cut when the boss starts)
             float handover = KingGlorpBoss.Fighting ? 0f : (1f - DayNight.Night) * (1f - fightLevel / FightVolume);
-            dayMix = Mathf.MoveTowards(dayMix, handover, Time.unscaledDeltaTime / HandoverTime);
+            dayMix = dayMixSet ? Mathf.MoveTowards(dayMix, handover, Time.unscaledDeltaTime / HandoverTime) : handover;
+            dayMixSet = true;
             music.volume = dayLevel * dayMix * AudioMix.Music * AudioMix.Duck
                            * (1f - 0.8f * StingDuck);   // night jungle music takes over; the big goal sting ducks it
         }
@@ -529,10 +532,11 @@ namespace RexMagnum
             }
             MarkGoalsShown();
             state = State.Play;
+            dayMixSet = false;
             Busy = false;
             SetPlayerActive(true);
             Play("Music/day_resort");
-            music.volume = DayVolume * AudioMix.Music;
+            music.volume = DayVolume * AudioMix.Music * (1f - DayNight.Night);   // (quiet at night until the first update)
             fadeTarget = 0f;
             hintTime = Time.time;
             if (rex != null) hintStartPos = rex.transform.position;

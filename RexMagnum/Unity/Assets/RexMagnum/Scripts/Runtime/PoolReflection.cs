@@ -159,9 +159,9 @@ namespace RexMagnum
             if (cam == null || water == null) return;
             if (!Allowed(cam)) { Off(); return; }
             if (!Wanted(cam)) { Fade(false); return; }       // the last texture shows while it fades (0.2 s)
-            // never in a frame a mirror rendered: a stale texture would trail the camera (the water samples it in screen
-            // space), so that frame falls back to the probe (the fade weight is kept for the next frame)
-            if (PlanarMirror.RenderedFrame == Time.frameCount) { Push(0f); return; }
+            // never render in a frame a mirror rendered: the water keeps last frame's texture and weight (one frame
+            // old, barely visible; dropping to the probe for that frame flickered)
+            if (PlanarMirror.RenderedFrame == Time.frameCount) return;
             EnsureRT();                             // a new texture is handed to the water by Push
             Vector3 n = Vector3.up;
             Vector3 p = new Vector3(0f, planeY, 0f);

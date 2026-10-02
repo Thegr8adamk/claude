@@ -571,12 +571,31 @@ namespace RexMagnum
                 for (int i = 0; i < 32; i++)
                 {
                     float ang = i * Mathf.PI * 2f / 32f;
-                    lr.SetPosition(i, at + new Vector3(Mathf.Cos(ang) * r, 0.15f, Mathf.Sin(ang) * r));
+                    Vector3 pt = at + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+                    lr.SetPosition(i, new Vector3(pt.x, RingGround(pt) + 0.15f, pt.z));     // follows slopes and steps
                 }
                 lr.widthMultiplier = 1f - 0.6f * t / 0.4f;                                   // thins as it spreads
                 yield return null;
             }
             if (lr != null) Destroy(lr.gameObject);
+        }
+
+        static readonly RaycastHit[] ringHits = new RaycastHit[8];
+
+        /// <summary>The ground under a ring point: the highest static hit from 1.5 m over Rex's / the cart's feet down
+        /// 3 m (bodies are skipped: rigidbodies - the cart -, character controllers - Rex -, capsules - blobs, guests,
+        /// trunks); else the feet.</summary>
+        static float RingGround(Vector3 pt)
+        {
+            int n = Physics.RaycastNonAlloc(pt + Vector3.up * 1.5f, Vector3.down, ringHits, 3f, ~0, QueryTriggerInteraction.Ignore);
+            float best = float.NegativeInfinity;
+            for (int k = 0; k < n; k++)
+            {
+                var c = ringHits[k].collider;
+                if (c == null || c.attachedRigidbody != null || c is CharacterController || c is CapsuleCollider) continue;
+                best = Mathf.Max(best, ringHits[k].point.y);
+            }
+            return float.IsNegativeInfinity(best) ? pt.y : best;
         }
 
         // ---------------------------------------------------------------- guns
@@ -698,29 +717,47 @@ namespace RexMagnum
             Progress.Set(hintKey, 1);
             RexTestHUD.Notice(hintText, 6f);
             hintSince = -1f;
-            practiceKey = "practice_" + hintKey.Substring(5);       // hint_supersnap -> practice_supersnap
-            practiceAfter = Time.unscaledTime + 5f;                   // the hint is read first (one notice line)
-            practiceUntil = Time.unscaledTime + 50f;
+            lastHintAt = Time.unscaledTime;           // the practice waits 5 s: the hint is read first (one notice line)
         }
 
-        // ---- practice moment: right after an unlock hint, 3 tourist blobs turn up 8-10 m around Rex to try the move
-        // on. Only when it is calm (on foot, or in the cart for the horn; no fight, event or tutorial; no blob within
-        // 25 m). Once per ability (saved flag "practice_..."); not calm within 45 s: no practice (the horn: on the next drive).
+        // ---- practice moment: after an unlock hint, 3 tourist blobs turn up 8-10 m around Rex (the horn: 6-8 m in
+        // front of the cart) to try the move on. Only when it is calm (on foot, or in the cart for the horn; no fight,
+        // event or tutorial; no blob within 25 m). Once per ability (saved flag "practice_..."): any unlocked ability
+        // whose hint was shown and practice not done is picked up, one at a time (so a later hint or a quit does not
+        // lose it); one that is not calm within 45 s waits a minute and is picked up again.
         string practiceKey;
-        float practiceAfter, practiceUntil;
+        float practiceAfter, practiceUntil, lastHintAt = -10f, practiceRetryAt;
+        UnityEngine.AI.NavMeshPath practicePath;           // reused (made on first use, not in a field initializer)
+
+        /// <summary>The practice that fits now (the horn in the cart, the others on foot), or null.</summary>
+        string PendingPractice(bool inCart)
+        {
+            if (inCart)
+                return GolfCart.HornUnlocked && Progress.Value("hint_carthorn") > 0 && Progress.Value("practice_carthorn") == 0 ? "practice_carthorn" : null;
+            if (SuperSnap && Has(WeaponId.Towel) && Progress.Value("hint_supersnap") > 0 && Progress.Value("practice_supersnap") == 0)
+                return "practice_supersnap";
+            if (CoconutPouch && Ammo(WeaponId.Coconut) > 0 && Progress.Value("hint_coconutpouch") > 0 && Progress.Value("practice_coconutpouch") == 0)
+                return "practice_coconutpouch";        // (needs a coconut to throw)
+            return null;
+        }
 
         void TryPractice()
         {
-            // the horn is unlocked at the bar (on foot): its practice waits for the next drive instead
-            if (practiceKey == null && GolfCart.Driven != null && GolfCart.HornUnlocked &&
-                Progress.Value("hint_carthorn") > 0 && Progress.Value("practice_carthorn") == 0)
-            { practiceKey = "practice_carthorn"; practiceAfter = Time.unscaledTime; practiceUntil = Time.unscaledTime + 50f; }
-            if (practiceKey == null || Time.unscaledTime < practiceAfter) return;
-            if (Time.unscaledTime > practiceUntil || Progress.Value(practiceKey) > 0) { practiceKey = null; return; }
-            bool horn = practiceKey == "practice_carthorn";
             bool inCart = GolfCart.Driven != null;
-            if (horn != inCart || (!horn && (!controller.InputEnabled || controller.IsSwimming))) return;
-            if (practiceKey == "practice_coconutpouch" && !Has(WeaponId.Coconut)) return;     // nothing to throw yet
+            if (practiceKey == null && Time.unscaledTime >= practiceRetryAt)
+            {
+                practiceKey = PendingPractice(inCart);
+                practiceAfter = Mathf.Max(Time.unscaledTime, lastHintAt + 5f);
+                practiceUntil = practiceAfter + 45f;
+            }
+            if (practiceKey == null || Time.unscaledTime < Mathf.Max(practiceAfter, lastHintAt + 5f)) return;   // a newer hint is read first
+            if (Progress.Value(practiceKey) > 0) { practiceKey = null; return; }
+            if (Time.unscaledTime > practiceUntil) { practiceKey = null; practiceRetryAt = Time.unscaledTime + 60f; return; }
+            bool horn = practiceKey == "practice_carthorn";
+            // the wrong mode (out of the cart for the horn, in it for the others): let another one fit
+            if (horn != inCart) { practiceKey = null; return; }
+            if (!horn && (!controller.InputEnabled || controller.IsSwimming)) return;
+            if (practiceKey == "practice_coconutpouch" && Ammo(WeaponId.Coconut) <= 0) { practiceKey = null; return; }   // nothing to throw
             if (KingGlorpBoss.Fighting || GameGuide.EventRunning || GameFlow.TutorialActive || GameFlow.Busy) return;
             if (Blob.AliveCount() + 3 > BlobSpawner.GlobalCap) return;
             Vector3 rexAt = transform.position;
@@ -737,15 +774,23 @@ namespace RexMagnum
             if (tourist == null) { practiceKey = null; return; }
             int made = 0;
             float start = Random.Range(0f, 360f);
+            // the horn: in the cart's front arc (+-40 deg, 6-8 m), where the honk reaches; on foot all round Rex
+            Vector3 fwd = horn ? Vector3.ProjectOnPlane(GolfCart.Driven.transform.forward, Vector3.up) : Vector3.forward;
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
+            float fwdAng = Mathf.Atan2(fwd.z, fwd.x) * Mathf.Rad2Deg;
+            // where Rex stands on the NavMesh (the spots must be reachable from there, not over a wall or the water)
+            bool rexOnMesh = UnityEngine.AI.NavMesh.SamplePosition(rexAt, out UnityEngine.AI.NavMeshHit rexHit, 2f, UnityEngine.AI.NavMesh.AllAreas);
             for (int tries = 0; tries < 12 && made < 3; tries++)
             {
-                float ang = (start + tries * 120f + (tries / 3) * 40f) * Mathf.Deg2Rad;     // 3 around Rex, then shifted
-                float dist = Random.Range(8f, 10f);
+                float ang = horn ? (fwdAng + Random.Range(-40f, 40f)) * Mathf.Deg2Rad
+                                 : (start + tries * 120f + (tries / 3) * 40f) * Mathf.Deg2Rad;     // 3 around Rex, then shifted
+                float dist = horn ? Random.Range(6f, 8f) : Random.Range(8f, 10f);
                 Vector3 p = rexAt + new Vector3(Mathf.Cos(ang) * dist, 0f, Mathf.Sin(ang) * dist);
                 if (!UnityEngine.AI.NavMesh.SamplePosition(p, out UnityEngine.AI.NavMeshHit nh, 2f, UnityEngine.AI.NavMesh.AllAreas)) continue;
                 if (Mathf.Abs(nh.position.y - rexAt.y) > 3f) continue;                          // same floor
                 if (WaterVolume.Depth(nh.position + Vector3.up * 0.1f) > 0.2f) continue;        // not in the pool / sea
-                if ((nh.position - rexAt).sqrMagnitude < 7f * 7f) continue;
+                if ((nh.position - rexAt).sqrMagnitude < (horn ? 5f * 5f : 7f * 7f)) continue;
+                if (!PracticeReachable(rexOnMesh ? rexHit.position : rexAt, rexOnMesh, nh.position)) continue;
                 var b = Instantiate(tourist, nh.position, Quaternion.identity);
                 b.Alert(6f);
                 SlimeFX.Splat(nh.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 10);
@@ -755,6 +800,22 @@ namespace RexMagnum
             Progress.Set(practiceKey, 1);
             practiceKey = null;
             RexTestHUD.Notice("Try it out!", 3f);
+        }
+
+        /// <summary>A practice spot counts only when Rex can get there: a complete NavMesh path under 16 m, else (Rex
+        /// off the mesh) a clear line from his chest to the spot.</summary>
+        bool PracticeReachable(Vector3 from, bool fromOnMesh, Vector3 spot)
+        {
+            if (fromOnMesh && practicePath == null) practicePath = new UnityEngine.AI.NavMeshPath();
+            if (fromOnMesh && UnityEngine.AI.NavMesh.CalculatePath(from, spot, UnityEngine.AI.NavMesh.AllAreas, practicePath))
+            {
+                if (practicePath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) return false;
+                var corners = practicePath.corners;
+                float len = 0f;
+                for (int k = 1; k < corners.Length; k++) len += Vector3.Distance(corners[k - 1], corners[k]);
+                return len < 16f;
+            }
+            return !Physics.Linecast(transform.position + Vector3.up * 1.3f, spot + Vector3.up * 0.8f, ~0, QueryTriggerInteraction.Ignore);
         }
 
         void OnDestroy() { if (muzzleLight != null) Destroy(muzzleLight.gameObject); }

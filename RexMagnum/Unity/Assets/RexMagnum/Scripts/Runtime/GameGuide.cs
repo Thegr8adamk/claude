@@ -235,9 +235,9 @@ namespace RexMagnum
             if (w != null && !w.Has(WeaponId.Pistol)) { target = Pistol; return "Get the chrome pistol in the casino lounge (hotel, ground floor)."; }
             // the cart first: the golf course is a long walk west, the cart waits by the pool
             id = "cart";
-            // walking there counts too: the step ends at the pro shop / with the clubs (the cart_m counter still ends it)
-            Vector3 toShop = ProShop - rex; toShop.y = 0f;
-            bool atGolf = (w != null && w.Has(WeaponId.GolfClub)) || Visited("golf") || toShop.sqrMagnitude < 30f * 30f;
+            // walking there counts too: the step ends on the golf course / with the clubs (the cart_m counter still ends
+            // it); not near the pro shop alone (its 30 m reached into the resort side)
+            bool atGolf = (w != null && w.Has(WeaponId.GolfClub)) || Visited("golf");
             if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0 && !atGolf)
             {
                 const string cartText = "Drive the cart from the pool to the golf course (or walk: the clubs are at the pro shop).";

@@ -69,7 +69,9 @@ namespace RexMagnum
         bool GunVolley(GameObject attacker)
         {
             var w = attacker != null ? attacker.GetComponent<RexWeapons>() : null;
-            if (w == null || !w.Current.isGun || Time.frameCount == lastGunHitFrame) return false;
+            if (w == null || Time.frameCount == lastGunHitFrame) return false;
+            // the weapon the hit is credited to (a harpoon bolt / coconut landing after a switch), else the one held
+            if (!(creditWeapon.HasValue ? WeaponDef.Get(creditWeapon.Value) : w.Current).isGun) return false;
             lastGunHitFrame = Time.frameCount;
             if (Time.time - gunHitsSince > GunHitWindow) { gunHitsSince = Time.time; gunHits = 0; }
             return ++gunHits >= GunHitsToCrack;

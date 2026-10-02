@@ -127,6 +127,8 @@ namespace RexMagnum.EditorTools
                 aux.name = auxName;
                 AssetDatabase.CreateAsset(aux, path);
             }
+            // re-copied each run, but dirtied only when it changed (no asset write / reimport on every setup)
+            string before = EditorJsonUtility.ToJson(aux);
             EditorUtility.CopySerialized(source, aux);
             var aso = new SerializedObject(aux);
             var feats = aso.FindProperty("m_RendererFeatures");
@@ -135,13 +137,14 @@ namespace RexMagnum.EditorTools
             if (map != null) map.arraySize = 0;
             aso.ApplyModifiedPropertiesWithoutUndo();
             aux.name = auxName;                            // CopySerialized brings the source's name along
-            EditorUtility.SetDirty(aux);
+            if (EditorJsonUtility.ToJson(aux) != before) EditorUtility.SetDirty(aux);
             // this asset's list: our aux once; other aux entries (the old shared one, another source's) out, so the
             // camera's prefix match finds this one
             bool has = false;
             for (int i = list.arraySize - 1; i >= 1; i--)
             {
                 var e = list.GetArrayElementAtIndex(i);
+                if (e.objectReferenceValue == null) { list.DeleteArrayElementAtIndex(i); continue; }   // a leftover empty slot
                 if (!(e.objectReferenceValue is ScriptableRendererData d) ||
                     !d.name.StartsWith(RexMagnum.QualityAuto.AuxRendererName, System.StringComparison.Ordinal)) continue;
                 if (d == aux && !has) { has = true; continue; }
