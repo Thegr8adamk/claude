@@ -229,7 +229,12 @@ namespace RexMagnum
                 SlimeFX.Splat(at + Random.insideUnitSphere * 3f + Vector3.up * 2f, Random.onUnitSphere, new Color(1f, 0.8f, 0.2f), 40);
                 yield return new WaitForSeconds(0.1f);
             }
-            if (rex != null) RexVoice.Say(rex.gameObject, "GlorpWin", true);
+            if (rex != null)
+            {
+                RexVoice.Say(rex.gameObject, "GlorpWin", true);
+                var rc = rex.GetComponent<RexController>();
+                if (rc != null) rc.SetTrigger(Animator.StringToHash("Victory"));   // both fists up
+            }
             PlayerPrefs.SetInt(SaveKey, 1);
             PlayerPrefs.Save();
             yield return new WaitForSeconds(4f);

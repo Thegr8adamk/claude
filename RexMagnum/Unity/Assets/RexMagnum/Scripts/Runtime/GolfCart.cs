@@ -54,7 +54,21 @@ namespace RexMagnum
             }
             if (!driving) return;
             if (RMInput.Hands) SetLights(!lights);
-            rex.transform.SetPositionAndRotation(seat.position, seat.rotation);
+            // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
+            bool pushing = battery <= 0f;
+            if (pushing)
+            {
+                Vector3 behind = transform.position - transform.forward * 1.9f;
+                behind.y = transform.position.y;
+                rex.transform.SetPositionAndRotation(behind, Quaternion.LookRotation(transform.forward, Vector3.up));
+            }
+            else rex.transform.SetPositionAndRotation(seat.position, seat.rotation);
+            if (rex.bodyAnimator != null)
+            {
+                rex.bodyAnimator.SetBool("Drive", !pushing);
+                rex.bodyAnimator.SetBool("Push", pushing);
+                rex.bodyAnimator.SetFloat("Speed", Mathf.Abs(speed));
+            }
             // charging
             foreach (var c in chargers)
                 if (c != null && Vector3.Distance(c.position, transform.position) < 3.5f)
@@ -109,7 +123,7 @@ namespace RexMagnum
             var cc = rex.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = true;
             rex.InputEnabled = true;
-            if (rex.bodyAnimator != null) rex.bodyAnimator.SetBool("Drive", false);
+            if (rex.bodyAnimator != null) { rex.bodyAnimator.SetBool("Drive", false); rex.bodyAnimator.SetBool("Push", false); }
             speed = 0f;
         }
 

@@ -70,7 +70,7 @@ namespace RexMagnum
             else
             {
                 // "I'm back.": low hero angle, hero pose
-                if (!heroed) { heroed = true; if (rex.bodyAnimator != null) rex.bodyAnimator.Play("Locomotion", 0, 0f); RexVoice.Subtitle?.Invoke("REX: I'm back."); PlayLine("Voice/Ending/imback_01"); }
+                if (!heroed) { heroed = true; rex.SetTrigger(Animator.StringToHash("Victory")); RexVoice.Subtitle?.Invoke("REX: I'm back."); PlayLine("Voice/Ending/imback_01"); }
                 cam.transform.position = p + f * 3.2f - r * 0.8f + Vector3.up * 0.5f;
                 cam.transform.LookAt(p + Vector3.up * 1.4f);
             }

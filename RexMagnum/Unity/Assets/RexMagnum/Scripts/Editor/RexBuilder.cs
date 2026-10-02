@@ -215,7 +215,7 @@ namespace RexMagnum.EditorTools
         /// <summary>Swim clips (Rex_Tread, Rex_Paddle) come in a small extra FBX (Blender/swim_export.py):
         /// armature only, Humanoid with Rex's own avatar, so they retarget exactly like his other clips.</summary>
         /// <summary>Clips in Rex_Swim.fbx (Blender/swim_export.py EXTRA).</summary>
-        static readonly string[] ExtraClips = { "Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive" };
+        static readonly string[] ExtraClips = { "Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive", "Rex_Push", "Rex_Limp", "Rex_Victory" };
 
         static void ImportSwimClips()
         {
@@ -237,7 +237,7 @@ namespace RexMagnum.EditorTools
                 string n = c.takeName.Contains("|") ? c.takeName.Substring(c.takeName.LastIndexOf('|') + 1) : c.takeName;
                 if (!ExtraClips.Contains(n)) continue;
                 c.name = n;
-                c.loopTime = c.loopPose = n == "Rex_Tread" || n == "Rex_Paddle" || n == "Rex_Drive";   // the rest play once
+                c.loopTime = c.loopPose = n == "Rex_Tread" || n == "Rex_Paddle" || n == "Rex_Drive" || n == "Rex_Push" || n == "Rex_Limp";   // the rest play once
                 c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true;
                 c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
                 clips.Add(c);
@@ -265,7 +265,9 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("HandsDown", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Swim", AnimatorControllerParameterType.Bool);
             ac.AddParameter("Drive", AnimatorControllerParameterType.Bool);
-            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing" };
+            ac.AddParameter("Push", AnimatorControllerParameterType.Bool);
+            ac.AddParameter("Hurt", AnimatorControllerParameterType.Bool);
+            string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death", "Comb", "Throw", "Stab", "GolfSwing", "Victory" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
             var layers = ac.layers;
@@ -317,12 +319,47 @@ namespace RexMagnum.EditorTools
                 outDrive.duration = 0.25f;
             }
 
+            // pushing the dead golf cart (Push bool), like Drive
+            var pushClip = Clip("Rex_Push");
+            if (pushClip != null)
+            {
+                var push = sm.AddState("Push");
+                push.motion = pushClip;
+                var toPush = sm.AddAnyStateTransition(push);
+                toPush.AddCondition(AnimatorConditionMode.If, 0, "Push");
+                toPush.canTransitionToSelf = false;
+                toPush.duration = 0.25f;
+                var outPush = push.AddTransition(loco);
+                outPush.AddCondition(AnimatorConditionMode.IfNot, 0, "Push");
+                outPush.hasExitTime = false;
+                outPush.duration = 0.25f;
+            }
+            // low health: idle + limp instead of idle / walk / run
+            var limpClip = Clip("Rex_Limp");
+            if (limpClip != null)
+            {
+                var limp = ac.CreateBlendTreeInController("Limp", out BlendTree limpTree, 0);
+                limpTree.blendType = BlendTreeType.Simple1D;
+                limpTree.blendParameter = "Speed";
+                limpTree.useAutomaticThresholds = false;
+                limpTree.AddChild(Clip("Rex_Idle"), 0f);
+                limpTree.AddChild(limpClip, 1.6f);
+                var toLimp = loco.AddTransition(limp);
+                toLimp.AddCondition(AnimatorConditionMode.If, 0, "Hurt");
+                toLimp.hasExitTime = false;
+                toLimp.duration = 0.3f;
+                var outLimp = limp.AddTransition(loco);
+                outLimp.AddCondition(AnimatorConditionMode.IfNot, 0, "Hurt");
+                outLimp.hasExitTime = false;
+                outLimp.duration = 0.3f;
+            }
+
             var map = new Dictionary<string, string>
             {
                 { "Jump", "Rex_Jump" }, { "Jab", "Rex_PunchJab" }, { "Heavy", "Rex_PunchHeavy" }, { "Swing", "Rex_Swing" },
                 { "Whip", "Rex_Whip" }, { "Taunt", "Rex_Taunt" }, { "Photo", "Rex_Photo" }, { "Hit", "Rex_Hit" },
                 { "Slip", "Rex_Slip" }, { "Death", "Rex_Death" }, { "Comb", "Rex_Comb" },
-                { "Throw", "Rex_Throw" }, { "Stab", "Rex_Stab" }, { "GolfSwing", "Rex_GolfSwing" },
+                { "Throw", "Rex_Throw" }, { "Stab", "Rex_Stab" }, { "GolfSwing", "Rex_GolfSwing" }, { "Victory", "Rex_Victory" },
             };
             foreach (var kv in map)
             {

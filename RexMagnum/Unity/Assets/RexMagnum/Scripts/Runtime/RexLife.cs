@@ -8,6 +8,16 @@ namespace RexMagnum
     [RequireComponent(typeof(Health))]
     public class RexLife : MonoBehaviour
     {
+        /// <summary>Low health (under 25 %): Rex limps (animator bool Hurt). Checked on damage and twice a second.</summary>
+        void UpdateLimp()
+        {
+            if (ctrl != null && ctrl.bodyAnimator != null && health != null)
+                ctrl.bodyAnimator.SetBool("Hurt", !health.IsDead && health.Fraction < 0.25f);
+        }
+
+        void OnEnable() => InvokeRepeating(nameof(UpdateLimp), 1f, 0.5f);
+        void OnDisable() => CancelInvoke(nameof(UpdateLimp));
+
         public Transform respawnPoint;
         Health health;
         RexController ctrl;
@@ -31,6 +41,7 @@ namespace RexMagnum
                 else RexVoice.Say(gameObject, "Hurt");
             };
             health.Died += by => StartCoroutine(DieRoutine());
+            health.Damaged += (a, p, by) => UpdateLimp();
         }
 
         IEnumerator DieRoutine()

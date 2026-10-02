@@ -468,6 +468,56 @@ def p_drive(P, t):
     P.fist("Left", 0.85)
 
 
+def p_push(P, t):
+    """Dead golf cart: Rex leans into the back of the cart, both arms out straight, slow heavy steps."""
+    for side, ph in (("Left", 0.0), ("Right", 0.5)):
+        c = math.cos(math.tau * (t + ph))
+        swing = max(0.0, math.sin(math.tau * (t + ph)))
+        P.leg(side, 18 + 16 * c, 25 + 40 * swing, -10 * c, spread=0.1)
+    P.hips((0, 0, -0.08), pitch=28, yaw=3 * s(t))
+    P.spine(bend=32, twist=-3 * s(t))
+    P.head(nod=-14)
+    for side in ("Left", "Right"):
+        sx = 1 if side == "Left" else -1
+        P.arm_dirs(side, d(0.2 * sx, -0.95, -0.05), d(0.1 * sx, -1.0, 0.1), d(0.0, -0.4, 0.9))
+        P.fist(side, 0.2)
+
+
+def p_limp(P, t):
+    """Low health: limping walk. The right leg stays stiff, the body dips on it, left hand on the lower back."""
+    for side, ph in (("Left", 0.0), ("Right", 0.5)):
+        c = math.cos(math.tau * (t + ph))
+        swing = max(0.0, math.sin(math.tau * (t + ph)))
+        if side == "Right":
+            P.leg(side, 14 * c, 8 + 10 * swing, -6 * c, spread=0.09)          # stiff leg
+        else:
+            P.leg(side, 20 * c, 10 + 55 * swing ** 1.5, -10 * c + 8 * swing, spread=0.07)
+    dip = max(0.0, math.cos(math.tau * (t + 0.5)))
+    P.hips((0, 0, -0.05 * dip), roll=-6 * dip, yaw=4 * s(t))
+    P.spine(bend=12, side=8 * dip)
+    P.head(nod=-8, tilt=-5 * dip)
+    P.arm_swing("Right", 10 * math.cos(math.tau * t), 30, 0.25)
+    P.fist("Right", 0.5)
+    P.arm_dirs("Left", d(0.35, 0.45, -0.8), d(-0.4, 0.75, 0.2))      # hand on the sore back
+    P.fist("Left", 0.2)
+
+
+def p_victory(P, t):
+    """Victory: both fists up over the head, chest out, a little bounce. Then back down."""
+    up = seg(t, 0.0, 0.2) * (1 - seg(t, 0.85, 1.0))
+    pump = 0.08 * math.sin(math.tau * 3 * t) * up
+    P.hips((0, 0, 0.02 * up), pitch=-6 * up)
+    P.spine(bend=-10 * up)
+    P.head(nod=-12 * up)
+    P.leg("Left", 2, 4, spread=0.16)
+    P.leg("Right", 2, 4, spread=0.16)
+    for side in ("Left", "Right"):
+        sx = 1 if side == "Left" else -1
+        P.arm_dirs(side, d(0.2 * sx, -0.3, -0.9).lerp(d(0.45 * sx, -0.1, 0.9 + pump), up),
+                   d(0.1 * sx, -0.5, -0.8).lerp(d(0.15 * sx, -0.05, 1.0), up))
+        P.fist(side, 1.0)
+
+
 def p_hit(P, t):
     k = seg(t, 0.0, 0.15) * (1 - seg(t, 0.3, 1.0))
     P.hips((0, 0.04 * k, -0.02 * k), pitch=-6 * k)
@@ -555,6 +605,9 @@ ACTIONS = [
     ("Rex_Stab", 0.7, p_stab, False),
     ("Rex_GolfSwing", 1.5, p_golf, False),
     ("Rex_Drive", 2.0, p_drive, True),
+    ("Rex_Push", 1.6, p_push, True),
+    ("Rex_Limp", 1.4, p_limp, True),
+    ("Rex_Victory", 2.2, p_victory, False),
     ("Rex_Hit", 0.5, p_hit, False),
     ("Rex_Slip", 1.6, p_slip, False),
     ("Rex_Death", 1.6, p_death, False),

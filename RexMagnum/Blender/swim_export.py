@@ -15,7 +15,7 @@ import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-EXTRA = ("Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive")   # clips in this FBX
+EXTRA = ("Rex_Tread", "Rex_Paddle", "Rex_Comb", "Rex_Throw", "Rex_Stab", "Rex_GolfSwing", "Rex_Drive", "Rex_Push", "Rex_Limp", "Rex_Victory")   # clips in this FBX
 OUT = os.path.join(HERE, "..", "Unity", "Assets", "RexMagnum", "Characters", "Rex", "Rex_Swim.fbx")
 
 
