@@ -417,6 +417,37 @@ def p_death(P, t):
     P.arm_swing("Right", 10 * knees + 90 * fall, 40, 0.5 + 0.6 * fall)
 
 
+def p_tread(P, t):
+    """Treading water (in place): upright, chin up, slow bicycle legs, sculling arms."""
+    P.hips((0, 0, 0.02 * s(t, 0.25)), pitch=8)
+    P.spine(bend=6)
+    P.head(nod=-12)
+    for side, ph in (("Left", 0.0), ("Right", 0.5)):
+        sx = 1 if side == "Left" else -1
+        c = math.cos(math.tau * (t + ph))
+        P.leg(side, 35 + 20 * c, 70 + 25 * max(0.0, c), 25, 0.1)
+        sc = s(t * 2, 0.1 if side == "Left" else 0.0)
+        P.arm_dirs(side, d(0.85 * sx, -0.2 - 0.25 * sc, -0.45), d(0.55 * sx, -0.65 - 0.45 * sc, -0.45),
+                   d(0.4 * sx, -0.75 - 0.4 * sc, -0.5))
+        P.fist(side, 0.15, 0.2)
+
+
+def p_paddle(P, t):
+    """Doggy paddle (moving): leaning forward, hands circle in front of the chest, small flutter kicks."""
+    P.hips((0, 0, 0.015 * s(t * 2)), pitch=15)
+    P.spine(bend=18, twist=3 * s(t))
+    P.head(nod=-30)
+    for side, ph in (("Left", 0.0), ("Right", 0.5)):
+        sx = 1 if side == "Left" else -1
+        a = math.tau * (t + ph)
+        P.arm_dirs(side, d(0.3 * sx, -0.8 - 0.12 * math.cos(a), -0.5 + 0.22 * math.sin(a)),
+                   d(0.12 * sx, -0.85, -0.45 + 0.45 * math.sin(a + 0.4)),
+                   d(0.05 * sx, -0.7, -0.7 + 0.3 * math.sin(a + 0.6)))
+        P.fist(side, 0.2, 0.2)
+        k = math.cos(math.tau * 2 * (t + ph))
+        P.leg(side, -4 + 12 * k, 25 + 15 * max(0.0, k), -25, 0.07)
+
+
 ACTIONS = [
     ("Rex_Idle", 3.0, p_idle_belly, True),
     ("Rex_IdleHero", 3.0, p_idle_hero, True),
@@ -432,6 +463,8 @@ ACTIONS = [
     ("Rex_Hit", 0.5, p_hit, False),
     ("Rex_Slip", 1.6, p_slip, False),
     ("Rex_Death", 1.6, p_death, False),
+    ("Rex_Tread", 2.0, p_tread, True),
+    ("Rex_Paddle", 1.2, p_paddle, True),
 ]
 
 

@@ -64,6 +64,7 @@ namespace RexMagnum.EditorTools
             var mats = BuildMaterials();
             ImportModel(Char + "/Rex.fbx", mats);
             ImportModel(Char + "/Rex_FPArms.fbx", mats);
+            ImportSwimClips();
             var controller = BuildController();
             return (BuildRexPrefab(controller), controller);
         }
@@ -211,10 +212,45 @@ namespace RexMagnum.EditorTools
             Debug.Log($"[Rex Magnum] {Path.GetFileName(path)}: {clips.Count} clips, avatar human: {mi.animationType}");
         }
 
+        /// <summary>Swim clips (Rex_Tread, Rex_Paddle) come in a small extra FBX (Blender/swim_export.py):
+        /// armature only, Humanoid with Rex's own avatar, so they retarget exactly like his other clips.</summary>
+        static void ImportSwimClips()
+        {
+            string path = Char + "/Rex_Swim.fbx";
+            var mi = AssetImporter.GetAtPath(path) as ModelImporter;
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(Char + "/Rex.fbx").OfType<Avatar>().FirstOrDefault();
+            if (mi == null || avatar == null) { Debug.LogWarning("[Rex Magnum] no swim clips (Rex_Swim.fbx)"); return; }
+            mi.globalScale = 1f;
+            mi.useFileScale = true;
+            mi.animationType = ModelImporterAnimationType.Human;
+            mi.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
+            mi.sourceAvatar = avatar;
+            mi.importAnimation = true;
+            mi.materialImportMode = ModelImporterMaterialImportMode.None;
+            mi.SaveAndReimport();
+            var clips = new List<ModelImporterClipAnimation>();
+            foreach (var c in mi.defaultClipAnimations)
+            {
+                string n = c.takeName.Contains("|") ? c.takeName.Substring(c.takeName.LastIndexOf('|') + 1) : c.takeName;
+                if (n != "Rex_Tread" && n != "Rex_Paddle") continue;
+                c.name = n;
+                c.loopTime = c.loopPose = true;
+                c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = true;
+                c.keepOriginalOrientation = c.keepOriginalPositionY = c.keepOriginalPositionXZ = true;
+                clips.Add(c);
+            }
+            mi.clipAnimations = clips.ToArray();
+            mi.SaveAndReimport();
+        }
+
         static AnimationClip Clip(string name)
         {
-            return AssetDatabase.LoadAllAssetsAtPath(Char + "/Rex.fbx").OfType<AnimationClip>()
-                .FirstOrDefault(c => c.name == name);
+            foreach (var fbx in new[] { "/Rex.fbx", "/Rex_Swim.fbx" })
+            {
+                var c = AssetDatabase.LoadAllAssetsAtPath(Char + fbx).OfType<AnimationClip>().FirstOrDefault(x => x.name == name);
+                if (c != null) return c;
+            }
+            return null;
         }
 
         static AnimatorController BuildController()
@@ -224,6 +260,7 @@ namespace RexMagnum.EditorTools
             ac.AddParameter("Speed", AnimatorControllerParameterType.Float);
             ac.AddParameter("Grounded", AnimatorControllerParameterType.Bool);
             ac.AddParameter("HandsDown", AnimatorControllerParameterType.Bool);
+            ac.AddParameter("Swim", AnimatorControllerParameterType.Bool);
             string[] triggers = { "Jump", "Jab", "Heavy", "Swing", "Whip", "Taunt", "Photo", "Hit", "Slip", "Death" };
             foreach (var t in triggers) ac.AddParameter(t, AnimatorControllerParameterType.Trigger);
 
@@ -239,6 +276,26 @@ namespace RexMagnum.EditorTools
             tree.AddChild(Clip("Rex_Walk"), 2.2f);
             tree.AddChild(Clip("Rex_Run"), 6.0f);
             sm.defaultState = loco;
+
+            // swimming (pool, sea, river): tread water in place, doggy paddle when moving
+            var tread = Clip("Rex_Tread");
+            if (tread != null)
+            {
+                var swim = ac.CreateBlendTreeInController("Swim", out BlendTree swimTree, 0);
+                swimTree.blendType = BlendTreeType.Simple1D;
+                swimTree.blendParameter = "Speed";
+                swimTree.useAutomaticThresholds = false;
+                swimTree.AddChild(tread, 0f);
+                swimTree.AddChild(Clip("Rex_Paddle") ?? tread, 1.5f);
+                var toSwim = loco.AddTransition(swim);
+                toSwim.AddCondition(AnimatorConditionMode.If, 0, "Swim");
+                toSwim.hasExitTime = false;
+                toSwim.duration = 0.3f;
+                var toLand = swim.AddTransition(loco);
+                toLand.AddCondition(AnimatorConditionMode.IfNot, 0, "Swim");
+                toLand.hasExitTime = false;
+                toLand.duration = 0.3f;
+            }
 
             var map = new Dictionary<string, string>
             {
