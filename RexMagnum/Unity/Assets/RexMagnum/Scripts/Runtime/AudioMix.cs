@@ -140,6 +140,7 @@ namespace RexMagnum
         void Update()
         {
             AudioMix.Tick(Time.unscaledDeltaTime);
+            Sfx.FollowBus();                                        // playing effects follow the blended bus
             if (Time.unscaledTime < nextListener) return;
             nextListener = Time.unscaledTime + 1f;
             foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))

@@ -28,6 +28,9 @@ namespace RexMagnum
         const int PoolSize = 24;
         static readonly AudioSource[] pool = new AudioSource[PoolSize];
         static readonly float[] started = new float[PoolSize];
+        // each pool sound's own volume (before the bus): a long or looping sound follows snapshot / Settings changes
+        static readonly float[] baseVolume = new float[PoolSize];
+        static float lastGain = -1f;
         // each pool source's filters, cached (SetWorldFX runs every frame: no GetComponent per source per frame)
         static readonly AudioLowPassFilter[] lowPass = new AudioLowPassFilter[PoolSize];
         static readonly AudioReverbFilter[] reverb = new AudioReverbFilter[PoolSize];
@@ -88,11 +91,23 @@ namespace RexMagnum
             a.transform.position = pos;
             a.clip = c;
             a.spatialBlend = 1f;
+            baseVolume[i] = volume;
             a.volume = volume * AudioMix.Effects;
             a.pitch = pitch * Random.Range(0.92f, 1.08f);
             Filter(i, true);
             a.Play();
             return a;
+        }
+
+        /// <summary>Once a frame (AudioMixDriver): when the Effects bus changed (a snapshot blend, Settings), the
+        /// playing pool sounds take the new gain (a long sound kept its start gain before).</summary>
+        public static void FollowBus()
+        {
+            float g = AudioMix.Effects;
+            if (g == lastGain) return;
+            lastGain = g;
+            for (int i = 0; i < PoolSize; i++)
+                if (pool[i] != null && pool[i].isPlaying) pool[i].volume = baseVolume[i] * g;
         }
 
         // a few UI sources: the pitch is per source, so a cue at another pitch takes another source (setting the
