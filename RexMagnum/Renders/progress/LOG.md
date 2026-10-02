@@ -42,3 +42,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 | 2026-10-02 04:00 | Jungle river: no trees or grass in the water now; rocks on the banks and in the stream. Exported to Unity. Next: more plants and moss on the bare river banks | 2026-10-02_0400_river_clear.png |
 | 2026-10-02 04:30 | Audio: all 7 music tracks + 18 sound effects in the game (10 made in ElevenLabs). Fight music fades in when blobs attack; blob slide squelch | (audio, no picture) |
 | 2026-10-02 05:00 | Cave: finer rock cracks (fewer melted flaps), fallen rubble at the foot, jungle vines lying on the rock over the mouth. Test view (sand ground only for the test) | 2026-10-02_0500_cave_detail.png |
+| 2026-10-02 05:10 | River banks: ferns and boulders along both banks (1,462 plants), exported to Unity. Next: mud/moss ground colour on the lower bank slope (still sandy) | 2026-10-02_0510_river_banks.png |
