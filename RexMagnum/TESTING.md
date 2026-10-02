@@ -22,6 +22,18 @@
 1. Menu **Rex Magnum > Build Island**. Wait (a progress bar shows; 5–15 minutes).
 2. Open `Assets/RexMagnum/Scenes/Island.unity`. Press **Play**.
 
+### New things to try (2026-10-02)
+| Try this | What you should see |
+|---|---|
+| Walk into the pool or the sea until the water is at Rex's chest | Rex swims. Shift = swim faster. Space = kick up (climb out at the edge). |
+| Hold **Tab** (controller: hold **Y**, phone: hold **Weapon**) | Time slows. A ring of your weapons shows. Point with the mouse / right stick / finger, then let go to take that weapon. |
+| Take the towel into the water, then hit a blob | Towel is darker, drips, hits harder for 90 s. |
+| Look for a blob in a flowered dress and a sun hat | It wanders and leaves slime. Go close or hit it: Rex says a line, and it attacks. |
+| Wait near the pool | Blobs rise out of the water with a splash. |
+| Third person, daytime, look down at Rex's head | A small star of sun light flashes on his bald spot. |
+| Play about 4 minutes with no blob near | Rex calls Marty (voice mail greeting, then Rex's message). |
+| Leave the controls alone for 35 s | Rex says an idle line. |
+
 ## 5. Send me the result
 - Window > General > **Console**. If there are red lines: click the first red line, copy the text (Ctrl+C), and paste it in the chat.
 - Take screenshots (Windows key + Shift + S) of what looks wrong and send them.
