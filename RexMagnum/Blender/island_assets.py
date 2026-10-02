@@ -1727,6 +1727,8 @@ def cave(m):
         d.texture_coords = "GLOBAL"
         d.strength = strength
         d.mid_level = 0.5
+    dc = mass.modifiers.new("Budget", "DECIMATE")     # fine detail stays, flat areas lose triangles (phones)
+    dc.ratio = 0.45
     _apply(mass)
     for p in mass.data.polygons:
         p.use_smooth = True

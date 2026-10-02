@@ -1575,11 +1575,6 @@
    "tris": 17068
   },
   {
-   "name": "Cave",
-   "fbx": "Buildings/Cave.fbx",
-   "tris": 126912
-  },
-  {
    "name": "Ship",
    "fbx": "Buildings/Ship.fbx",
    "tris": 12996
@@ -1593,6 +1588,11 @@
    "name": "River",
    "fbx": "Buildings/River.fbx",
    "tris": 2994
+  },
+  {
+   "name": "Cave",
+   "fbx": "Buildings/Cave.fbx",
+   "tris": 148474
   }
  ],
  "vegetation": {

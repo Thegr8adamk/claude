@@ -683,7 +683,7 @@ def rebuild_assets(names, res):
             falls_cache.append(IA.jungle_falls(m_, ha, I.heightmap()[3]))
         return falls_cache[0]
     builders = dict(Hotel=IA.hotel, Room304=IA.room304, PoolArea=IA.pool_area, DiveShop=IA.dive_shop,
-                    TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship,
+                    TikiBar=IA.tiki_bar, BeachProps=IA.beach_props, Pier=IA.pier, Ruins=IA.ruins, Ship=IA.ship, Cave=IA.cave,
                     Golf=golf_builder, GolfCart=IA.golf_cart, CaveTunnels=tunnel_builder,
                     JungleFalls=lambda m_: falls_builder(m_)[0],
                     RiverRocks=lambda m_: IA.river_rocks(m_, ha, I.heightmap()[3], skip=[f[0] for f in falls_builder(m_)[1]]))
@@ -699,6 +699,12 @@ def rebuild_assets(names, res):
                 if ob.parent is None:
                     ob.matrix_world = T @ ob.matrix_world
             extra["factory"] = {k: [v[0] + 300, v[1] + 70, v[2] + rz] for k, v in IA.factory_markers().items()}
+        elif n == "Cave":            # same placement as build_island_v2: cave mouth in the north-west rock face
+            from mathutils import Matrix
+            T = Matrix.Translation((-160.0, 228.0, ha(-160, 222) - 0.4))
+            for ob in coll.all_objects:
+                if ob.parent is None:
+                    ob.matrix_world = T @ ob.matrix_world
         elif n in ("Hotel", "Room304"):
             from mathutils import Matrix
             T = Matrix.Translation((40, -300, hb))
