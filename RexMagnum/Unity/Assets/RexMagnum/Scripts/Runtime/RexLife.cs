@@ -68,6 +68,7 @@ namespace RexMagnum
             if (key != "boss" && !Stale(key))
             {
                 PlayerPrefs.DeleteKey(SavedSpotKey);       // the newest place wins the wake after PLAY: an older quit spot goes
+                hasLastCalm = false;                       // and so does an older calm spot (the next sample sets a new one)
                 WriteSaved(SavedCheckpointKey, checkpointPos, checkpointYaw, key);
             }
         }
@@ -117,18 +118,47 @@ namespace RexMagnum
 
         /// <summary>QUIT TO TITLE / app quit: remember where Rex is, so a returning player wakes there. Only a calm
         /// spot: playing (not at the title), alive, on the ground, not in water or the cart, not in the tutorial,
-        /// no boss fight and no living blob within 20 m. Otherwise the last saved checkpoint stays.</summary>
+        /// no boss fight and no living blob within 20 m. Otherwise the last calm spot of this session (sampled every
+        /// 5 s), if any; else the last saved one stays.</summary>
         public static void SaveQuitSpot()
         {
             var r = instance;
-            if (r == null || r.ctrl == null || r.health == null || r.health.IsDead) return;
-            if (GameFlow.Busy || GameFlow.TutorialActive || KingGlorpBoss.Fighting || GolfCart.Driven != null) return;
-            if (!r.ctrl.Grounded || r.ctrl.IsSwimming || r.ctrl.WaterDepth > 0f || r.ctrl.Locked) return;
-            Vector3 p = r.transform.position;
-            if (Blob.LivingNear(p, 20f) > 0) return;
-            if (!CalmGround(r.transform, p) || NearActiveSpawner(p)) return;
+            if (r == null || GameFlow.Busy || GameFlow.TutorialActive) return;    // at the title / tutorial: nothing to save
             // its own key: an alt-tab (OnApplicationPause) must not overwrite the cave / ruins / ship checkpoint deaths use
-            WriteSaved(SavedSpotKey, p, r.transform.eulerAngles.y, "spot");
+            if (r.CalmNow()) { r.NoteCalm(); WriteSaved(SavedSpotKey, r.lastCalmPos, r.lastCalmYaw, "spot"); }
+            // refused (a fight, the cart, mid-jump, dead): the last calm spot of this session, not the older saved one
+            else if (r.hasLastCalm && !NearActiveSpawner(r.lastCalmPos)) WriteSaved(SavedSpotKey, r.lastCalmPos, r.lastCalmYaw, "spot");
+        }
+
+        // ---- rolling "last calm spot" (this session only): where Rex last stood calm, sampled every 5 s with the quit
+        // spot tests. A refused quit / pause writes it instead (no spot from an hour ago). Forgotten when a newer zone
+        // checkpoint is set (the newest place wins) and on NEW GAME.
+        bool hasLastCalm;
+        Vector3 lastCalmPos;
+        float lastCalmYaw, nextCalmSample;
+
+        /// <summary>The quit spot tests: alive, no boss fight, not on the cart, on calm ground, no blob within 20 m.</summary>
+        bool CalmNow()
+        {
+            if (ctrl == null || health == null || health.IsDead) return false;
+            if (KingGlorpBoss.Fighting || GolfCart.Driven != null) return false;
+            if (!ctrl.Grounded || ctrl.IsSwimming || ctrl.WaterDepth > 0f || ctrl.Locked) return false;
+            Vector3 p = transform.position;
+            if (Blob.LivingNear(p, 20f) > 0) return false;
+            return CalmGround(transform, p) && !NearActiveSpawner(p);
+        }
+
+        void NoteCalm()
+        {
+            hasLastCalm = true;
+            lastCalmPos = transform.position;
+            lastCalmYaw = transform.eulerAngles.y;
+        }
+
+        void SampleCalm()
+        {
+            if (ctrl == null || GameFlow.Busy || GameFlow.TutorialActive || !ctrl.InputEnabled) return;
+            if (CalmNow()) NoteCalm();
         }
 
         /// <summary>A quit spot Rex can wake at again: not on something that moves (an elevator cab wakes him in the
@@ -163,6 +193,7 @@ namespace RexMagnum
         /// <summary>NEW GAME (and the boss win): forget the saved checkpoint and the quit spot.</summary>
         public static void ClearSavedCheckpoint()
         {
+            if (instance != null) instance.hasLastCalm = false;     // a new game: no calm spot from the old one
             if (!PlayerPrefs.HasKey(SavedCheckpointKey) && !PlayerPrefs.HasKey(SavedSpotKey)) return;
             PlayerPrefs.DeleteKey(SavedCheckpointKey);
             PlayerPrefs.DeleteKey(SavedSpotKey);
@@ -251,6 +282,7 @@ namespace RexMagnum
         {
             if (Time.time > nextCheckpointCheck) { nextCheckpointCheck = Time.time + 0.5f; UpdateCheckpoint(); }
             if (Time.time > nextGoalCheck) { nextGoalCheck = Time.time + 1f; UpdateMaxHealth(); }    // two PlayerPrefs reads a second
+            if (Time.time > nextCalmSample) { nextCalmSample = Time.time + 5f; SampleCalm(); }       // the rolling last calm spot
             if (lowSaid && health.Fraction > 0.5f) lowSaid = false;
             // slow regen out of the fight: +2 HP/s after 6 s without damage and no living blob within 15 m
             // (food still matters in a fight; a long walk does not leave Rex at 10 HP). Blob check twice a second.
@@ -300,6 +332,7 @@ namespace RexMagnum
             health.ResetHealth();
             ctrl.Revive();
             health.Invulnerable(2f);                   // respawn grace: a blob waiting at the checkpoint gets no free hit
+            NightSiege.Breather(60f);                  // no cave siege starting on top of a fresh wake-up
             RexVoice.Say(gameObject, "Respawn", true);
             UpdateLimp();                              // full health again: the limp / hurt-in-fight flags clear now
         }

@@ -81,6 +81,7 @@ namespace RexMagnum
                     battery = Mathf.Min(100f, battery + 8f * Time.deltaTime);
             if (!driving) return;
             if (!locked && RMInput.HandsPressed && !PauseMenu.Open) SetLights(!lights);
+            if (!locked && RMInput.Taunt && !PauseMenu.Open && !pushMode) Horn();
             // dead battery (brief section 6): Rex gets out and pushes from behind; back in the seat once charged
             // pushing until 15% (not back in the seat at the first 0.1% of charge)
             if (battery <= 0f) pushMode = true;
@@ -137,6 +138,33 @@ namespace RexMagnum
                 nextLine = Time.time + 20f;
                 RexVoice.Say(rex.gameObject, "CartPush", true);
             }
+        }
+
+        // ---- CART HORN (bar defended): Taunt while driving honks. Blobs within 8 m in front are shoved back and
+        // stunned 1.5 s (not King Glorp: Knockback and Stun refuse him). 6 s cooldown.
+        public static bool HornUnlocked => Progress.Value(BarDefense.DoneKey) > 0;
+        float nextHorn;
+
+        void Horn()
+        {
+            if (!HornUnlocked || Time.time < nextHorn) return;
+            nextHorn = Time.time + 6f;
+            Vector3 at = transform.position;
+            if (Sfx.Get("cart_horn") != null) Sfx.Play("cart_horn", at + transform.forward * 1.5f, 1f, 1f);
+            else Sfx.Play("blob_angry", at + transform.forward * 1.5f, 1f, 1.8f);     // no horn clip: a squeaky honk, pitched up
+            RMInput.Rumble(0.3f, 0.5f, 0.15f);
+            int hit = 0;
+            foreach (var b in Blob.All)
+            {
+                if (b == null || b.IsDead || b.GetComponent<KingGlorpBoss>() != null) continue;
+                Vector3 to = Vector3.ProjectOnPlane(b.transform.position - at, Vector3.up);
+                if (to.sqrMagnitude > 64f || Mathf.Abs(b.transform.position.y - at.y) > 3f) continue;
+                if (to.sqrMagnitude > 0.01f && Vector3.Angle(transform.forward, to) > 60f) continue;    // in front only
+                b.Knockback(to.sqrMagnitude > 0.01f ? to.normalized : transform.forward, 3f);
+                b.Stun(1.5f);
+                hit++;
+            }
+            if (hit > 0) RexTestHUD.Notice("HONK!", 0.8f);
         }
 
         // the cart is unloaded or destroyed while Rex drives: give him back his controller (and free Driven)

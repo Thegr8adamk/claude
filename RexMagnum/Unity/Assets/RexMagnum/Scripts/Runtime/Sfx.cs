@@ -129,7 +129,7 @@ namespace RexMagnum
             if (a.isPlaying && !Mathf.Approximately(a.pitch, pitch)) a.Stop();     // all busy: the oldest cue ends
             a.pitch = pitch;
             uiStarted[pick] = Time.unscaledTime;
-            a.PlayOneShot(c, volume * AudioMix.Effects);
+            a.PlayOneShot(c, volume * AudioMix.UI);       // the UI bus (stays up in the Paused snapshot)
         }
 
         // ------------------------------------------------------------ world filters (Ambience sets them)

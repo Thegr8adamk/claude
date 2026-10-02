@@ -114,15 +114,17 @@ namespace RexMagnum
 
         // ---------------------------------------------------------------- inventory
 
-        public void Give(WeaponId id)
+        /// <summary>A weapon found: owned (a new one is equipped unless equip is false, e.g. a reward that must not
+        /// take Rex's weapon out of his hand), or its ammo if already owned.</summary>
+        public void Give(WeaponId id, bool equip = true)
         {
             var d = WeaponDef.Get(id);
             if (!owned.Contains(id))
             {
                 owned.Add(id);
                 if (id == WeaponId.Bottle) bottleHits = 0;          // a fresh bottle (switching weapons keeps the count)
-                if (d.isGun) ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + d.startAmmo);   // keep ammo found before the weapon
-                Equip(id);
+                if (d.isGun) ammo[id] = Mathf.Min(MaxAmmo(id), Ammo(id) + d.startAmmo);   // keep ammo found before the weapon
+                if (equip) Equip(id);
                 RexVoice.Say(gameObject, "WeaponFound", true);
                 SaveInventory();
             }
@@ -131,10 +133,18 @@ namespace RexMagnum
 
         public void AddAmmo(WeaponId id, int n)
         {
-            var d = WeaponDef.Get(id);
-            ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + n);
+            ammo[id] = Mathf.Min(MaxAmmo(id), Ammo(id) + n);
             SaveInventory();
         }
+
+        // ---- big-goal abilities (each gated by its saved Progress key)
+        /// <summary>Cave siege won ("COCONUT POUCH"): coconut max ammo +3 and a 2.2 s fuse.</summary>
+        public static bool CoconutPouch => NightSiege.Done;
+        /// <summary>Fuse of Rex's coconut, seconds (CoconutBomb reads it when thrown).</summary>
+        public static float CoconutFuse => CoconutPouch ? 2.2f : 3f;
+        public int MaxAmmo(WeaponId id) => WeaponDef.Get(id).maxAmmo + (id == WeaponId.Coconut && CoconutPouch ? 3 : 0);
+        /// <summary>Factory stopped ("SUPER SNAP"): the towel's heavy snap also stuns every blob within 3 m.</summary>
+        public static bool SuperSnap => FactoryCore.Stopped || Progress.Value("factory") > 0;
 
         void Cycle(int dir)
         {
@@ -280,11 +290,30 @@ namespace RexMagnum
 
         // ---------------------------------------------------------------- melee
 
+        // ---- dodge cancel: from 60% of a swing on, a dodge ends it (recovery skipped, no hit after that point)
+        const float CancelAt = 0.62f;                 // just past the heavy hit (0.45 of 0.75 s): a dodge never eats it
+        int swingId;
+        float swingStart, swingEnd;
+
+        /// <summary>RexController calls this when a dodge starts. Late in a swing (60%+): the swing is over now (Rex may
+        /// attack again right after the dodge, a hit still pending never lands). Earlier: the swing goes on as before.</summary>
+        public void DodgeCancel()
+        {
+            if (Time.time >= swingEnd || Time.time < swingStart + (swingEnd - swingStart) * CancelAt) return;
+            swingId++;                                    // the pending MeleeHit sees a newer id and does nothing
+            swingEnd = 0f;
+            busyUntil = Time.time;
+            controller.ReleaseFaceAim();                  // the dodge turns Rex, not the swing's aim
+        }
+
         void Melee(WeaponDef d, bool heavy)
         {
             controller.SetTrigger(Animator.StringToHash(heavy ? d.holdTrigger : d.tapTrigger));
             // tap = a quick jab (0.42 s); heavy = 0.75 s but ~3x the damage, knockback, hit-stop and shake
             busyUntil = Time.time + (heavy ? 0.75f : 0.42f);
+            swingId++;
+            swingStart = Time.time;
+            swingEnd = busyUntil;
             controller.FaceAimFor(heavy ? 0.75f : 0.42f);
             SoftAim();
             // tap combo: the 3rd tap within 0.8 s of the one before is a finisher (2x damage, heavy knockback + hit-stop)
@@ -296,7 +325,7 @@ namespace RexMagnum
                 if (tapCount >= 3) { combo = true; tapCount = 0; }
             }
             else tapCount = 0;
-            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo));
+            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo, swingId));
             // charge cue: Rex plants his feet (a low thud, not a second whoosh: the swing below is the only whoosh)
             if (heavy) Sfx.Play("footstep", transform.position, 0.5f, 0.7f);
             if (heavy && cameraRig != null) cameraRig.FovPush(4f);   // wind-up cue: the view leans in before the big hit
@@ -370,10 +399,12 @@ namespace RexMagnum
         static bool IsBig(Blob b) => b.kind == Blob.Kind.Bouncer && !b.isHalf;   // King Glorp has his own dizzy
         float lastTapTime = -10f;
 
-        IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay, bool combo = false)
+        IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay, bool combo = false, int swing = -1)
         {
             bool hard = heavy || combo;            // the combo finisher hits like a heavy (feel only; death style stays the tap one)
             yield return new WaitForSeconds(delay);
+            if (swing >= 0 && swing != swingId) yield break;       // cancelled by a dodge (or a newer swing)
+            if (d.id == WeaponId.Towel && heavy && SuperSnap) SnapStun();
             Vector3 c = transform.position + Vector3.up * 1.1f + transform.forward * (d.reach * 0.6f);
             // swing arc: everything in front within reach is hit (light 55 degrees each side, heavy cleaves 85 and a
             // little further); one sound, shake and hit-stop per swing, not per blob
@@ -474,6 +505,29 @@ namespace RexMagnum
                 else Give(WeaponId.BottleBroken);
                 SlimeFX.Splat(heldBody ? heldBody.transform.position : c, Vector3.up, new Color(0.3f, 0.12f, 0.03f), 10);
             }
+        }
+
+        /// <summary>SUPER SNAP (factory stopped): the heavy towel snap cracks like a whip around Rex: every living blob
+        /// within 3 m (same floor, not King Glorp: Stun refuses him) is stunned 2 s. A crack and a ring of slime.</summary>
+        void SnapStun()
+        {
+            Vector3 at = transform.position;
+            int stunned = 0;
+            foreach (var b in Blob.All)
+            {
+                if (b == null || b.IsDead || b.GetComponent<KingGlorpBoss>() != null) continue;
+                Vector3 to = b.transform.position - at;
+                if (Mathf.Abs(to.y) > 2f || Vector3.ProjectOnPlane(to, Vector3.up).sqrMagnitude > 9f) continue;
+                b.Stun(2f);
+                stunned++;
+            }
+            Sfx.Play("towel_crack", at + Vector3.up, 1f, 0.75f);           // a lower, bigger crack than the swing's
+            for (int i = 0; i < 10; i++)                                    // the ring: slime flicked out at 3 m
+            {
+                float a = i * Mathf.PI * 2f / 10f;
+                SlimeFX.Splat(at + new Vector3(Mathf.Cos(a) * 3f, 0.2f, Mathf.Sin(a) * 3f), Vector3.up, new Color(0.7f, 0.85f, 1f), 2);
+            }
+            if (stunned > 0) RexTestHUD.Notice("SUPER SNAP", 0.8f);        // (the accomplishment counts the swing's own stuns)
         }
 
         // ---------------------------------------------------------------- guns

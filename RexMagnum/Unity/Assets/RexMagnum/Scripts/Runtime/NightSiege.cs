@@ -15,8 +15,10 @@ namespace RexMagnum
     /// Rex dies, goes more than AbortRadius away (or 15 m up/down: the tunnels) or the night ends: the event stops
     /// cleanly and can start again later (after a death the wave blobs go too). The fight is MouthOut m out in front of
     /// the door, and the cave doors do not take Rex while it runs (ZoneDoor). A win sets LastSummary.
+    /// Score: best time "siege_best_s" and no hit in LastSummary. Done: Use at the cave mouth at night starts a replay
+    /// (no reward, score only). Never starts while Rex drives the golf cart.
     /// No builder step: it attaches itself to Rex when a scene loads (like BarDefense).
-    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target.
+    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayAvailable, ReplayPrompt.
     /// </summary>
     public class NightSiege : MonoBehaviour
     {
@@ -45,7 +47,7 @@ namespace RexMagnum
         /// <summary>The fight's centre: MouthOut m in front of the cave door when found, else the cave zone at Rex's height.</summary>
         public static Vector3 Center { get; private set; } = CaveZone;
         /// <summary>Objective line for the HUD while active, else null.</summary>
-        public static string Objective => Active ? $"CAVE SIEGE! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
+        public static string Objective => Active ? $"{(Replaying ? "REPLAY - " : "")}CAVE SIEGE! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
         /// <summary>Done before (saved).</summary>
         public static bool Done => Progress.Value(DoneKey) > 0;
         /// <summary>No auto-start for this many seconds (fast travel, respawn; a big jump of Rex sets it too).</summary>
@@ -60,6 +62,21 @@ namespace RexMagnum
         public static string Hint => Open ? "The cave is besieged at night: fight, or come back at dawn." : null;
         /// <summary>One line about the last won siege ("Cave held in 2:41 - 17 blobs popped") for the UI, else null.</summary>
         public static string LastSummary { get; private set; }
+
+        // score (the reward is one-time; a replay after it is done plays for the time only)
+        public const string BestKey = "siege_best_s", NoHitKey = "siege_nohit";
+        /// <summary>Best winning time in seconds (saved; 0 = none yet).</summary>
+        public static int BestSeconds => Progress.Value(BestKey);
+        /// <summary>True while the waves run and Rex has taken no damage since the start (HUD "NO HIT" tag).</summary>
+        public static bool NoHitSoFar => Active && inst != null && (inst.rexHealth == null || inst.rexHealth.LastDamageTime < inst.startedAt);
+        /// <summary>The run going now is a replay (no reward, score only).</summary>
+        public static bool Replaying { get; private set; }
+        /// <summary>Done before, night, Rex at the cave mouth, nothing else going on: Use starts a replay.</summary>
+        public static bool ReplayAvailable { get; private set; }
+        /// <summary>HUD prompt while ReplayAvailable, else null (the HUD puts the Use button's name in front).</summary>
+        public static string ReplayPrompt => ReplayAvailable
+            ? $"Fight the cave siege again (score only{(BestSeconds > 0 ? ", best " + Clock(BestSeconds) : "")})" : null;
+        static string Clock(int secs) => $"{secs / 60}:{secs % 60:00}";
 
         static NightSiege inst;
 
@@ -85,7 +102,7 @@ namespace RexMagnum
         static void ResetStatics()
         {
             Active = false; Wave = 0; Left = 0; Center = CaveZone; LastSummary = null;
-            breatherUntil = 0f; SkippedTonight = false; failsTonight = 0;
+            breatherUntil = 0f; SkippedTonight = false; failsTonight = 0; Replaying = false; ReplayAvailable = false;
         }   // editor with Domain Reload off
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -96,7 +113,12 @@ namespace RexMagnum
             UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
             Attach();
         }
-        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m) => Attach();
+        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
+        {
+            // NEW GAME / a load: last session's night (deaths, give-up, breather) does not carry over
+            SkippedTonight = false; failsTonight = 0; breatherUntil = 0f; Replaying = false; ReplayAvailable = false;
+            Attach();
+        }
 
         static void Attach()
         {
@@ -132,6 +154,8 @@ namespace RexMagnum
             if (inst == this) inst = null;
             // a scene reload / NEW GAME mid-event: the spawners must not stay on hold
             if (Active) { Active = false; Wave = 0; Left = 0; }
+            Replaying = false;
+            ReplayAvailable = false;
             DropLight();
         }
 
@@ -176,12 +200,22 @@ namespace RexMagnum
             lastPos = pos;
             hasLastPos = true;
             if (DayNight.Night < EndNight && (failsTonight > 0 || SkippedTonight)) { failsTonight = 0; SkippedTonight = false; }   // a new day
+            // replay: Use at the cave mouth (other Use targets near him go first: food, a pickup)
+            if (!Active && ReplayAvailable && RMInput.Use && !PauseMenu.Open && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && FindPrefabs())
+            {
+                RMInput.ConsumeUse();
+                Replaying = true;
+                StartCoroutine(Run());
+                return;
+            }
             if (Active || Time.time < nextCheck) return;
             nextCheck = Time.time + 0.5f;
             Vector3 moved = pos - checkPos;                                  // the last 0.5 s
             checkPos = pos;
+            ReplayAvailable = CanReplay(pos);
             if (Time.time < retryAt || Time.time < breatherUntil || SkippedTonight || Done || !FactoryCore.Stopped || DayNight.Night < StartNight) return;
-            if (KingGlorpBoss.Fighting || BarDefense.Active || GameFlow.Busy || (rexHealth != null && rexHealth.IsDead)) return;
+            // never while he drives: the cart would roll him into the waves (and out of the fight)
+            if (KingGlorpBoss.Fighting || BarDefense.Active || GameFlow.Busy || GolfCart.Driven != null || (rexHealth != null && rexHealth.IsDead)) return;
             FindMouth();
             Vector3 off = pos - Center;
             if (Mathf.Abs(off.y) > 15f) return;                              // not from the tunnels under the island
@@ -195,6 +229,18 @@ namespace RexMagnum
             }
             if (!FindPrefabs()) return;
             StartCoroutine(Run());
+        }
+
+        /// <summary>A replay can start: done before, night, Rex alive on foot at the cave mouth, no other event / boss.</summary>
+        bool CanReplay(Vector3 rexAt)
+        {
+            if (!Done || Time.time < retryAt || DayNight.Night < StartNight || GolfCart.Driven != null) return false;
+            if (KingGlorpBoss.Fighting || BarDefense.Active || GameFlow.Busy || (rexHealth != null && rexHealth.IsDead)) return false;
+            FindMouth();
+            Vector3 fromCenter = rexAt - Center;
+            if (Mathf.Abs(fromCenter.y) > 15f) return false;               // not from the tunnels
+            fromCenter.y = 0f;
+            return fromCenter.sqrMagnitude < StartRadius * StartRadius;
         }
 
         /// <summary>Blob prefabs copied from the island's spawners (no own prefab references: no builder change).</summary>
@@ -247,7 +293,16 @@ namespace RexMagnum
             bool died = rexHealth != null && rexHealth.IsDead;
             mine.Clear();
             DropLight();
-            retryAt = Time.time + RetryAfter;
+            bool replay = Replaying;
+            Replaying = false;
+            retryAt = Time.time + (replay ? 5f : RetryAfter);
+            if (replay)
+            {
+                // a replay he chose: no give-up count (the boss route is open anyway), only a breather after a death
+                if (died) Breather(BreatherAfterJump);
+                RexTestHUD.Notice("Replay over: the cave siege is off.", 4f);
+                return;
+            }
             if (died)
             {
                 Breather(BreatherAfterJump);                                   // the respawn: not straight back into it
@@ -264,6 +319,7 @@ namespace RexMagnum
         IEnumerator Run()
         {
             Active = true;
+            ReplayAvailable = false;
             mine.Clear();
             startedAt = Time.time;
             popped = 0;
@@ -397,14 +453,30 @@ namespace RexMagnum
             Active = false;
             Wave = 0;
             Left = 0;
-            Progress.Set(DoneKey, 1);
-            int secs = Mathf.RoundToInt(Time.time - startedAt);
-            LastSummary = $"Cave held in {secs / 60}:{secs % 60:00} - {popped} blob{(popped == 1 ? "" : "s")} popped";
+            bool replay = Replaying;
+            Replaying = false;
+            if (!replay) Progress.Set(DoneKey, 1);
+            int secs = Mathf.Max(1, Mathf.RoundToInt(Time.time - startedAt));
+            // score: best time (saved) and no hit (Rex took no damage in the whole event)
+            bool noHit = rexHealth == null || rexHealth.LastDamageTime < startedAt;
+            int best = BestSeconds;
+            bool record = best > 0 && secs < best;
+            if (best <= 0 || secs < best) Progress.Set(BestKey, secs);
+            if (noHit) Progress.Max(NoHitKey, 1);
+            LastSummary = $"{(replay ? "REPLAY: " : "")}Cave held in {Clock(secs)} — " +
+                          (record ? "NEW BEST!" : $"best {Clock(best > 0 ? Mathf.Min(best, secs) : secs)}") + (noHit ? " — NO HIT!" : "");
+            if (replay)
+            {
+                // a replay: the score only (no reward, no BIG GOAL banner)
+                RexTestHUD.Notice(LastSummary, 5f);
+                retryAt = Time.time + 5f;
+                return;
+            }
             // the reward: coconuts (+ the coconut itself when he never found one) + half a load for every gun he owns
             if (weapons != null)
             {
-                // never found a coconut: he gets the throw too, so the reward is usable (Give equips it, + its start ammo)
-                if (!weapons.Has(WeaponId.Coconut)) weapons.Give(WeaponId.Coconut);
+                // never found a coconut: he gets the throw too, so the reward is usable (+ its start ammo)
+                if (!weapons.Has(WeaponId.Coconut)) weapons.Give(WeaponId.Coconut, false);   // added, not equipped mid-fight
                 weapons.AddAmmo(WeaponId.Coconut, 5);
                 foreach (var id in weapons.OwnedInOrder())
                 {

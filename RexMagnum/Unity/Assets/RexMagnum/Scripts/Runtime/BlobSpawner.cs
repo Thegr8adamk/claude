@@ -52,6 +52,35 @@ namespace RexMagnum
             return null;
         }
 
+        Blob KindPrefab(Blob.Kind k)
+        {
+            foreach (var p in prefabs) if (p != null && p.kind == k && !p.isHalf) return p;
+            return null;
+        }
+
+        /// <summary>This spawner stands in the GameGuide zone with this id.</summary>
+        bool InZone(string id)
+        {
+            foreach (var z in GameGuide.Zones) if (z.id == id) return GameGuide.InZone(z, transform.position);
+            return false;
+        }
+
+        /// <summary>Glow spitters: in the tunnels under the island (any time, it is dark down there), or within
+        /// SpitterCaveRadius of the cave at night.</summary>
+        bool SpitterZone()
+        {
+            if (gameObject.name == "TunnelBlobs" || transform.position.y < -20f) return true;
+            if (DayNight.Night < 0.5f) return false;
+            foreach (var z in GameGuide.Zones)
+                if (z.id == "cave")
+                {
+                    Vector3 off = transform.position - z.at; off.y = 0f;
+                    return off.sqrMagnitude < SpitterCaveRadius * SpitterCaveRadius;
+                }
+            return false;
+        }
+        const float SpitterCaveRadius = 70f;
+
         static float Weight(Blob p, float night)
         {
             if (p == null || p.isHalf || (int)p.kind > 2) return 0f;
@@ -139,8 +168,14 @@ namespace RexMagnum
             if (found)
             {
                 Blob pick = firstFight ? TouristPrefab() : null;
+                if (pick == null && SpitterZone() && Random.value < 0.4f) pick = KindPrefab(Blob.Kind.Lifeguard);
                 var b = Instantiate(pick != null ? pick : PickPrefab(), hit.position, Quaternion.identity);
-                if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
+                // zone variants (no new art): ruins tourists are often stone temple guardians, cave lifeguards spit
+                if (!firstFight && !b.isHalf && b.kind == Blob.Kind.Tourist && InZone("ruins") && Random.value < 0.4f)
+                    b.SetVariant(Blob.Variant.TempleGuardian);
+                else if (!b.isHalf && b.kind == Blob.Kind.Lifeguard && SpitterZone())
+                    b.SetVariant(Blob.Variant.GlowSpitter);
+                else if (b.kind == Blob.Kind.Tourist && !b.isHalf && Random.value < disguiseChance) b.gameObject.AddComponent<BlobDisguise>();
                 if (fromWater) StartCoroutine(Rise(b, water));
             }
         }

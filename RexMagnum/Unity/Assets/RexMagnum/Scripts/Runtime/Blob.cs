@@ -22,6 +22,56 @@ namespace RexMagnum
         public Kind kind = Kind.Tourist;
         public bool isHalf;                       // bouncer half after a split
 
+        /// <summary>Zone variants on the normal prefabs (no new art), set by BlobSpawner / NightSiege right after Instantiate:
+        ///  TempleGuardian (ruins, a tourist): grey stone shell, +60% health, light hits do 25% until a heavy hit cracks it
+        ///  GlowSpitter (cave at night, tunnels; a lifeguard): keeps 8-12 m off and spits slime every 3 s, low health</summary>
+        public enum Variant { None, TempleGuardian, GlowSpitter }
+        public Variant variant { get; private set; }
+        bool shellIntact;
+        Color normalColor;                                                 // the guardian's colour under the stone
+
+        public void SetVariant(Variant v)
+        {
+            if (health == null || health.IsDead) return;
+            variant = v;
+            normalColor = baseColor;
+            if (v == Variant.TempleGuardian)
+            {
+                health.ResetHealth(Mathf.Round(health.maxHealth * 1.6f));
+                shellIntact = true;
+                baseColor = new Color(0.56f, 0.55f, 0.52f, baseColor.a);   // stone grey
+            }
+            else if (v == Variant.GlowSpitter)
+            {
+                health.ResetHealth(18);
+                attackRange = 12f; attackInterval = 3f; damage = 7f; sightRange = 24f;
+                baseColor = new Color(0.35f, 1f, 0.7f, baseColor.a);       // cave glow green
+            }
+            SetNightGlow(DayNight.Night);
+        }
+
+        /// <summary>A hit that cracks the guardian's shell: a heavy swing / combo finisher (well over the weapon's tap
+        /// damage), or anything big (harpoon, sniper, coconut). RexWeapons has no heavy flag on the hit itself.</summary>
+        static bool HeavyHit(float amount, GameObject attacker)
+        {
+            if (amount >= 40f) return true;
+            var w = attacker != null ? attacker.GetComponent<RexWeapons>() : null;
+            if (w == null) return false;
+            var d = w.Current;
+            return !d.isGun && amount >= d.tapDamage * 1.75f;              // 1.75: a wet towel's tap (x1.5) is still light
+        }
+
+        void CrackShell(Vector3 point)
+        {
+            shellIntact = false;
+            SlimeFX.Splat(point, Vector3.up, baseColor, 14);               // stone chips
+            baseColor = normalColor;
+            lastCol = new Color(-1f, -1f, -1f, -1f);                       // rewrite the colour block
+            SetNightGlow(DayNight.Night);
+            Sfx.Play("bottle_break", point, 1f, 0.55f);
+            RexTestHUD.Notice("SHELL CRACKED!", 1.5f);
+        }
+
         [Header("Links")]
         public Animator animator;
         public Renderer jellyRenderer;
@@ -152,7 +202,41 @@ namespace RexMagnum
         {
             busyUntil = Mathf.Max(busyUntil, Time.time + seconds);
             nextAttack = Mathf.Max(nextAttack, Time.time + seconds + 0.4f);
-            if (kind != Kind.KingGlorp) staggeredAt = Time.time;           // on a normal blob a Hold is RexWeapons' stagger
+            if (kind != Kind.KingGlorp && !health.IsDead)                  // on a normal blob a Hold is RexWeapons' stagger
+            {
+                staggeredAt = Time.time;
+                flashUntil = Time.time + StaggerFlash;                     // the tell: a longer white flash and a "!" pop
+                StartCoroutine(StaggerPop());
+            }
+        }
+        const float StaggerFlash = 0.2f;
+
+        /// <summary>Stagger tell: a small yellow "!" (two cubes) pops up over the head for ~0.5 s and follows it.</summary>
+        IEnumerator StaggerPop()
+        {
+            var root = new GameObject("StaggerTell").transform;
+            Destroy(root.gameObject, 0.6f);                                // also when the blob pops meanwhile
+            var mat = SlimeFX.SharedSlime(new Color(1f, 0.92f, 0.25f));
+            for (int i = 0; i < 2; i++)
+            {
+                var part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(part.GetComponent<Collider>());
+                part.transform.SetParent(root, false);
+                part.transform.localPosition = i == 0 ? new Vector3(0f, 0.28f, 0f) : Vector3.zero;
+                part.transform.localScale = i == 0 ? new Vector3(0.09f, 0.34f, 0.09f) : Vector3.one * 0.1f;
+                var pr = part.GetComponent<Renderer>();
+                pr.sharedMaterial = mat;
+                pr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            float top = HeightOf() + 0.35f;
+            for (float t = 0f; t < 0.55f && root != null; t += Time.deltaTime)
+            {
+                float pop = t < 0.12f ? Mathf.Lerp(0.2f, 1.3f, t / 0.12f) : Mathf.Lerp(1.3f, 1f, Mathf.Clamp01((t - 0.12f) / 0.1f));
+                root.localScale = Vector3.one * pop;
+                root.position = transform.position + Vector3.up * (top + t * 0.3f);
+                yield return null;
+            }
+            if (root != null) Destroy(root.gameObject);
         }
         /// <summary>Last stagger (Hold on a non-boss blob): a jump-slam started before it is called off.</summary>
         float staggeredAt = -10f;
@@ -335,7 +419,7 @@ namespace RexMagnum
                 else if (telegraphShown)
                 {
                     telegraphShown = false;
-                    glow = baseColor * DayNight.Night * 1.5f;                // back to the night glow
+                    glow = NightGlow(DayNight.Night);                        // back to the night glow
                     glowDirty = true;
                 }
                 // write the block only when something changed (most frames a blob keeps its colour)
@@ -366,6 +450,7 @@ namespace RexMagnum
                 return;
             }
             if (Time.time < retreatUntil) { Retreat(); return; }
+            if (variant == Variant.GlowSpitter) { Spitter(dist); return; }
             // attack turns (not the boss): near Rex a blob needs one of the tokens, else it circles and waits
             if (kind != Kind.KingGlorp)
             {
@@ -410,6 +495,54 @@ namespace RexMagnum
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(to), 6f * Time.deltaTime);
             if (dist <= attackRange && Time.time >= nextAttack)
                 StartCoroutine(Attack(dist));
+        }
+
+        /// <summary>Glow spitter: holds 8-12 m from Rex (backs off when he comes closer, follows when he goes), faces him
+        /// and spits every 3 s (it needs an attack token for the shot, like any blob).</summary>
+        void Spitter(float dist)
+        {
+            bool inBand = dist >= 8f && dist <= 12f;
+            if (agent.isOnNavMesh)
+            {
+                agent.isStopped = inBand;
+                if (!inBand && Time.time > nextPath)
+                {
+                    nextPath = Time.time + 0.4f;
+                    Vector3 away = transform.position - rex.position; away.y = 0f;
+                    if (away.sqrMagnitude < 0.01f) away = -transform.forward;
+                    Vector3 want = rex.position + away.normalized * 10f;   // its own side of Rex, 10 m out
+                    // the pool floor is on the NavMesh too: no backing off into the water
+                    if (NavMesh.SamplePosition(want, out NavMeshHit nh, 3f, NavMesh.AllAreas) && WaterVolume.Depth(nh.position + Vector3.up * 0.1f) <= 0.2f)
+                        agent.SetDestination(nh.position);
+                }
+            }
+            Vector3 look = rex.position - transform.position; look.y = 0f;
+            if (look.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(look), 5f * Time.deltaTime);
+            if (dist <= attackRange + 2f && Time.time >= nextAttack)
+            {
+                if (TryToken()) StartCoroutine(SpitterShot());
+                else nextAttack = Time.time + 0.5f;                        // two blobs already attack: try again soon
+            }
+        }
+
+        IEnumerator SpitterShot()
+        {
+            nextAttack = Time.time + attackInterval;
+            busyUntil = Time.time + TelegraphTime * 2f + 0.5f;
+            // two warning pulses (a long glow): the shot comes from far, so it reads before it flies
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned || rex == null) { ReleaseToken(); yield break; }
+            Play("Throw");                                                 // the lifeguard's body has no spit clip
+            Sfx.Play("blob_spit", transform.position, 0.8f, 1.3f);
+            yield return new WaitForSeconds(0.3f);
+            if (health.IsDead || rex == null) { ReleaseToken(); yield break; }
+            Vector3 mouth = transform.position + Vector3.up * HeightOf() * 0.6f + transform.forward * 0.4f;
+            SlimeProjectile.Launch(mouth, rex.position + Vector3.up * 1.2f, damage, gameObject, BaseColor());
+            ReleaseToken();
         }
 
         IEnumerator Attack(float dist)
@@ -629,6 +762,8 @@ namespace RexMagnum
                     if (squashT != null) squashT.localPosition = jellyBasePos;
                     yield break;
                 }
+                // staggered mid-hop: it drops straight down where it is (no more travel, no shockwave)
+                if (SlamStaggered(slamFrom)) { Sfx.Play("blob_slide", transform.position, 0.7f, 0.8f); yield break; }
                 float k = Mathf.Clamp01((t + Time.deltaTime) / 0.5f);
                 agent.Move(step * (k - done));
                 done = k;
@@ -760,6 +895,12 @@ namespace RexMagnum
 
         void OnDamaged(float amount, Vector3 point, GameObject attacker)
         {
+            // temple guardian: the stone shell gives back 75% of a light hit; a heavy hit cracks it (full damage from then)
+            if (variant == Variant.TempleGuardian && shellIntact && !health.IsDead)
+            {
+                if (HeavyHit(amount, attacker)) CrackShell(point);
+                else health.Heal(amount * 0.75f);
+            }
             // hit from far away (sniper): it comes for Rex instead of sitting still outside its sight range
             if (attacker != null && attacker.CompareTag("Player")) alertUntil = Mathf.Max(alertUntil, Time.time + 10f);
             // a hit that does not kill: the weapon's death style (golf fling, knife leak) must not stay for a later kill
@@ -904,8 +1045,11 @@ namespace RexMagnum
         {
             if (jellyRenderer == null) return;
             jellyRenderer.GetPropertyBlock(mpb);
-            mpb.SetColor("_EmissionColor", baseColor * amount * 1.5f);
+            mpb.SetColor("_EmissionColor", NightGlow(amount));
             jellyRenderer.SetPropertyBlock(mpb);
         }
+
+        /// <summary>The glow spitter glows in the dark tunnels by day too.</summary>
+        Color NightGlow(float amount) => baseColor * (variant == Variant.GlowSpitter ? Mathf.Max(amount, 0.8f) : amount) * 1.5f;
     }
 }

@@ -48,6 +48,7 @@ namespace RexMagnum
         public static string Objective(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget)
         {
             string s = Step(w, rex, out target, out hasTarget, out StepId);
+            StepLine = s;           // the step's own line (the NEW GOAL notice), before a set piece or the siege hint replaces it
             SideHasTarget = false;
             // a running set piece leads (the step id stays: no NEW GOAL when it ends). The bar: the marker on the
             // nearest wave blob (a stuck one far off is found, not hunted for); the cave siege: its own line and spot
@@ -171,6 +172,8 @@ namespace RexMagnum
         /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "cart", "clubs", "cave", "factory",
         /// "glorp", "explore_&lt;zone&gt;", "free"): the HUD announces a new goal when it changes.</summary>
         public static string StepId;
+        /// <summary>The step's own goal line from the last Objective call (not the set piece's or the siege hint's).</summary>
+        public static string StepLine;
         /// <summary>A warning line under the goal (the first night), or null.</summary>
         public static string Warning;
         /// <summary>An optional side note under the goal (Defend the Bar after the pistol, the sniper rifle while at

@@ -18,6 +18,10 @@ namespace RexMagnum
     {
         public const string PrefKey = "RexMagnum_Quality";
         public Terrain[] terrains;
+        // ocean grid: the 4 m one as built, the coarse 8 m one (~44k vertices instead of ~160k) on Low / phone Medium
+        public MeshFilter ocean;
+        public Mesh oceanCoarse;
+        Mesh oceanFine;
         public QualityTier Tier { get; private set; }
 
         void Awake()
@@ -278,6 +282,13 @@ namespace RexMagnum
             // cloud layer (RexMagnum/Clouds; off on Low): 5 + 3 noise octaves per sky pixel on desktop High / Ultra,
             // 3 + 2 on Medium and phones (the finest octaves are sub-pixel at their render scale anyway)
             Shader.SetGlobalFloat("_RMCloudOctaves", t >= QualityTier.High && !mobile ? 5f : 3f);
+            // ocean: the coarse grid on Low and phone Medium (RexMagnum/Water then displaces it with the long wave
+            // only: the short trains aliased on 8 m cells); Low also skips the per-pixel wave pass (vertex waves)
+            if (ocean != null && oceanFine == null) oceanFine = ocean.sharedMesh;
+            bool coarse = ocean != null && oceanCoarse != null && (t == QualityTier.Low || (t == QualityTier.Medium && mobile));
+            if (ocean != null && oceanFine != null) ocean.sharedMesh = coarse ? oceanCoarse : oceanFine;
+            Shader.SetGlobalFloat("_RMOceanCoarse", coarse ? 1f : 0f);
+            Shader.SetGlobalFloat("_RMWaterLow", t == QualityTier.Low ? 1f : 0f);
             QualitySettings.lodBias = lodBias[i];
             QualitySettings.anisotropicFiltering = t >= QualityTier.High ? AnisotropicFiltering.ForceEnable : AnisotropicFiltering.Enable;
             Application.targetFrameRate = Application.isMobilePlatform ? 30 : 60;

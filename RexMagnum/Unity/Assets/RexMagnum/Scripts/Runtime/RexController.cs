@@ -129,9 +129,11 @@ namespace RexMagnum
         float staggerUntil;
 
         /// <summary>How hard a hit on Rex lands: 0 light (tourist spit, slime pool tick), 1 medium, 2 heavy (14+ damage:
-        /// bouncer, King Glorp's sweep / hop; and any of the king's own 10+ hits). Rex's flinch and the camera use it.</summary>
+        /// bouncer, King Glorp's sweep / hop; and any of the king's own 10+ hits). Rex's flinch and the camera use it.
+        /// Rex's own coconut is at most 1: no stagger from his own throw.</summary>
         public static int HitWeight(float amount, GameObject by)
         {
+            if (by != null && by.GetComponent<RexController>() != null) return amount >= 10f ? 1 : 0;
             if (amount >= 14f || (amount >= 10f && by != null && by.GetComponent<KingGlorpBoss>() != null)) return 2;
             return amount >= 10f ? 1 : 0;
         }
@@ -160,6 +162,8 @@ namespace RexMagnum
         float faceAimUntil;
         bool wasGrounded;
         public void FaceAimFor(float seconds) => faceAimUntil = Mathf.Max(faceAimUntil, Time.time + seconds);
+        /// <summary>A dodge cancels a swing: Rex stops facing the swing's aim at once.</summary>
+        public void ReleaseFaceAim() => faceAimUntil = 0f;
 
         CharacterController cc;
         Vector3 velocity;
@@ -277,6 +281,7 @@ namespace RexMagnum
         Vector3 dodgeDir;
         bool dodgeBack;
         Health hp;
+        RexWeapons weapons;
 
         void StartDodge(Vector3 dir, bool back)
         {
@@ -291,11 +296,14 @@ namespace RexMagnum
             SetTrigger(DodgeHash);
             Sfx.Play("swing", transform.position + Vector3.up, 0.5f, 0.7f);    // low whoosh
             if (cameraRig != null) cameraRig.DodgeKick(5f);                    // the view widens for a moment (not in VR)
+            if (weapons == null) weapons = GetComponent<RexWeapons>();
+            if (weapons != null) weapons.DodgeCancel();                        // late in a swing: the dodge ends its recovery
             if (GhostsAllowed) { ghostsLeft = Ghosts; nextGhost = Time.time; }
         }
 
         // ---- dodge afterimages: 3 fading see-through copies of Rex along the dodge. His skinned meshes are baked into
-        // reused meshes and drawn with Graphics.DrawMesh (no new objects). Third person only; never in VR (sickness, cost).
+        // reused meshes and drawn with Graphics.DrawMesh (no new objects). Third person only; never in VR (sickness, cost),
+        // and only on Medium tier and up (BakeMesh of every skinned mesh is too much for a phone on Low).
         const int Ghosts = 3;
         const float GhostLife = 0.22f;
         SkinnedMeshRenderer[] ghostSkins;
@@ -310,7 +318,15 @@ namespace RexMagnum
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         bool GhostsAllowed => cameraRig != null && !cameraRig.VRControlled && !VRMode.Active
-                              && cameraRig.Mode == RexCameraRig.CameraMode.ThirdPerson;
+                              && cameraRig.Mode == RexCameraRig.CameraMode.ThirdPerson && TierAllowsGhosts();
+        QualityAuto quality;
+        bool qualityLooked;
+
+        bool TierAllowsGhosts()
+        {
+            if (!qualityLooked) { qualityLooked = true; quality = FindAnyObjectByType<QualityAuto>(); }
+            return quality == null || quality.Tier >= QualityTier.Medium;       // no QualityAuto (test scene): on
+        }
 
         void DropGhost()
         {

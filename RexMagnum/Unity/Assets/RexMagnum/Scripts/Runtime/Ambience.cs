@@ -22,7 +22,10 @@ namespace RexMagnum
         Transform rex;
         float stepDist, nextStroke;
         bool wasInWater, roofed;
-        float nextRoofCheck;
+        float nextRoofCheck, beachLevel, jungleLevel;
+
+        // the AudioMix snapshot flags are this object's: none left on after Rex is gone (quit to title, new game)
+        void OnDisable() { AudioMix.Underwater = false; AudioMix.Indoor = false; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -140,8 +143,12 @@ namespace RexMagnum
             if (Time.time > nextShoreCheck) { nextShoreCheck = Time.time + 0.5f; shore = ShoreNear(p); }
             float wantBeach = title ? 0f : 0.35f * Mathf.Max(low * nearBeach, shore) * outside;
             float wantJungle = title ? 0f : (0.22f + 0.18f * DayNight.Night) * Mathf.Clamp01((p.y - 4f) / 10f + (1f - low) * 0.5f) * outside;
-            if (beach != null) beach.volume = Mathf.MoveTowards(beach.volume, wantBeach * AudioMix.Effects, dt * 0.2f);
-            if (jungle != null) jungle.volume = Mathf.MoveTowards(jungle.volume, wantJungle * AudioMix.Effects, dt * 0.2f);
+            // the levels fade slowly by place; the World bus (AudioMix snapshots, 0.5 s blends) multiplies in after
+            beachLevel = Mathf.MoveTowards(beachLevel, wantBeach, dt * 0.2f);
+            jungleLevel = Mathf.MoveTowards(jungleLevel, wantJungle, dt * 0.2f);
+            if (beach != null) beach.volume = beachLevel * AudioMix.World;
+            if (jungle != null) jungle.volume = jungleLevel * AudioMix.World;
+            AudioMix.Indoor = !title && roofed;
             ListenerFX(title);
             if (title || cc == null) return;
 
@@ -192,6 +199,7 @@ namespace RexMagnum
             {
                 nextUnder = now + 0.1f;
                 camUnder = !title && listener != null && WaterVolume.Depth(listener.transform.position) > 0.05f;
+                AudioMix.Underwater = camUnder;
             }
             // into the water fast (~0.3 s), out a bit slower
             float want = camUnder ? 700f : 22000f;

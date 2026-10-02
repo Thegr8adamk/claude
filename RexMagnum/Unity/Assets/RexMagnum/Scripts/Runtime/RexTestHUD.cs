@@ -580,7 +580,7 @@ namespace RexMagnum
             if (step == null || step == goalShown) { goalPending = null; return; }
             if (step != goalPending) { goalPending = step; goalPendingSince = Time.unscaledTime; return; }
             if (Time.unscaledTime - goalPendingSince < 1.5f) return;
-            Notice((goalShown == null ? "GOAL: " : "NEW GOAL: ") + objective, 4f);
+            Notice((goalShown == null ? "GOAL: " : "NEW GOAL: ") + (GameGuide.StepLine ?? objective), 4f);   // the step's own line, not the siege hint
             goalShown = step;
             goalPending = null;
             // the soft goal chime (Resources/Sfx/goal_chime) when it is in the build, else the low click: a cue, not a menu click

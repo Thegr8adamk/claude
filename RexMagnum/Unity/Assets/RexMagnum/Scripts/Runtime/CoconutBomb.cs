@@ -35,6 +35,7 @@ namespace RexMagnum
             // thrown from inside Rex's capsule reach: it must not bounce off Rex himself
             if (owner != null && owner.TryGetComponent(out CharacterController occ)) Physics.IgnoreCollision(sc, occ);
             var b = go.AddComponent<CoconutBomb>();
+            b.fuse = RexWeapons.CoconutFuse;          // COCONUT POUCH (cave siege won): shorter fuse
             b.damage = damage;
             b.owner = owner;
             b.spark = new GameObject("Spark").AddComponent<Light>();

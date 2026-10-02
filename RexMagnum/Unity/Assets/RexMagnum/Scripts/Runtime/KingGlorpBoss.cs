@@ -514,6 +514,10 @@ namespace RexMagnum
             return go;
         }
 
+        /// <summary>A new move's first time (with its notice): a low bell (the bar's clink pitched far down) heard at Rex,
+        /// so the lesson sounds different from every attack.</summary>
+        static void TeachCue() => Sfx.PlayUI("bottle_clink", 1f, 0.45f);
+
         /// <summary>Phase 2+: he turns to Rex and winds up a tentacle (SweepWarn s of warning glow + an orange fan on the
         /// ground), then sweeps 120 degrees in front of him. Out of the fan (step round him), a jump or a dodge avoids it.</summary>
         IEnumerator Sweep()
@@ -524,7 +528,7 @@ namespace RexMagnum
             sweepTaught = true;
             float warn = teach ? TeachSweepWarn : SweepWarn;
             float blink = teach ? 6f * TeachSlow : 6f;
-            if (teach) RexTestHUD.Notice("Jump or dodge the sweep!", 2.5f);
+            if (teach) { RexTestHUD.Notice("Jump or dodge the sweep!", 2.5f); TeachCue(); }
             blob.Hold(warn + 0.6f);
             Vector3 to = rex.position - transform.position; to.y = 0f;
             if (to.sqrMagnitude < 0.01f) to = transform.forward;
@@ -555,9 +559,11 @@ namespace RexMagnum
                 var rc = rex.GetComponent<RexController>();
                 var rh = rex.GetComponent<Health>();
                 bool high = Mathf.Abs(off.y) > 2f;
+                // it passes under him only with real jump height (not the step off a kerb); a dodge is untouchable anyway
+                bool jumped = rc != null && !rc.Grounded && Mathf.Abs(off.y) > 0.6f;
                 off.y = 0f;
                 bool inFan = off.sqrMagnitude < SweepRange * SweepRange && Vector3.Angle(fwd, off) < SweepHalfAngle;
-                if (inFan && !high && rc != null && rc.Grounded && rh != null && !rh.IsDead)     // in the air: it passes under him
+                if (inFan && !high && !jumped && rc != null && rh != null && !rh.IsDead)
                 {
                     rh.Damage(SweepDamage, rex.position + Vector3.up, gameObject);
                     if (rh.LastDamageTime == Time.time) rc.Slimed();   // a dodge (invulnerable): no slime
@@ -578,12 +584,13 @@ namespace RexMagnum
             hopTaught = true;
             float slow = teach ? TeachSlow : 1f;
             float warn = HopWarn / slow, hopFor = HopTime / slow;
-            if (teach) RexTestHUD.Notice("Jump the ring!", 2.5f);
+            if (teach) { RexTestHUD.Notice("Jump the ring!", 2.5f); TeachCue(); }
             nextWave = Mathf.Max(nextWave, Time.time + warn + hopFor + 3f);   // not on top of the big shockwave
             blob.Hold(warn + hopFor + 0.8f);
             Vector3 to = rex.position - transform.position; to.y = 0f;
             if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
-            Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 2f, 0f, HopMax);
+            // lands 3.5 m short of Rex (not on him): the ring then needs a real jump, not a lucky gap
+            Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 3.5f, 0f, HopMax);
             var mark = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(mark.GetComponent<Collider>());
             Destroy(mark, warn + hopFor + 0.5f);

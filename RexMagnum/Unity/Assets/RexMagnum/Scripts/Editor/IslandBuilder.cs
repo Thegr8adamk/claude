@@ -127,6 +127,10 @@ namespace RexMagnum.EditorTools
                 if (dome != null) dn.cloudDome = dome.GetComponent<Renderer>();
                 var q = game.AddComponent<QualityAuto>();
                 q.terrains = new[] { terrain };
+                var oceanGo = GameObject.Find("Island/Ocean");      // the coarse grid swaps in on Low / phone Medium
+                if (oceanGo != null) q.ocean = oceanGo.GetComponent<MeshFilter>();
+                q.oceanCoarse = AssetDatabase.LoadAssetAtPath<Mesh>($"{Gen}/OceanGridCoarse.asset");
+                game.AddComponent<PoolReflection>();                 // planar reflection on the main pool (not on Low)
                 if (hasRoom) Room304(room, rex, game);
                 Golf(File.ReadAllText(json), pool);
                 Factory(File.ReadAllText(json));
@@ -708,7 +712,9 @@ namespace RexMagnum.EditorTools
             rp.refreshMode = ReflectionProbeRefreshMode.ViaScripting;     // InteriorProbes: load + dusk / dawn
             rp.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
             if (gp.GetComponent<InteriorProbes>() == null) gp.gameObject.AddComponent<InteriorProbes>();
-            rp.cullingMask = ~(1 << DayNight.SkyLayer);                 // no cloud dome in the room
+            // the cloud dome stays in (the only interior probe that keeps it): the room's walls hide it, the windows and
+            // balcony door show it, so the glass / mirror frames reflect clouds, not an empty sky (InteriorProbes keeps it)
+            rp.cullingMask = ~0;
             rp.importance = 2;
             // title camera: slow shot of the hotel from the beach; then the flow takes over
             var tc = new GameObject("TitleCamera").AddComponent<Camera>();
@@ -785,7 +791,8 @@ namespace RexMagnum.EditorTools
             var westTop = Counter(-1f);
             if (eastTop.HasValue) Pickup("Pickup_Coconut", eastTop.Value + Vector3.up * 0.1f, root);
             else if (tiki.HasValue) Pickup("Pickup_Coconut", tiki.Value + new Vector3(0.9f, 1.0f, 0f), root);
-            if (westTop.HasValue) FoodPickup.Spawn(FoodPickup.Kind.Cocktail, westTop.Value + Vector3.up * 0.03f, 120f, root);
+            // counter food: reach 1.8 m (the default 1.4 m ended just short of the sand pad in front of the counter)
+            if (westTop.HasValue) FoodPickup.Spawn(FoodPickup.Kind.Cocktail, westTop.Value + Vector3.up * 0.03f, 120f, root).radius = 1.8f;
             else if (tiki.HasValue) FoodPickup.Spawn(FoodPickup.Kind.Cocktail, tiki.Value + new Vector3(-0.9f, 1.0f, 0f), 120f, root);
             Debug.Log($"[Rex Magnum] Beach pickups: harpoon {(atBack ? "by the dive shop's back wall" : "fallback (inside)")}, " +
                       $"tiki coconut {(eastTop.HasValue ? "on the east counter" : "fallback (inside)")}, cocktail {(westTop.HasValue ? "on the west counter" : "fallback (inside)")}.");
@@ -2456,41 +2463,52 @@ namespace RexMagnum.EditorTools
             // grid: 4 m cells over the island square (+-640 m), then growing to 1.6 km. It was a power-law grid around
             // the island centre with 12 - 14 m cells at the beach: the 26 m waves were sampled ~2x per wavelength there
             // (diamond facets). Quads well above the shore (under the terrain) are left out: no vertex cost there.
-            const float inner = 640f, cellIn = 4f, size = 3200f;
-            const int outer = 40;                  // cells from the inner square to the edge, each side
-            var axis = new List<float>();
-            for (int k = outer; k >= 1; k--) axis.Add(-(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f)));
-            for (float a = -inner; a <= inner + 0.01f; a += cellIn) axis.Add(a);
-            for (int k = 1; k <= outer; k++) axis.Add(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f));
-            int n = axis.Count - 1;
-            var verts = new Vector3[(n + 1) * (n + 1)];
-            var dry = new bool[(n + 1) * (n + 1)];
+            // A second, coarse grid (8 m cells, 24 outer rings: ~44k vertices instead of ~160k) for QualityAuto to
+            // swap in on Low and phone Medium (the shader then displaces it with the long wave train only).
+            const float inner = 640f, size = 3200f;
             float tY = terrain != null ? terrain.transform.position.y : 0f;
-            for (int z = 0; z <= n; z++)
-                for (int x = 0; x <= n; x++)
-                {
-                    var vp = new Vector3(axis[x], 0f, axis[z]);
-                    verts[z * (n + 1) + x] = vp;
-                    // 1.5 m: over the highest wave crest (~0.3 m) with room for the terrain's LOD error
-                    dry[z * (n + 1) + x] = terrain != null && terrain.SampleHeight(vp) + tY > 1.5f;
-                }
-            var triList = new List<int>(n * n * 6);
-            int skipped = 0;
-            for (int z = 0; z < n; z++)
-                for (int x = 0; x < n; x++)
-                {
-                    int a = z * (n + 1) + x;
-                    if (dry[a] && dry[a + 1] && dry[a + n + 1] && dry[a + n + 2]) { skipped++; continue; }
-                    triList.Add(a); triList.Add(a + n + 1); triList.Add(a + 1);
-                    triList.Add(a + 1); triList.Add(a + n + 1); triList.Add(a + n + 2);
-                }
-            var tris = triList.ToArray();
-            Debug.Log($"[Rex Magnum] Ocean grid: {n} x {n} cells ({cellIn:F0} m inside +-{inner:F0} m), {tris.Length / 6} quads, {skipped} under dry land left out.");
-            var mesh = new Mesh { name = "OceanGrid", indexFormat = IndexFormat.UInt32, vertices = verts, triangles = tris };
-            mesh.RecalculateNormals();
-            mesh.bounds = new Bounds(Vector3.zero, new Vector3(size, 10f, size));
-            AssetDatabase.DeleteAsset($"{Gen}/OceanGrid.asset");
-            AssetDatabase.CreateAsset(mesh, $"{Gen}/OceanGrid.asset");
+            // 1.5 m: over the highest wave crest (~0.3 m) with room for the terrain's LOD error
+            bool Dry(float x, float z) => terrain != null && terrain.SampleHeight(new Vector3(x, 0f, z)) + tY > 1.5f;
+            Mesh Grid(float cellIn, int outer, string meshName)
+            {
+                var axis = new List<float>();
+                for (int k = outer; k >= 1; k--) axis.Add(-(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f)));
+                // inner lines by index (no float accumulation: the +-640 m line exactly once, next to the first ring)
+                int cells = Mathf.RoundToInt(2f * inner / cellIn);
+                for (int c = 0; c <= cells; c++) axis.Add(-inner + c * cellIn);
+                for (int k = 1; k <= outer; k++) axis.Add(inner + (size / 2 - inner) * Mathf.Pow(k / (float)outer, 1.5f));
+                int n = axis.Count - 1;
+                var verts = new Vector3[(n + 1) * (n + 1)];
+                var dry = new bool[(n + 1) * (n + 1)];
+                for (int z = 0; z <= n; z++)
+                    for (int x = 0; x <= n; x++)
+                    {
+                        verts[z * (n + 1) + x] = new Vector3(axis[x], 0f, axis[z]);
+                        dry[z * (n + 1) + x] = Dry(axis[x], axis[z]);
+                    }
+                var triList = new List<int>(n * n * 6);
+                int skipped = 0;
+                for (int z = 0; z < n; z++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        int a = z * (n + 1) + x;
+                        // all four corners and the centre dry: a quad over a low dip between dry corners stays (no hole)
+                        if (dry[a] && dry[a + 1] && dry[a + n + 1] && dry[a + n + 2] &&
+                            Dry((axis[x] + axis[x + 1]) * 0.5f, (axis[z] + axis[z + 1]) * 0.5f)) { skipped++; continue; }
+                        triList.Add(a); triList.Add(a + n + 1); triList.Add(a + 1);
+                        triList.Add(a + 1); triList.Add(a + n + 1); triList.Add(a + n + 2);
+                    }
+                var tris = triList.ToArray();
+                Debug.Log($"[Rex Magnum] {meshName}: {n} x {n} cells ({cellIn:F0} m inside +-{inner:F0} m), {tris.Length / 6} quads, {skipped} under dry land left out.");
+                var gm = new Mesh { name = meshName, indexFormat = IndexFormat.UInt32, vertices = verts, triangles = tris };
+                gm.RecalculateNormals();
+                gm.bounds = new Bounds(Vector3.zero, new Vector3(size, 10f, size));
+                AssetDatabase.DeleteAsset($"{Gen}/{meshName}.asset");
+                AssetDatabase.CreateAsset(gm, $"{Gen}/{meshName}.asset");
+                return gm;
+            }
+            var mesh = Grid(4f, 40, "OceanGrid");
+            Grid(8f, 24, "OceanGridCoarse");          // loaded by Build Island for QualityAuto (Low / phone Medium)
             var go = new GameObject("Ocean");
             go.transform.SetParent(parent, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;

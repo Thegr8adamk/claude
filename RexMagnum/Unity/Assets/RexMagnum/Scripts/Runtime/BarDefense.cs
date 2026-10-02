@@ -13,9 +13,10 @@ namespace RexMagnum
     /// to the bar. The spawners around the hotel hold off meanwhile (BlobSpawner).
     /// Reward: all owned guns full + Progress "bar_defended" (saved: never again). Rex dies, goes more than
     /// AbortRadius away or stays upstairs over UpstairsAbort s: the event stops cleanly and can start again later
-    /// (after a death the wave blobs go too). A win sets LastSummary.
+    /// (after a death the wave blobs go too). A win sets LastSummary (time, best time "bar_best_s", no hit).
+    /// Done: Use at the counter starts a replay (no reward, score only).
     /// No builder step: it attaches itself to Rex when a scene loads (like Ambience).
-    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target.
+    /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target, NoHitSoFar, ReplayAvailable, ReplayPrompt.
     /// </summary>
     public class BarDefense : MonoBehaviour
     {
@@ -42,11 +43,26 @@ namespace RexMagnum
         /// <summary>Blobs of this wave still to beat (alive + not yet in).</summary>
         public static int Left { get; private set; }
         /// <summary>Objective line for the HUD while active, else null.</summary>
-        public static string Objective => Active ? $"DEFEND THE BAR! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
+        public static string Objective => Active ? $"{(Replaying ? "REPLAY - " : "")}DEFEND THE BAR! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
         /// <summary>Done before (saved).</summary>
         public static bool Done => Progress.Value(DoneKey) > 0;
-        /// <summary>One line about the last won defence ("Bar held in 2:41 - 17 blobs popped") for the UI, else null.</summary>
+        /// <summary>One line about the last won defence ("Bar held in 2:41 — best 2:30 — NO HIT!") for the UI, else null.</summary>
         public static string LastSummary { get; private set; }
+
+        // score (the event's reward is one-time; a replay after it is done plays for the time only)
+        public const string BestKey = "bar_best_s", NoHitKey = "bar_nohit";
+        /// <summary>Best winning time in seconds (saved; 0 = none yet).</summary>
+        public static int BestSeconds => Progress.Value(BestKey);
+        /// <summary>True while the waves run and Rex has taken no damage since the start (HUD "NO HIT" tag).</summary>
+        public static bool NoHitSoFar => Active && inst != null && (inst.rexHealth == null || inst.rexHealth.LastDamageTime < inst.startedAt);
+        /// <summary>The run going now is a replay (no reward, score only).</summary>
+        public static bool Replaying { get; private set; }
+        /// <summary>Done before, Rex at the bar counter, nothing else going on: Use starts a replay.</summary>
+        public static bool ReplayAvailable { get; private set; }
+        /// <summary>HUD prompt while ReplayAvailable, else null (the HUD puts the Use button's name in front).</summary>
+        public static string ReplayPrompt => ReplayAvailable
+            ? $"Defend the bar again (score only{(BestSeconds > 0 ? ", best " + Clock(BestSeconds) : "")})" : null;
+        static string Clock(int secs) => $"{secs / 60}:{secs % 60:00}";
 
         static BarDefense inst;
 
@@ -69,7 +85,7 @@ namespace RexMagnum
         public static Vector3 Target { get { var b = NearestBlob(); return b != null ? b.transform.position : Center; } }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; Wave = 0; Left = 0; LastSummary = null; }   // editor with Domain Reload off
+        static void ResetStatics() { Active = false; Wave = 0; Left = 0; LastSummary = null; Replaying = false; ReplayAvailable = false; }   // editor with Domain Reload off
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -116,12 +132,23 @@ namespace RexMagnum
             if (inst == this) inst = null;
             // a scene reload / NEW GAME mid-event: the spawners must not stay on hold
             if (Active) { Active = false; Wave = 0; Left = 0; }
+            Replaying = false;
+            ReplayAvailable = false;
         }
 
         void Update()
         {
+            // replay: Use at the counter (other Use targets near it go first: a drink, a pickup)
+            if (!Active && ReplayAvailable && RMInput.Use && !PauseMenu.Open && FoodPickup.Nearby == null && WeaponPickup.Nearby == null && FindPrefabs())
+            {
+                RMInput.ConsumeUse();
+                Replaying = true;
+                StartCoroutine(Run());
+                return;
+            }
             if (Active || Time.time < nextCheck) return;
             nextCheck = Time.time + 0.5f;
+            ReplayAvailable = CanReplay();
             if (Time.time < retryAt || Done || FactoryCore.Stopped || KingGlorpBoss.Fighting || GameFlow.Busy) return;
             if (weapons == null || !weapons.Has(WeaponId.Pistol) || (rexHealth != null && rexHealth.IsDead)) return;
             Vector3 p = transform.position;
@@ -130,6 +157,17 @@ namespace RexMagnum
             if (flat.sqrMagnitude > StartRadius * StartRadius) return;
             if (!FindPrefabs()) return;
             StartCoroutine(Run());
+        }
+
+        /// <summary>A replay can start: done before, Rex alive on the ground floor at the counter, no other event / boss.</summary>
+        bool CanReplay()
+        {
+            if (!Done || Time.time < retryAt || KingGlorpBoss.Fighting || NightSiege.Active || GameFlow.Busy || GolfCart.Driven != null) return false;
+            if (rexHealth != null && rexHealth.IsDead) return false;
+            Vector3 at = transform.position;
+            if (at.y > StartTop) return false;
+            Vector3 flat = at - Center; flat.y = 0f;
+            return flat.sqrMagnitude < StartRadius * StartRadius;
         }
 
         /// <summary>Blob prefabs copied from the island's spawners (no own prefab references: no builder change).</summary>
@@ -185,13 +223,16 @@ namespace RexMagnum
                     Destroy(b.gameObject);
                 }
             mine.Clear();
-            retryAt = Time.time + RetryAfter;
-            RexTestHUD.Notice("The bar fell. Come back to defend it again.", 4f);
+            bool replay = Replaying;
+            Replaying = false;
+            retryAt = Time.time + (replay ? 5f : RetryAfter);              // a replay: try again soon (Use at the counter)
+            RexTestHUD.Notice(replay ? "Replay over: the bar fell." : "The bar fell. Come back to defend it again.", 4f);
         }
 
         IEnumerator Run()
         {
             Active = true;
+            ReplayAvailable = false;
             mine.Clear();
             startedAt = Time.time;
             highSince = -1f;
@@ -295,9 +336,26 @@ namespace RexMagnum
             Active = false;
             Wave = 0;
             Left = 0;
-            Progress.Set(DoneKey, 1);
-            int secs = Mathf.RoundToInt(Time.time - startedAt);
-            LastSummary = $"Bar held in {secs / 60}:{secs % 60:00} - {popped} blob{(popped == 1 ? "" : "s")} popped";
+            bool replay = Replaying;
+            Replaying = false;
+            if (!replay) Progress.Set(DoneKey, 1);
+            int secs = Mathf.Max(1, Mathf.RoundToInt(Time.time - startedAt));
+            // score: best time (saved) and no hit (Rex took no damage in the whole event)
+            bool noHit = rexHealth == null || rexHealth.LastDamageTime < startedAt;
+            int best = BestSeconds;
+            bool record = best > 0 && secs < best;
+            if (best <= 0 || secs < best) Progress.Set(BestKey, secs);
+            if (noHit) Progress.Max(NoHitKey, 1);
+            LastSummary = $"{(replay ? "REPLAY: " : "")}Bar held in {Clock(secs)} — " +
+                          (record ? "NEW BEST!" : $"best {Clock(best > 0 ? Mathf.Min(best, secs) : secs)}") + (noHit ? " — NO HIT!" : "");
+            if (replay)
+            {
+                // a replay: the score only (no reward, no BIG GOAL banner)
+                RexTestHUD.Notice(LastSummary, 5f);
+                Sfx.Play("bottle_clink", transform.position, 0.9f);
+                retryAt = Time.time + 5f;
+                return;
+            }
             // the reward: every gun Rex owns gets full ammo
             if (weapons != null)
                 foreach (var id in weapons.OwnedInOrder())

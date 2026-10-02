@@ -1,5 +1,8 @@
 // Rex Magnum - realistic water for URP: two scrolling normal maps, depth colour (needs the camera depth
 // texture), shore foam, Fresnel sky reflection, sun glint, optional Gerstner waves (ocean) and slime glow.
+// Main pool: optional planar reflection (PoolReflection sets _PlanarRefl + _UsePlanar per renderer), blended by Fresnel.
+// Globals from QualityAuto: _RMOceanCoarse = 1 on the coarse ocean grid (only the long wave train displaces the
+// vertices: the short ones aliased on 8 m cells), _RMWaterLow = 1 on Low (no per-pixel Gerstner pass: vertex waves).
 Shader "RexMagnum/Water"
 {
     Properties
@@ -20,6 +23,8 @@ Shader "RexMagnum/Water"
         _WaveLength ("Wave Length (m)", Float) = 28
         _WaveFade ("Wave Fade Distance (m)", Float) = 900
         _River ("River Mode (flow along UV v, foam from vertex colour R)", Float) = 0
+        _PlanarRefl ("Planar Reflection (set by script)", 2D) = "black" {}
+        _UsePlanar ("Use Planar Reflection (set by script)", Float) = 0
     }
     SubShader
     {
@@ -42,11 +47,13 @@ Shader "RexMagnum/Water"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
+            TEXTURE2D(_PlanarRefl); SAMPLER(sampler_PlanarRefl);
             CBUFFER_START(UnityPerMaterial)
                 float4 _ShallowColor, _DeepColor, _FoamColor, _Glow, _FlowDir, _NormalMap_ST;
                 float _DepthFade, _NormalTiling, _NormalStrength, _FlowSpeed, _Smoothness, _FoamDepth;
-                float _WaveHeight, _WaveLength, _WaveFade, _River;
+                float _WaveHeight, _WaveLength, _WaveFade, _River, _UsePlanar;
             CBUFFER_END
+            float _RMOceanCoarse, _RMWaterLow;     // globals (QualityAuto); 0 = not set = full quality
 
             struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V
@@ -74,13 +81,14 @@ Shader "RexMagnum/Water"
                 return float3(d.x * a * cos(f), a * sin(f), d.y * a * cos(f));
             }
 
-            // the three ocean wave trains at the undisplaced point p (fade 0..1): offset, tangent and binormal
-            float3 Waves(float3 p, float fade, inout float3 t, inout float3 b)
+            // the three ocean wave trains at the undisplaced point p (fade 0..1): offset, tangent and binormal.
+            // shortTrains 0 = only the long train (coarse grid vertices)
+            float3 Waves(float3 p, float fade, float shortTrains, inout float3 t, inout float3 b)
             {
                 float s = _WaveHeight / _WaveLength * 6.2831853 * fade;
                 return Gerstner(p, float2(1, 0.4), s * 0.5, _WaveLength, t, b)
-                     + Gerstner(p, float2(-0.3, 1), s * 0.35, _WaveLength * 0.61, t, b)
-                     + Gerstner(p, float2(0.7, -0.6), s * 0.2, _WaveLength * 0.37, t, b);
+                     + Gerstner(p, float2(-0.3, 1), s * 0.35 * shortTrains, _WaveLength * 0.61, t, b)
+                     + Gerstner(p, float2(0.7, -0.6), s * 0.2 * shortTrains, _WaveLength * 0.37, t, b);
             }
 
             V vert(A i)
@@ -96,7 +104,7 @@ Shader "RexMagnum/Water"
                     float fade = saturate(1 - distance(ws.xz, _WorldSpaceCameraPos.xz) / _WaveFade);
                     float3 t = float3(1, 0, 0), b = float3(0, 0, 1);
                     o.wave = float3(ws.xz, fade);
-                    ws += Waves(ws, fade, t, b);
+                    ws += Waves(ws, fade, 1 - saturate(_RMOceanCoarse), t, b);
                     n = normalize(cross(b, t));
                 }
                 o.positionWS = ws;
@@ -129,12 +137,12 @@ Shader "RexMagnum/Water"
                 float3 nt = normalize(float3(n1.xy + n2.xy, n1.z * n2.z));
                 float3 up = normalize(i.normalWS);
                 float2 crestFoam = 0;
-                if (_WaveHeight > 0)
+                if (_WaveHeight > 0 && _RMWaterLow < 0.5)
                 {
                     // ocean: wave height and normal per pixel (the grid's vertices are metres apart: per-vertex crest
                     // foam came out as diamond patches, the interpolated normals were faceted)
                     float3 wt = float3(1, 0, 0), wb = float3(0, 0, 1);
-                    float3 off = Waves(float3(i.wave.x, 0, i.wave.y), i.wave.z, wt, wb);
+                    float3 off = Waves(float3(i.wave.x, 0, i.wave.y), i.wave.z, 1, wt, wb);
                     up = normalize(cross(wb, wt));
                     // the three amplitudes add up to ~0.79 x _WaveHeight; far (faded) waves stay low: no crest foam there
                     crestFoam = float2(off.y / (_WaveHeight * 0.79 + 1e-4), 1 - up.y);
@@ -154,6 +162,13 @@ Shader "RexMagnum/Water"
                 float3 V = normalize(GetWorldSpaceViewDir(i.positionWS));
                 float fres = pow(1 - saturate(dot(N, V)), 5) * 0.95 + 0.04;
                 float3 refl = GlossyEnvironmentReflection(reflect(-V, N), 1 - _Smoothness, 1);
+                if (_UsePlanar > 0.01)
+                {
+                    // main pool: the reflected camera's image in screen space, shifted a little by the ripples
+                    float2 ruv = suv + (N.xz - up.xz) * 0.04;
+                    float3 pr = SAMPLE_TEXTURE2D_LOD(_PlanarRefl, sampler_PlanarRefl, ruv, 0).rgb;
+                    refl = lerp(refl, pr, saturate(_UsePlanar));
+                }
                 Light L = GetMainLight(TransformWorldToShadowCoord(i.positionWS));
                 float3 H = normalize(L.direction + V);
                 float spec = pow(saturate(dot(N, H)), 600 * _Smoothness + 8) * 6 * L.shadowAttenuation;

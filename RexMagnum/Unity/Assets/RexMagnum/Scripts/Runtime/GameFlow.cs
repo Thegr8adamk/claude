@@ -310,11 +310,12 @@ namespace RexMagnum
         static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended", "cave_siege" };
         static readonly string[] GoalNames = { "The blob factory is stopped.", "King Glorp is popped.", "The bar held.", "The cave siege is over." };
         // the reward line under it, the same form for all 4: RexLife raises max health by 25 for the factory and King
-        // Glorp; the bar and the cave give ammo (the events show no notice of their own)
-        static readonly string[] GoalRewards = { "REWARD: MAX HEALTH +25.  Fewer blobs on the island.",
+        // Glorp; the bar and the cave give ammo. The factory, the bar and the cave also unlock an ability: named here
+        // with what it does (RexWeapons super snap, GolfCart horn, the coconut pouch)
+        static readonly string[] GoalRewards = { "REWARD: MAX HEALTH +25  \u00B7  SUPER SNAP (towel heavy stuns nearby blobs)",
                                                  "REWARD: MAX HEALTH +25.  Free play: the island is yours.",
-                                                 "REWARD: all your guns are full.",
-                                                 "REWARD: +5 coconuts and half a load for every gun." };
+                                                 "REWARD: Free refill  \u00B7  CART HORN (honk to stun blobs)",
+                                                 "REWARD: +5 coconuts  \u00B7  COCONUT POUCH (+3 coconuts, shorter fuse)" };
         AudioSource sting;
         float bannerUntil, stingStart = -100f, nextGoalCheck;
         string bannerLine, bannerReward;
@@ -453,18 +454,20 @@ namespace RexMagnum
         void FightMusic()
         {
             UpdateSting();
-            if (rex == null) return;
+            if (rex == null) { AudioMix.Combat = false; return; }
             if (fight != null && fight.clip != null)
             {
                 bool battle = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;
                 float target = battle ? FightVolume : 0f;
                 // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
                 fightLevel = Mathf.MoveTowards(fightLevel, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
+                AudioMix.Combat = fightLevel > 0.3f * FightVolume;      // the Combat snapshot: fight music up, ambience down
                 // AudioMix.Duck: music dips to 60% while a voice line plays (no AudioMixer asset needed)
                 fight.volume = fightLevel * AudioMix.Music * AudioMix.Duck * (1f - 0.8f * StingDuck);
                 if (fightLevel > 0f && !fight.isPlaying) fight.Play();
                 else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
             }
+            else AudioMix.Combat = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;   // no fight clip: the snapshot still follows
             // without the fight clip the day music still follows night, the boss and the voice duck
             music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music * AudioMix.Duck
                            * (1f - 0.8f * StingDuck);   // night jungle music takes over; the big goal sting ducks it
@@ -623,7 +626,7 @@ namespace RexMagnum
         {
             float left = bannerUntil - Time.unscaledTime;
             float a = MenuSkin.Appear(bannerUntil - 5f, 0.35f) * Mathf.Clamp01(left / 0.8f);
-            var r = new Rect(w * 0.2f, h * 0.36f, w * 0.6f, 190 * s);
+            var r = new Rect(w * 0.2f, h * 0.36f, w * 0.6f, 220 * s);     // room for a reward line that wraps (the ability names)
             GUI.color = new Color(1f, 1f, 1f, a);
             MenuSkin.DrawPanel(r);
             GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
@@ -634,7 +637,7 @@ namespace RexMagnum
             if (!string.IsNullOrEmpty(bannerReward))
             {
                 GUI.color = new Color(1f, 0.85f, 0.4f, a);          // gold: what it unlocked
-                GUI.Label(new Rect(r.x, r.y + 128 * s, r.width, 50 * s), bannerReward, MenuSkin.Hint);
+                GUI.Label(new Rect(r.x + 16 * s, r.y + 128 * s, r.width - 32 * s, 84 * s), bannerReward, MenuSkin.Hint);
             }
             GUI.color = Color.white;
         }

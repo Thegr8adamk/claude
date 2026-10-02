@@ -79,7 +79,11 @@ namespace RexMagnum
                     // past the last button goes on to scrolling the lists below (zones, big goals, clues)
                     if (MenuNav.Up && travelSel > 0) { travelSel--; travelConfirm = -1; MenuNav.Click(); }
                     if (MenuNav.Down) { travelSel++; travelConfirm = -1; if (travelSel >= travel.Count) scroll.y += 140f * Screen.height / 1080f; MenuNav.Click(); }
-                    if (travelSel < travel.Count && MenuNav.Ok) { MenuNav.Consume(); pendingTravel = travelSel; }
+                    if (travelSel < travel.Count && MenuNav.Ok)
+                    {
+                        MenuNav.Consume(); pendingTravel = travelSel;
+                        if (travel[travelSel].why != null) MenuNav.Click();      // greyed: a click and a notice (StartTravel), not silence
+                    }
                 }
                 else
                 {
@@ -115,6 +119,7 @@ namespace RexMagnum
             tab = (t + Tabs.Length) % Tabs.Length;
             scroll = Vector2.zero;
             travelSel = 0; travelConfirm = -1;      // back on the MAP: the first TRAVEL button, the list at the top
+            if (tab == 0 && Open) BuildTravel();    // the stops again (blobs come and go while the other tabs were up)
             tabSince = Time.unscaledTime;
             MenuNav.Click();
         }
@@ -359,7 +364,9 @@ namespace RexMagnum
             if (!string.IsNullOrEmpty(objective)) GUILayout.Label("NEXT: " + objective, label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
             if (!string.IsNullOrEmpty(objective) && GameGuide.Side != null) GUILayout.Label("<color=#B8E6A0>" + GameGuide.Side + "</color>", label);
-            GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.  Blue = night event.  White = fast travel.", small);
+            // "Blue" only while a blue marker is on the map (the cave siege's side target)
+            GUILayout.Label(objectiveHas && GameGuide.SideHasTarget ? "Red arrow = you.  Green = visited.  Yellow = next goal.  Blue = night event.  White = fast travel."
+                                                    : "Red arrow = you.  Green = visited.  Yellow = next goal.  White = fast travel.", small);
             TravelSection();
             Section("ISLAND ZONES");
             foreach (var z in GameGuide.Zones)
@@ -415,7 +422,7 @@ namespace RexMagnum
             if (photos.Count == 0) { GUILayout.Label($"No photos yet. Press {Glyph.B("Photo")} near a blob or a guest.", label); return; }
             int cols = 3;
             float cw = width / cols - 20, th = cw * 9f / 16f;
-            // thumbnails load lazily: only rows near the view, at most 3 per frame (no hitch on a big album); grey until then
+            // thumbnails load lazily: only rows near the view, at most 1 per frame (a JPG decode each) (no hitch on a big album); grey until then
             float rowH = th + 70f * s, rowTop = 0f;
             for (int i = photos.Count - 1; i >= 0; i -= cols)
             {
@@ -454,7 +461,7 @@ namespace RexMagnum
             if (thumbs.TryGetValue(file, out var t)) return t;
             if (!load) return null;
             if (thumbFrame != Time.frameCount) { thumbFrame = Time.frameCount; thumbLoads = 0; }
-            if (thumbLoads >= 3) return null;             // the rest load in the next frames
+            if (thumbLoads >= 1) return null;             // the rest load in the next frames
             thumbLoads++;
             t = PhotoAlbum.LoadThumb(file);      // 384x216 thumb_<file> (made once from the full JPG for older photos)
             thumbs[file] = t;
@@ -480,7 +487,7 @@ namespace RexMagnum
         bool travelOk, traveling;
         string travelWhy;
         int travelSel, pendingTravel = -1, travelConfirm = -1;
-        float travelFade;
+        float travelFade, travelNoteUntil;
 
         /// <summary>The fast travel stops when the menu opens (nothing moves while paused): per visited zone the cart
         /// charge station nearest its landmark (pool deck, pro shop, factory door), and the cave mouth (the cave door's
@@ -529,7 +536,14 @@ namespace RexMagnum
         /// or within reach of an active blob spawner (radius + 5 m: it would fill up around him).</summary>
         static string StopBlock(Vector3 at)
         {
-            if (Blob.LivingNear(at, 25f) > 0) return "blobs there";
+            // a living blob within 25 m on the same floor (6 m up or down: not the hotel room over the lobby), and not
+            // a disguised one (it looks like a guest: a greyed stop would give it away)
+            foreach (var b in Blob.All)
+            {
+                if (b == null || b.IsDead || b.Disguised) continue;
+                Vector3 d = b.transform.position - at;
+                if (Mathf.Abs(d.y) < 6f && d.sqrMagnitude < 25f * 25f) return "blobs there";
+            }
             foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
             {
                 if (sp == null || !sp.isActiveAndEnabled || sp.prefabs == null || sp.prefabs.Length == 0) continue;
@@ -628,6 +642,7 @@ namespace RexMagnum
             Section("FAST TRAVEL");
             if (travel.Count == 0) { GUILayout.Label("Find the golf cart charge stations (resort, golf course, ruins) and the cave: you can travel there from here.", small); return; }
             if (!travelOk) GUILayout.Label("<color=#FF9C80>" + travelWhy + "</color>", small);
+            else if (Time.unscaledTime < travelNoteUntil) GUILayout.Label("<color=#FF9C80>Blobs at that stop. Pick another one, or clear them first.</color>", small);
             // the cave stop at night (siege can start): one more OK first, with the warning
             if (travelOk && travelConfirm >= 0 && travelConfirm < travel.Count)
                 GUILayout.Label("<color=#9CCBFF>" + SiegeWarning + "  Press TRAVEL again to go.</color>", small);
@@ -659,7 +674,8 @@ namespace RexMagnum
         {
             if (i < 0 || i >= travel.Count || !travelOk || traveling || !Open) return;
             var spot = travel[i];
-            if (spot.why != null) return;                          // greyed: blobs there
+            // greyed: a notice in the menu (the HUD's notice is under the paused menu and waits)
+            if (spot.why != null) { travelNoteUntil = Time.unscaledTime + 3f; return; }
             // into the night siege: a warning and one more OK first
             if (spot.siege && travelConfirm != i) { travelConfirm = i; return; }
             travelConfirm = -1;

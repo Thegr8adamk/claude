@@ -66,6 +66,8 @@ namespace RexMagnum
         /// <summary>Gun recoil: the view kicks up by this many degrees and settles back in ~0.2 s (the aim does not move).</summary>
         public void Kick(float degrees) => kick = Mathf.Min(kick + degrees, 6f);
         float kick;
+        float hitRoll, hitRollAt = -10f;
+        const float HitRollTime = 0.25f;
         /// <summary>Heavy attack wind-up cue: the view pushes in by this many degrees of FOV and eases back (~0.35 s).</summary>
         public void FovPush(float degrees) => fovPush = Mathf.Max(fovPush, degrees);
         float fovPush;          // < 0: a dodge kick (the view widens)
@@ -112,6 +114,14 @@ namespace RexMagnum
                 if (w >= 2) { Shake(0.45f); RMInput.Rumble(0.9f, 1f, 0.3f); }
                 else if (w == 1) { Shake(Mathf.Clamp(a * 0.012f, 0.1f, 0.3f)); RMInput.Rumble(0.5f, 0.8f, 0.18f); }
                 else { Shake(0.06f); RMInput.Rumble(0.3f, 0.5f, 0.1f); }
+                // directional reaction: the view tilts away from the side the hit came from (the attacker; Rex's own
+                // coconut: the blast point). Light 3, heavy 6 degrees, eased back over 0.25 s. Not in VR.
+                if (by == null || VRControlled) return;
+                Vector3 src = by.transform.IsChildOf(target) ? p : by.transform.position;
+                float sideDot = Vector3.Dot(transform.right, Vector3.ProjectOnPlane(src - target.position, Vector3.up));
+                if (Mathf.Abs(sideDot) < 0.2f) return;            // straight ahead / behind: the shake alone
+                hitRoll = Mathf.Sign(sideDot) * (w >= 2 ? 6f : 3f);    // + rolls the view's top to the left: away from a hit on the right
+                hitRollAt = Time.unscaledTime;
             };
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -151,6 +161,11 @@ namespace RexMagnum
                 if (RMInput.SwapShoulder) side = -side;
                 Vector2 look = RMInput.LookDelta;
                 if (weapons != null && weapons.Scoped) look *= 12f / Mathf.Max(1f, FovSetting);   // scope (12°): same feel as unzoomed
+                // aim assist slow-down (controller stick, not scoped): the look slows to 55% while the crosshair is
+                // within ~3 degrees of a living blob's centre, so the stick does not sail past it (the AimPoint pull stays)
+                else if (!VRControlled && RMInput.AimAssist && RMInput.LookIsStick && !TouchState.Active
+                         && look.sqrMagnitude > 0f && CrosshairOnBlob(3f * cam.fieldOfView / 65f))
+                    look *= 0.55f;
                 if (VRControlled)
                 {
                     // the headset does up/down; the stick or mouse turns Rex (smooth, or 30-degree snaps: less sickness)
@@ -250,6 +265,12 @@ namespace RexMagnum
                                                        (Mathf.PerlinNoise(nt, 7.3f) * 2f - 1f) * s * 4f);
                 shake = Mathf.MoveTowards(shake, 0f, Time.unscaledDeltaTime * 1.6f);
             }
+            if (hitRoll != 0f)
+            {
+                float rt = (Time.unscaledTime - hitRollAt) / HitRollTime;
+                if (rt >= 1f || VRControlled) hitRoll = 0f;
+                else transform.rotation *= Quaternion.Euler(0f, 0f, hitRoll * (1f - rt * rt * (3f - 2f * rt)));   // eased back
+            }
             if (kick > 0.01f)
             {
                 // through the scope the same degrees fill far more of the narrow view: scale like the shake
@@ -305,6 +326,22 @@ namespace RexMagnum
         Quaternion aimRot = Quaternion.identity;
         /// <summary>Steady aim direction: the crosshair without shake / recoil kick (VR: the head).</summary>
         public Vector3 AimForward => VRControlled ? transform.forward : aimRot * Vector3.forward;
+
+        /// <summary>A living blob's centre (1 m up) within deg of the steady crosshair, in clear view, within 120 m.</summary>
+        bool CrosshairOnBlob(float deg)
+        {
+            Vector3 eyePos = transform.position, fwd = aimRot * Vector3.forward;
+            foreach (var b in Blob.All)
+            {
+                if (b == null || b.IsDead) continue;
+                Vector3 c = b.transform.position + Vector3.up * 1.0f;
+                if ((c - eyePos).sqrMagnitude > 120f * 120f || Vector3.Angle(fwd, c - eyePos) >= deg) continue;
+                // in clear view: nothing static between (Rex himself and other blobs do not block)
+                if (!Physics.Linecast(eyePos, c, out RaycastHit block, collisionMask, QueryTriggerInteraction.Ignore) ||
+                    block.transform.IsChildOf(target) || block.collider.GetComponentInParent<Blob>() != null) return true;
+            }
+            return false;
+        }
 
         public Vector3 AimPoint(float range = 200f)
         {

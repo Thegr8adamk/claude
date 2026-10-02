@@ -206,13 +206,16 @@ namespace RexMagnum
         // ---- baked light probes vs day / night
         // Bake Lighting fills the probes with a flat dim ambient (all lights are realtime), so a probe only holds how
         // open it is (sky visibility / AO). Used as is, the baked SH replaced the live sky ambient: characters, LOD1
-        // and trees on probes kept one fixed brightness day and night. Each probe's openness (its L0 against the open-
-        // air probes) is kept from the original data; the live ambient probe times that openness is written back
-        // whenever the ambient changes. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
+        // and trees on probes kept one fixed brightness day and night. Each probe's baked SH is normalised against the
+        // open-air probes (L0 = 1 there, openness clamped 0.05 - 1.2) and keeps its own direction (light from the open
+        // side, dark under eaves); whenever the ambient changes it is scaled per colour channel by the live ambient L0
+        // over the open-air baked L0. Robust against any bake ambient, and the sky colour (dawn, moon) comes through.
+        // (It was the live ambient SH x openness: every probe got the sky's direction, also deep under a roof.)
         // The buildings use these probes too (Bake Lighting gives them no lightmaps: a lightmap holds one fixed
         // brightness, URP Lit cannot scale it at runtime, and lightmapped buildings stayed lit the same day and night).
         float[] probeOpen;
-        SphericalHarmonicsL2[] probeLive;
+        SphericalHarmonicsL2[] probeNorm, probeLive;
+        Vector3 probeRef;                                // open-air baked L0 per colour channel
         Vector3 probeAmb = new Vector3(-1f, -1f, -1f);
 
         static float L0(SphericalHarmonicsL2 sh) => sh[0, 0] * 0.3f + sh[1, 0] * 0.59f + sh[2, 0] * 0.11f;
@@ -234,7 +237,19 @@ namespace RexMagnum
             // the 90th percentile = open air (most of the grid is outdoors); brighter ones (ground bounce) cap at 1.2
             float open = Mathf.Max(1e-4f, sorted[Mathf.Min(sorted.Length - 1, (int)(sorted.Length * 0.9f))]);
             probeOpen = new float[baked.Length];
-            for (int i = 0; i < baked.Length; i++) probeOpen[i] = Mathf.Clamp(lum[i] / open, 0.05f, 1.2f);
+            probeNorm = new SphericalHarmonicsL2[baked.Length];
+            // the open-air probe's own colour, per channel (floored at 20% of its luminance: a channel near 0 in the
+            // bake must not blow up the scale)
+            int refI = System.Array.IndexOf(lum, open);
+            var rs = refI >= 0 ? baked[refI] : baked[0];
+            probeRef = new Vector3(Mathf.Max(rs[0, 0], open * 0.2f), Mathf.Max(rs[1, 0], open * 0.2f), Mathf.Max(rs[2, 0], open * 0.2f));
+            for (int i = 0; i < baked.Length; i++)
+            {
+                probeOpen[i] = Mathf.Clamp(lum[i] / open, 0.05f, 1.2f);
+                // the clamp as a factor on the baked SH (1 for nearly all probes), so the direction stays as baked
+                probeNorm[i] = baked[i] * (lum[i] > 1e-6f ? probeOpen[i] * open / lum[i] : 0f);
+                if (lum[i] <= 1e-6f) { probeNorm[i].AddAmbientLight(Color.white * (0.05f * open)); }
+            }
             probeLive = new SphericalHarmonicsL2[baked.Length];
             probeAmb = new Vector3(-1f, -1f, -1f);
         }
@@ -250,7 +265,13 @@ namespace RexMagnum
             // only on a noticeable change (2%): writing the probes re-uploads them
             if (Mathf.Abs(a.x - probeAmb.x) + Mathf.Abs(a.y - probeAmb.y) + Mathf.Abs(a.z - probeAmb.z) < 0.02f * Mathf.Max(0.05f, a.x + a.y + a.z)) return;
             probeAmb = a;
-            for (int i = 0; i < probeLive.Length; i++) probeLive[i] = amb * probeOpen[i];
+            var sc = new Vector3(a.x / probeRef.x, a.y / probeRef.y, a.z / probeRef.z);
+            for (int i = 0; i < probeLive.Length; i++)
+            {
+                var sh = probeNorm[i];
+                for (int k = 0; k < 9; k++) { sh[0, k] *= sc.x; sh[1, k] *= sc.y; sh[2, k] *= sc.z; }
+                probeLive[i] = sh;
+            }
             lp.bakedProbes = probeLive;
         }
 
