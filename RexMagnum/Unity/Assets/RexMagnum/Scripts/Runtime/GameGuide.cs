@@ -73,7 +73,7 @@ namespace RexMagnum
             // Defend the Bar is easy to miss (it starts only when Rex walks into the lounge bar): any time after the
             // pistol (also after the factory: BarDefense is open then too), a side line says so. It wins over the sniper note;
             // at the hotel the marker leads to the bar (the main goal leads again once Rex is out of the hotel)
-            if (BarOpen(w) && !BarDefense.Active)
+            if (BarOpen(w) && !BarDefense.Active && !NightSiege.Active)
             {
                 Side = BarSide;
                 if (InZone(Zones[0], rex) && StepId != "rescue") { target = BarDefense.Center; hasTarget = true; }   // a guest to save comes first
@@ -446,7 +446,7 @@ namespace RexMagnum
             {
                 ("SUPER SNAP", RexWeapons.SuperSnap, "Stop the factory (ruins)",
                     $"Towel: hold {Glyph.B("Action")} for a heavy snap; it also stuns every blob within 3 m"),
-                ("CART HORN", GolfCart.HornUnlocked, "Defend the bar (night event at the bar, after the pistol)",
+                ("CART HORN", GolfCart.HornUnlocked, "Defend the bar (walk into the hotel lounge bar with the pistol)",
                     $"Driving the golf cart: {Glyph.B("Taunt")} honks; blobs in front are pushed back and stunned"),
                 ("COCONUT POUCH", RexWeapons.CoconutPouch, "Win the cave siege (night event at the cave)",
                     "Always on: 3 more coconuts to carry and a shorter fuse"),

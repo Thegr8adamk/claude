@@ -1108,6 +1108,7 @@ namespace RexMagnum
         {
             show = false;
             if (owner == null || owner.IsDead || !owner.ShellIntact || GameFlow.Busy) return;
+            if (PauseMenu.Open || KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing) return;   // world tags stay out of menus, cut scenes and photos
             if (rex == null) { var p = GameObject.FindGameObjectWithTag("Player"); if (p == null) return; rex = p.transform; }
             float d2 = (rex.position - transform.position).sqrMagnitude;
             if (Time.time > nextCheck && d2 < MeetRange * MeetRange)

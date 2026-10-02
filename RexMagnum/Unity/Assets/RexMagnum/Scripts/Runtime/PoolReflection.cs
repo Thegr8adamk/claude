@@ -6,7 +6,7 @@ namespace RexMagnum
 {
     /// <summary>
     /// Planar reflection for the main pool (the PlanarMirror approach on a horizontal plane): one camera renders the
-    /// view mirrored at the water surface into a half-res texture (quarter on Medium phones), and RexMagnum/Water
+    /// view mirrored at the water surface into a half-res texture (quarter on Medium), and RexMagnum/Water
     /// blends it in by Fresnel (_PlanarRefl + _UsePlanar, set per renderer). Only when Rex is within ~40 m of the
     /// pool, the camera is above the water and the pool is on screen; off on Low, on phones, in VR and while another
     /// camera shows the scene (kill cam, ending, selfie: they would sample a texture made for the game camera's view;
@@ -79,10 +79,11 @@ namespace RexMagnum
             QualityAuto.UseAuxRenderer(cd);                // the renderer without SSAO, when ProjectSetup made it
         }
 
-        /// <summary>RT at half the screen size; remade when the window changes.</summary>
+        /// <summary>RT at half the screen size (quarter on Medium); remade when the window or tier changes.</summary>
         void EnsureRT()
         {
-            int w = Mathf.Max(256, Screen.width / 2), h = Mathf.Max(256, Screen.height / 2);
+            int div = quality != null && quality.Tier == QualityTier.Medium ? 4 : 2;      // Medium: quarter size, every frame
+            int w = Mathf.Max(256, Screen.width / div), h = Mathf.Max(256, Screen.height / div);
             if (rt != null && rt.width == w && rt.height == h) return;
             if (rt != null) { rt.Release(); Destroy(rt); }
             var fmt = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR) ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
@@ -133,10 +134,9 @@ namespace RexMagnum
             if (cam == null || water == null) return;
             if (!Wanted(cam)) { SetUse(false); return; }
             // Medium: every 2nd frame (the water keeps last frame's texture); never in a frame a mirror rendered
-            bool skip = PlanarMirror.RenderedFrame == Time.frameCount ||
-                        (quality != null && quality.Tier == QualityTier.Medium && (Time.frameCount & 1) == 1);
-            if (skip && on) return;
-            if (skip) { SetUse(false); return; }
+            // a stale texture would trail the camera (the water samples it in screen space): a frame a mirror rendered
+            // falls back to the probe instead
+            if (PlanarMirror.RenderedFrame == Time.frameCount) { SetUse(false); return; }
             var oldRt = rt;
             EnsureRT();
             if (rt != oldRt) on = false;            // a new texture: hand it to the water again
@@ -153,7 +153,7 @@ namespace RexMagnum
             // the 80 m far plane, behind the hub's buildings: the reflection had a cloudless sky)
             bool waterLayered = true;
             foreach (var r in water) if (r != null && r.gameObject.layer != WaterLayer) waterLayered = false;
-            reflCam.cullingMask = cam.cullingMask & ~(1 << WaterLayer);
+            reflCam.cullingMask = cam.cullingMask & ~(1 << WaterLayer) & ~(1 << DayNight.SkyLayer);   // no cloud dome: the oblique far plane cuts it into patches
             reflCam.worldToCameraMatrix = cam.worldToCameraMatrix * refl;
             reflCam.farClipPlane = Mathf.Min(cam.farClipPlane, farClip);
             reflCam.aspect = cam.aspect;

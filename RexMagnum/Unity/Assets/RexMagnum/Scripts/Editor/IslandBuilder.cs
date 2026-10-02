@@ -2708,6 +2708,7 @@ namespace RexMagnum.EditorTools
                 QualityAuto.SetUrp(urpA, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
                 // dithered LOD cross-fade (also here, not only in Project Setup: a project set up before it had pops)
                 QualityAuto.SetUrp(urpA, "enableLODCrossFade", "m_EnableLODCrossFade", true);
+                ProjectSetup.AddAuxRenderer(urpA);     // the light renderer for mirrors / pool reflection (projects set up before it)
                 EditorUtility.SetDirty(urpA);
             }
 

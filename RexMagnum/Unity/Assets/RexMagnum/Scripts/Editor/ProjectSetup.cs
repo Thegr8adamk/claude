@@ -108,7 +108,7 @@ namespace RexMagnum.EditorTools
         /// <summary>A second, lightweight renderer in the asset's renderer list: a copy of the default one without renderer
         /// features (no SSAO pass / depth-normals prepass). The mirror and pool reflection cameras pick it by name
         /// (QualityAuto.UseAuxRenderer). Made once in Assets/Settings, shared by every URP asset.</summary>
-        static void AddAuxRenderer(UniversalRenderPipelineAsset urp)
+        internal static void AddAuxRenderer(UniversalRenderPipelineAsset urp)
         {
             var so = new SerializedObject(urp);
             var list = so.FindProperty("m_RendererDataList");

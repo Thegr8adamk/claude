@@ -69,7 +69,7 @@ namespace RexMagnum
         static bool PredictLanding(Vector3 p, Vector3 v, Rigidbody self, out Vector3 land)
         {
             const float step = 0.04f;
-            for (float t = 0f; t < 3f; t += step)
+            for (float t = 0f; t < RexWeapons.CoconutFuse; t += step)    // the fuse (2.2 s with the COCONUT POUCH)
             {
                 Vector3 n = p + v * step + 0.5f * Physics.gravity * step * step;
                 Vector3 seg = n - p;

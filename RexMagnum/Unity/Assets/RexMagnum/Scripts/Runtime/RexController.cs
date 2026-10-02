@@ -404,14 +404,16 @@ namespace RexMagnum
 
         void UpdateHeightAboveGround()
         {
-            if (cc.enabled && cc.isGrounded) { HeightAboveGround = 0f; return; }
+            if (!cc.enabled || IsSwimming || cc.isGrounded) { HeightAboveGround = 0f; return; }   // cart / swimming: not jumping
             // from just above the feet (inside Rex's capsule: the ray does not hit it); triggers (water, zones) ignored
             // the nearest hit that is not Rex himself (a held weapon's collider)
             Vector3 from = transform.position + Vector3.up * 0.3f;
             int n = Physics.RaycastNonAlloc(from, Vector3.down, groundHits, 50.3f, ~0, QueryTriggerInteraction.Ignore);
             float best = 50.3f;
             for (int i = 0; i < n; i++)
-                if (groundHits[i].distance < best && !groundHits[i].transform.IsChildOf(transform)) best = groundHits[i].distance;
+                if (groundHits[i].distance < best && !groundHits[i].transform.IsChildOf(transform)
+                    && groundHits[i].rigidbody == null && groundHits[i].collider.GetComponentInParent<Health>() == null)
+                    best = groundHits[i].distance;      // not a blob / prop under a jump: that is still a jump
             HeightAboveGround = Mathf.Max(0f, best - 0.3f);
         }
         readonly RaycastHit[] groundHits = new RaycastHit[8];

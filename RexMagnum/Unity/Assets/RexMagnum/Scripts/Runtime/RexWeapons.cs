@@ -522,6 +522,7 @@ namespace RexMagnum
                 if (b == null || b.IsDead || b.GetComponent<KingGlorpBoss>() != null) continue;
                 Vector3 to = b.transform.position - at;
                 if (Mathf.Abs(to.y) > 2f || Vector3.ProjectOnPlane(to, Vector3.up).sqrMagnitude > 9f) continue;
+                if (!MeleeLineClear(transform.position + Vector3.up * 1.2f, b.transform.position + Vector3.up * 0.6f)) continue;   // not through walls
                 b.Stun(2f);
                 stunned++;
             }
@@ -644,10 +645,10 @@ namespace RexMagnum
             nextHintCheck = Time.unscaledTime + 1f;
             if (PauseMenu.Open || KillCam.Active) return;
             string hintKey = null, hintText = null;
-            if (SuperSnap && Progress.Value("hint_supersnap") == 0)
-            { hintKey = "hint_supersnap"; hintText = "SUPER SNAP: hold attack with the towel to stun every blob around you"; }
+            if (SuperSnap && Has(WeaponId.Towel) && Progress.Value("hint_supersnap") == 0)
+            { hintKey = "hint_supersnap"; hintText = $"SUPER SNAP: hold {Glyph.B("Action")} with the towel to stun every blob around you"; }
             else if (GolfCart.HornUnlocked && Progress.Value("hint_carthorn") == 0)
-            { hintKey = "hint_carthorn"; hintText = "CART HORN: press Taunt while driving to honk"; }
+            { hintKey = "hint_carthorn"; hintText = $"CART HORN: press {Glyph.B("Taunt")} while driving to honk"; }
             else if (CoconutPouch && Progress.Value("hint_coconutpouch") == 0)
             { hintKey = "hint_coconutpouch"; hintText = "COCONUT POUCH: carry 3 more coconuts, shorter fuse"; }
             if (hintKey == null) { hintSince = -1f; return; }

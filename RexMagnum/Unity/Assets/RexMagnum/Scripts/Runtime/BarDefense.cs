@@ -104,11 +104,12 @@ namespace RexMagnum
         static float nextFind;
         /// <summary>A guest not yet rescued, a golf cart or an elevator (cab or a landing door) within OtherUseRadius of p:
         /// Use belongs to them, never to a replay (NightSiege asks too). Carts / elevators are found again every 10 s.</summary>
+        const float GuestUseR2 = 1.5f * 1.5f;
         public static bool OtherUseNear(Vector3 p)
         {
             const float r2 = OtherUseRadius * OtherUseRadius;
             foreach (var g in Guest.All)
-                if (g != null && !g.Rescued && (g.transform.position - p).sqrMagnitude < r2) return true;
+                if (g != null && !g.Rescued && (g.transform.position - p).sqrMagnitude < GuestUseR2) return true;   // a guest: only right next to them (Rosa sits ~1 m from the counter)
             if (carts == null || Time.unscaledTime > nextFind)
             {
                 nextFind = Time.unscaledTime + 10f;
