@@ -636,7 +636,26 @@ namespace RexMagnum.EditorTools
             FoodPickup.Spawn(FoodPickup.Kind.Pizza, U(h.knife) + new Vector3(1.6f, 0.05f, 0f), 120f, root);
             FoodPickup.Spawn(FoodPickup.Kind.Fruit, U(h.knife) + new Vector3(-1.6f, 0.05f, 0f), 120f, root);
             if (h.stage != null && h.stage.Length == 3)
+            {
                 FoodPickup.Spawn(FoodPickup.Kind.Cocktail, U(h.stage) + new Vector3(0f, 0.85f, 0f), 120f, root);
+                // Rex's lounge act (brief section 6): the hotel-bar piano plays from the stage, heard only near the lounge
+                var lounge = Resources.Load<AudioClip>("Music/lounge_act");
+                if (lounge != null)
+                {
+                    var spk = new GameObject("LoungeMusic");
+                    spk.transform.SetParent(root, false);
+                    spk.transform.position = U(h.stage) + Vector3.up * 1.5f;
+                    var a = spk.AddComponent<AudioSource>();
+                    a.clip = lounge;
+                    a.loop = true;
+                    a.playOnAwake = true;
+                    a.spatialBlend = 1f;
+                    a.rolloffMode = AudioRolloffMode.Linear;
+                    a.minDistance = 4f;
+                    a.maxDistance = 22f;
+                    a.volume = 0.6f;
+                }
+            }
             // elevator: cab (floor, 3 walls, ceiling light) + a sliding landing door on every floor
             var steel = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Aluminum.mat");
             var wood = AssetDatabase.LoadAssetAtPath<Material>(Mats + "/A_Teak.mat");
