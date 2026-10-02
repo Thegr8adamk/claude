@@ -29,7 +29,7 @@ namespace RexMagnum
         readonly List<WeaponId> owned = new List<WeaponId> { WeaponId.Fists };
         readonly Dictionary<WeaponId, int> ammo = new Dictionary<WeaponId, int>();
         GameObject heldBody, heldArms;
-        float pressTime = -1f, busyUntil, nextShot;
+        float pressTime = -1f, busyUntil, nextShot, nextEmptyNotice;
         int bottleHits;
         LineRenderer aimLine;
 
@@ -286,7 +286,16 @@ namespace RexMagnum
             // tap = a quick jab (0.42 s); heavy = 0.75 s but ~3x the damage, knockback, hit-stop and shake
             busyUntil = Time.time + (heavy ? 0.75f : 0.42f);
             controller.FaceAimFor(heavy ? 0.75f : 0.42f);
-            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f));
+            // tap combo: the 3rd tap within 0.8 s of the one before is a finisher (2x damage, heavy knockback + hit-stop)
+            bool combo = false;
+            if (!heavy)
+            {
+                tapCount = Time.time - lastTapTime <= ComboWindow ? tapCount + 1 : 1;
+                lastTapTime = Time.time;
+                if (tapCount >= 3) { combo = true; tapCount = 0; }
+            }
+            else tapCount = 0;
+            StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo));
             // a whoosh on every swing: the towel and golf club have their own sound, the rest a plain swing
             // (lower and louder for a heavy attack)
             bool own = d.id == WeaponId.Towel || d.id == WeaponId.GolfClub;
@@ -307,8 +316,13 @@ namespace RexMagnum
             if (Mathf.Approximately(Time.timeScale, stopScale)) Time.timeScale = 1f;
         }
 
-        IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay)
+        const float ComboWindow = 0.8f;
+        int tapCount;
+        float lastTapTime = -10f;
+
+        IEnumerator MeleeHit(WeaponDef d, bool heavy, float delay, bool combo = false)
         {
+            bool hard = heavy || combo;            // the combo finisher hits like a heavy (feel only; death style stays the tap one)
             yield return new WaitForSeconds(delay);
             Vector3 c = transform.position + Vector3.up * 1.1f + transform.forward * (d.reach * 0.6f);
             foreach (var col in Physics.OverlapSphere(c, d.reach * 0.55f, ~0, QueryTriggerInteraction.Ignore))
@@ -332,12 +346,13 @@ namespace RexMagnum
                     }
                     if (d.id == WeaponId.Towel && heavy) { blob.Stun(2f); Progress.Add("towel_stuns"); }          // brief: wind-up snap stuns 2 s
                 }
-                float dmg = (heavy ? d.holdDamage : d.tapDamage) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
+                float dmg = (heavy ? d.holdDamage : d.tapDamage * (combo ? 2f : 1f)) * (d.id == WeaponId.Towel && TowelWet ? wetTowelDamage : 1f);
                 h.Damage(dmg, col.ClosestPoint(c), gameObject);
                 if (blob != null) RexTestHUD.HitMarker();
+                if (combo && blob != null) RexTestHUD.Notice("COMBO", 0.7f);      // once: the loop stops after the first hit
                 if (d.id == WeaponId.Knife || d.id == WeaponId.BottleBroken) Sfx.Play("knife_stab", c);
                 if (d.id == WeaponId.Swordfish) Sfx.Play("swordfish", c);
-                if (blob != null && !h.IsDead) blob.Knockback(transform.forward, heavy ? 1.5f : 0.4f);
+                if (blob != null && !h.IsDead) blob.Knockback(transform.forward, hard ? 1.5f : 0.4f);
                 if (h.IsDead && blob != null)       // blobs only: the stuck door also has Health (no kill cam for a door)
                 {
                     // brief section 8: kill cam on a hold-attack kill, or on the last blob of the group
@@ -350,9 +365,9 @@ namespace RexMagnum
                 }
                 if (blob != null)          // light hits get a smaller kick too (the jab should not feel like air)
                 {
-                    if (cameraRig != null) cameraRig.Shake(heavy ? 0.18f : 0.06f);
-                    StartCoroutine(HitStop(heavy ? 0.06f : 0.025f));
-                    if (heavy) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
+                    if (cameraRig != null) cameraRig.Shake(hard ? 0.18f : 0.06f);
+                    StartCoroutine(HitStop(hard ? 0.06f : 0.025f));
+                    if (hard) RMInput.Rumble(0.4f, 0.6f, 0.12f); else RMInput.Rumble(0.15f, 0.25f, 0.06f);
                 }
                 if (d.id == WeaponId.Bottle && ++bottleHits >= 3)               // brief: breaks after 3 hits
                 {
@@ -376,6 +391,11 @@ namespace RexMagnum
             {
                 nextShot = Time.time + 0.4f;
                 Sfx.Play("dryfire", transform.position, 0.6f);      // empty: click
+                if (Time.time >= nextEmptyNotice)                   // plus a message (the click alone is easy to miss)
+                {
+                    nextEmptyNotice = Time.time + 2f;
+                    RexTestHUD.Notice("OUT OF AMMO", 0.8f);
+                }
                 return;
             }
             ammo[d.id]--;

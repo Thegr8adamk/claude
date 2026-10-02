@@ -50,12 +50,35 @@ namespace RexMagnum
                     if (b != null && !b.IsDead && Vector3.Distance(b.transform.position, rex.transform.position) < 40f) { b.Stun(45f); stunned.Add(b); }
             }
             var main = Camera.main;
+            if (main == null)                                   // the kill cam may still have it switched off
+            {
+                var mg = GameObject.FindGameObjectWithTag("MainCamera");
+                if (mg != null) main = mg.GetComponent<Camera>();
+            }
             cam = new GameObject("EndingCam").AddComponent<Camera>();
             voice = cam.gameObject.AddComponent<AudioSource>();
             voice.spatialBlend = 0f;
-            if (main != null) { cam.CopyFrom(main); cam.depth = main.depth + 20f; }
+            if (main != null)
+            {
+                cam.CopyFrom(main);
+                cam.depth = main.depth + 20f;
+                // CopyFrom does not copy URP's camera data: same post-processing and anti-aliasing as the game
+                if (main.TryGetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>(out var md))
+                {
+                    if (!cam.TryGetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>(out var ed))
+                        ed = cam.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                    ed.renderPostProcessing = md.renderPostProcessing;
+                    ed.antialiasing = md.antialiasing;
+                }
+                // the ending covers the whole view: do not render the game camera too (its AudioListener stays on)
+                main.enabled = false;
+                hiddenMain = main;
+            }
+            cam.enabled = true;
             cam.fieldOfView = 50f;
         }
+
+        Camera hiddenMain;
 
         readonly System.Collections.Generic.List<Blob> stunned = new System.Collections.Generic.List<Blob>();
 
@@ -63,6 +86,7 @@ namespace RexMagnum
         {
             Playing = false;
             if (cam != null) Destroy(cam.gameObject);
+            if (hiddenMain != null) hiddenMain.enabled = true;      // the game view is back
             foreach (var b in stunned) if (b != null && !b.IsDead) b.Stun(0f);     // ending skipped: blobs move again with Rex
             // still off if he is at the golf cart's wheel or the pause menu is open (either may change during the ending)
             if (rex != null) rex.InputEnabled = GolfCart.Driven == null && !PauseMenu.Open;
@@ -70,6 +94,7 @@ namespace RexMagnum
 
         void Update()
         {
+            if (hiddenMain != null && hiddenMain.enabled) hiddenMain.enabled = false;   // a kill cam ending late turned it back on
             if (PauseMenu.Open) return;      // wait behind the pause menu (it runs on unscaled time; keys there must not skip it)
             t += Time.unscaledDeltaTime;
             if (t > 3f && RMInput.AnyKey && t < tBack)                       // skip to "I'm back."

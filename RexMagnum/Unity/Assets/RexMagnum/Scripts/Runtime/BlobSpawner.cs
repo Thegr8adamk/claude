@@ -42,6 +42,8 @@ namespace RexMagnum
 
         /// <summary>Blobs alive on the whole island before no spawner adds more.</summary>
         public const int GlobalCap = 24;
+        /// <summary>Spawners farther than this from Rex do nothing (blobs there would only be culled again).</summary>
+        const float SleepDistance = 120f;
 
         Blob TouristPrefab()
         {
@@ -96,6 +98,9 @@ namespace RexMagnum
         {
             if (prefabs == null || prefabs.Length == 0 || Time.time < next) return;
             next = Time.time + interval;
+            if (rex == null) { var pl = GameObject.FindGameObjectWithTag("Player"); if (pl != null) rex = pl.transform; }
+            // Rex is far away: this area sleeps (no spawn, no cleared-break bookkeeping, no blobs for the cull to remove)
+            if (rex != null && (rex.position - transform.position).sqrMagnitude > SleepDistance * SleepDistance) return;
             int near = 0;
             float r2 = (radius * 3f) * (radius * 3f);
             foreach (var b in Blob.All)
@@ -111,7 +116,6 @@ namespace RexMagnum
             if (near >= Mathf.Min(maxAlive, cap)) return;
             // global cap: all zones together (popping blobs count until they are gone)
             if (Blob.AliveCount() >= GlobalCap) return;
-            if (rex == null) { var pl = GameObject.FindGameObjectWithTag("Player"); if (pl != null) rex = pl.transform; }
             Vector2 c = Random.insideUnitCircle.normalized * radius;
             Vector3 p = transform.position + new Vector3(c.x, 0, c.y);
             // brief section 4: blobs come out of the water (pool, sea, green river) when there is water near

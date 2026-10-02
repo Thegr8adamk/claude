@@ -57,6 +57,21 @@ namespace RexMagnum
 
         static readonly Dictionary<string, int> last = new Dictionary<string, int>();
         static float nextAllowed;
+
+        /// <summary>A voice clip plays from SpeakingSince until SpeakingUntil (unscaled time): music ducks under it
+        /// (AudioMix.Duck). Other speakers (guests, Carmen, Glorp) can call Speaking(length) too.</summary>
+        public static float SpeakingSince { get; private set; } = -10f;
+        public static float SpeakingUntil { get; private set; } = -10f;
+
+        public static void Speaking(float seconds)
+        {
+            float now = Time.unscaledTime;
+            if (now > SpeakingUntil) SpeakingSince = now;          // a line right after another keeps the dip (no pump)
+            SpeakingUntil = Mathf.Max(SpeakingUntil, now + seconds);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { SpeakingSince = -10f; SpeakingUntil = -10f; nextAllowed = 0f; }   // editor with Domain Reload off
         public static System.Action<string> Subtitle;   // UI hook (shown about 3 s)
         /// <summary>UI hook with a time: the subtitle stays as long as the voice clip plays.</summary>
         public static System.Action<string, float> SubtitleTimed;
@@ -89,7 +104,7 @@ namespace RexMagnum
             var clip = Resources.Load<AudioClip>(clipPath);
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
             float length = clip != null ? clip.length : Mathf.Clamp(text.Length * 0.06f, 2f, 7f);   // or reading time
-            if (clip != null && src != null) src.PlayOneShot(clip, AudioMix.Voice);
+            if (clip != null && src != null) { src.PlayOneShot(clip, AudioMix.Voice); Speaking(length); }
             ShowSubtitle(who + ": " + text, length + 0.4f);      // same frame as the sound, as long as the sound
             nextAllowed = Time.time + length;                    // no other line talks over it
             return length;
@@ -106,8 +121,8 @@ namespace RexMagnum
             var src = speaker != null ? speaker.GetComponent<AudioSource>() : null;
             float length = clip != null ? clip.length : Mathf.Clamp(lines[i].Length * 0.06f, 2f, 6f);
             if (force && src != null) src.Stop();                // a forced line cuts the one before (no two Rex voices at once)
-            if (clip != null && src != null) src.PlayOneShot(clip, AudioMix.Voice);
-            nextAllowed = Time.time + length + 0.3f;             // the next line waits until this one is finished
+            if (clip != null && src != null) { src.PlayOneShot(clip, AudioMix.Voice); Speaking(length); }
+            nextAllowed = Time.time + length + 0.3f;            // the next line waits until this one is finished
             ShowSubtitle("REX: " + lines[i], length + 0.4f);
         }
     }

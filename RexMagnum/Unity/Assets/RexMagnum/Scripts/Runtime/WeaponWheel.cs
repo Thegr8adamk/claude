@@ -54,7 +54,7 @@ namespace RexMagnum
             if (items.Count < 2) return;          // nothing to choose
             IsOpen = true;
             pointer = Vector2.zero;
-            savedScale = Time.timeScale;
+            savedScale = Time.timeScale < 0.1f ? 1f : Time.timeScale;    // never save a hit-stop freeze (0.02): closing would restore it
             Time.timeScale = slowMotion;
             RMInput.LookBlocked = true;
         }
@@ -73,6 +73,7 @@ namespace RexMagnum
         void OnGUI()
         {
             if (!IsOpen) return;
+            if (PhotoAlbum.Capturing) return;        // keep the wheel out of the saved photo
             if (label == null)
             {
                 label = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter, wordWrap = true };

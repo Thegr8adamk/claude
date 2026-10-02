@@ -39,6 +39,8 @@ namespace RexMagnum
                     else if (n.EndsWith("_Hair") || n.EndsWith("_HairCap"))
                         c = mats[i].GetColor("_BaseColor") * (0.75f + (float)rng.NextDouble() * 0.5f);
                     else continue;
+                    // keep the material's own alpha: hair cards use alpha cutoff (a tint times 1.2 or a palette 1.0 broke it)
+                    if (mats[i].HasProperty("_BaseColor")) c.a = mats[i].GetColor("_BaseColor").a;
                     r.GetPropertyBlock(mpb, i);
                     mpb.SetColor("_BaseColor", c);
                     r.SetPropertyBlock(mpb, i);

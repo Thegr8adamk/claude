@@ -53,7 +53,7 @@ namespace RexMagnum
         public static readonly System.Collections.Generic.List<Blob> All = new System.Collections.Generic.List<Blob>();
         public bool IsDead => health != null && health.IsDead;
         void OnEnable() { alive++; All.Add(this); }
-        void OnDisable() { alive--; All.Remove(this); }
+        void OnDisable() { alive--; All.Remove(this); ReleaseToken(); }
 
         /// <summary>Harpoon: pinned (stuck in place, flailing) for a few seconds.</summary>
         public void Pin(float seconds)
@@ -117,19 +117,72 @@ namespace RexMagnum
             ApplyKind();
             if (jellyRenderer != null && jellyRenderer.sharedMaterial != null)
                 baseColor = jellyRenderer.sharedMaterial.GetColor("_BaseColor");
-            if (jellyRenderer != null) jellyBaseScale = jellyRenderer.transform.localScale;
+            // squash the "Model" child (the Animator's object, BlobBuilder): a SkinnedMeshRenderer ignores its own
+            // transform scale (the bones place the vertices), and the clips animate the bones but not the Model itself
+            squashT = animator != null && animator.transform != transform ? animator.transform
+                    : jellyRenderer != null ? jellyRenderer.transform : null;
+            if (squashT != null) jellyBaseScale = squashT.localScale;
         }
+        Transform squashT;
 
         // hit reaction (every hit): a short white flash and a squash of the jelly
-        const float FlashTime = 0.08f, SquashTime = 0.12f;
+        const float FlashTime = 0.08f, SquashTime = 0.16f;
         float flashUntil, squashUntil;
+
+        // attack telegraph: an orange-red glow pulse just before every whip / spit / throw (time to dodge)
+        public const float TelegraphTime = 0.3f;
+        static readonly Color TelegraphColor = new Color(1f, 0.35f, 0.08f);
+        float telegraphUntil;
+        bool telegraphShown;
+        /// <summary>Starts the warning glow (KingGlorpBoss uses it before his volley too).</summary>
+        public void Telegraph() => telegraphUntil = Time.time + TelegraphTime;
+
+        // group fight: at most MaxAttackers blobs attack Rex at once; the others circle at 4-6 m and wait their turn
+        const int MaxAttackers = 2;
+        const float TokenHold = 8f;                                        // then the token goes back so others get a turn
+        static int attackTokens;
+        bool hasToken, circling;
+        float tokenSince, noTokenUntil, orbitAngle, orbitRadius, orbitDir;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => attackTokens = 0;                    // no stale count with domain reload off
+
+        bool TryToken()
+        {
+            if (hasToken) return true;
+            if (attackTokens >= MaxAttackers || Time.time < noTokenUntil) return false;
+            attackTokens++;
+            hasToken = true;
+            tokenSince = Time.time;
+            return true;
+        }
+
+        void ReleaseToken()
+        {
+            if (!hasToken) return;
+            hasToken = false;
+            attackTokens = Mathf.Max(0, attackTokens - 1);
+        }
+
+        /// <summary>No attack token: keep a ring around Rex at 4-6 m, sliding slowly sideways.</summary>
+        void Circle()
+        {
+            if (!agent.isOnNavMesh) return;
+            agent.isStopped = false;
+            orbitAngle += orbitDir * 25f * Time.deltaTime;
+            if (Time.time <= nextPath) return;
+            nextPath = Time.time + 0.4f;
+            float a = orbitAngle * Mathf.Deg2Rad;
+            Vector3 p = rex.position + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * orbitRadius;
+            if (NavMesh.SamplePosition(p, out NavMeshHit nh, 2f, NavMesh.AllAreas)) agent.SetDestination(nh.position);
+            else orbitDir = -orbitDir;                                     // wall or water: go round the other way
+        }
         Vector3 jellyBaseScale = Vector3.one;
 
         void Squash()
         {
-            if (jellyRenderer == null) return;
+            if (squashT == null) return;
             float k = squashUntil > Time.time ? (squashUntil - Time.time) / SquashTime : 0f;
-            var t = jellyRenderer.transform;
+            var t = squashT;
             if (k <= 0f) { if (t.localScale != jellyBaseScale) t.localScale = jellyBaseScale; return; }
             float s = Mathf.Sin(k * Mathf.PI) * 0.22f;                     // flat and wide, then back
             t.localScale = Vector3.Scale(jellyBaseScale, new Vector3(1f + s * 0.5f, 1f - s, 1f + s * 0.5f));
@@ -181,6 +234,8 @@ namespace RexMagnum
             }
             nextAttack = Time.time + Random.Range(1f, 3f);
             nextCull = Time.time + Random.Range(0f, 1f);                   // spread the checks over the frames
+            orbitRadius = Random.Range(4f, 6f);
+            orbitDir = Random.value < 0.5f ? -1f : 1f;
             SetNightGlow(DayNight.Night);         // DayNight only writes the glow when Night changes: a new blob gets it here
         }
 
@@ -216,6 +271,19 @@ namespace RexMagnum
                     float f = (flashUntil - Time.time) / FlashTime;
                     col = Color.Lerp(col, new Color(1f, 1f, 1f, col.a), f * 0.85f);
                 }
+                // attack warning: orange-red pulse (up and down over 0.3 s), in colour and glow
+                if (Time.time < telegraphUntil)
+                {
+                    float pulse = Mathf.Sin((1f - (telegraphUntil - Time.time) / TelegraphTime) * Mathf.PI);
+                    col = Color.Lerp(col, new Color(TelegraphColor.r, TelegraphColor.g, TelegraphColor.b, col.a), pulse * 0.7f);
+                    mpb.SetColor("_EmissionColor", TelegraphColor * (0.5f + pulse * 2.5f));
+                    telegraphShown = true;
+                }
+                else if (telegraphShown)
+                {
+                    telegraphShown = false;
+                    mpb.SetColor("_EmissionColor", baseColor * DayNight.Night * 1.5f);     // back to the night glow
+                }
                 mpb.SetColor("_BaseColor", col);
                 jellyRenderer.SetPropertyBlock(mpb);
             }
@@ -225,6 +293,7 @@ namespace RexMagnum
             if (rex == null || (rexHealth != null && rexHealth.IsDead) || IsStunned || Time.time < busyUntil || GameFlow.Busy)   // Busy: title + intro
             {
                 if (agent.isOnNavMesh) agent.isStopped = true;
+                if (Time.time >= busyUntil) ReleaseToken();                // stunned / Rex down: give the turn to another blob
                 return;
             }
             if (Disguised) { Wander(); return; }
@@ -232,7 +301,34 @@ namespace RexMagnum
             if (dist > sightRange && !IsAngry && Time.time >= alertUntil)
             {
                 if (agent.isOnNavMesh) agent.isStopped = true;
+                ReleaseToken();
                 return;
+            }
+            // attack turns (not the boss): near Rex a blob needs one of the tokens, else it circles and waits
+            if (kind != Kind.KingGlorp)
+            {
+                float engage = Mathf.Max(attackRange, 6f);
+                if (hasToken && (dist > engage + 3f || Time.time - tokenSince > TokenHold))
+                {
+                    if (dist <= engage + 3f) noTokenUntil = Time.time + 2f;  // held too long: a short wait before the next turn
+                    ReleaseToken();
+                }
+                if (dist < engage + 1.5f && !TryToken())
+                {
+                    if (!circling)
+                    {
+                        circling = true;
+                        Vector3 off = transform.position - rex.position;   // start the ring where it is (no crossing past Rex)
+                        orbitAngle = Mathf.Atan2(off.z, off.x) * Mathf.Rad2Deg;
+                        nextPath = 0f;
+                    }
+                    Circle();
+                    Vector3 look = rex.position - transform.position; look.y = 0f;
+                    if (look.sqrMagnitude > 0.01f)
+                        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(look), 4f * Time.deltaTime);
+                    return;
+                }
+                if (circling) { circling = false; nextPath = 0f; }
             }
             if (agent.isOnNavMesh)
             {
@@ -258,9 +354,13 @@ namespace RexMagnum
             nextAttack = Time.time + attackInterval * (IsAngry ? 0.6f : 1f);
             bool melee = kind == Kind.Bouncer || (kind == Kind.KingGlorp && dist < 4f) || dist < 2.2f;
             string clip = melee ? "Whip" : kind == Kind.Lifeguard ? "Throw" : "Spit";
+            // warning first: 0.3 s orange-red glow, so a dodge is a skill and not luck
+            busyUntil = Time.time + TelegraphTime + 0.6f;
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
+            if (health.IsDead || IsStunned || rex == null) yield break;      // stunned in the warning: no attack
             Play(clip);
             Sfx.Play(melee ? "blob_whip" : "blob_spit", transform.position, 0.8f);
-            busyUntil = Time.time + 0.6f;
             yield return new WaitForSeconds(melee ? 0.4f : 0.45f);
             if (health.IsDead || rex == null) yield break;
             Vector3 mouth = transform.position + Vector3.up * HeightOf() * 0.6f + transform.forward * 0.4f;
@@ -383,6 +483,7 @@ namespace RexMagnum
         void OnDied(GameObject killer)
         {
             lastKiller = killer;
+            ReleaseToken();                                                // the next blob in the ring takes its turn
             if (killer != null && killer.GetComponent<RexController>() != null)
             {
                 Progress.Add("kills");

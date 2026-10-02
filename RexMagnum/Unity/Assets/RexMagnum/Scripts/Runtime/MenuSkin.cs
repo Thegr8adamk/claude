@@ -53,7 +53,7 @@ namespace RexMagnum
             Toast = Text(F(20), FontStyle.Bold, TextAnchor.MiddleCenter, Gold, true);
 
             Button = new GUIStyle(GUI.skin.button) { fontSize = F(22), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
-                                                     border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(10, 10, 6, 6) };
+                                                     border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(10, 10, 6, 6), richText = true };
             Skin(Button, Color.white, dark);
             Tab = new GUIStyle(Button) { fontSize = F(20) };
             Option = new GUIStyle(Button) { fontSize = F(19), fixedHeight = 40 * s, margin = new RectOffset(3, 3, 3, 3) };
@@ -65,7 +65,8 @@ namespace RexMagnum
 
         static GUIStyle Text(int size, FontStyle fs, TextAnchor a, Color c, bool wrap)
         {
-            var st = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = fs, alignment = a, wordWrap = wrap };
+            // rich text: controller buttons show as coloured tokens (Glyph)
+            var st = new GUIStyle(GUI.skin.label) { fontSize = size, fontStyle = fs, alignment = a, wordWrap = wrap, richText = true };
             st.normal.textColor = c;
             return st;
         }

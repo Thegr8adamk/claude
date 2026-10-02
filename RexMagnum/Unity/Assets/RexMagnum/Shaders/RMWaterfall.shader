@@ -24,6 +24,7 @@ Shader "RexMagnum/Waterfall"
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_fog
+            #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
@@ -31,11 +32,13 @@ Shader "RexMagnum/Waterfall"
                 float4 _MainTex_ST, _Color;
                 float _Speed, _Flow, _Opacity, _Glow;
             CBUFFER_END
-            struct A { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float3 normalOS : NORMAL; };
-            struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 normalWS : TEXCOORD1; float fog : TEXCOORD2; };
+            struct A { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct V { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 normalWS : TEXCOORD1; float fog : TEXCOORD2; UNITY_VERTEX_OUTPUT_STEREO };
             V vert(A i)
             {
                 V o;
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);   // single-pass instanced VR
                 o.positionCS = TransformObjectToHClip(i.positionOS.xyz);
                 o.uv = i.uv;
                 o.normalWS = TransformObjectToWorldNormal(i.normalOS);

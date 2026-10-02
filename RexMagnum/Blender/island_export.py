@@ -53,6 +53,7 @@ UV_OWN = {"A_JungleFall"}          # baked in the mesh's own UV space (0..1 = on
 MICRO_BUMP = {"A_Trim": (40, 0.15), "A_Aluminum": (60, 0.08), "A_Cushion": (25, 0.3), "A_SignBoard": (30, 0.15)}
 NRM_TARGET = {"A_Marble": 0.04, "A_Aluminum": 0.04, "A_Trim": 0.05, "A_SignBoard": 0.05, "A_Glass": 0.0,
               "A_CorridorPaper": 0.05, "A_JungleFall": 0.15, "T_Sand": 0.1, "T_WetSand": 0.08}   # rms normal slope
+BAKE_SAMPLES = 16   # Cycles samples per bake texel: 1 sample aliased the fine procedural noise (shimmer in-game)
 BUMP_DIST = 0.02     # Blender 4.2+ creates Bump nodes with Distance 0.001 (was 1.0): far too flat to bake
 GLASS = {"A_Glass": 0.2, "A_RailGlass": 0.3, "A_BottleGlass": 0.6, "A_DomeGlass": 0.45}
 WATER = {"A_PoolWater": "pool", "A_PlungeWater": "slime", "A_SlimeWater": "slime", "SlimeWater": "slime", "A_RiverWater": "river"}
@@ -133,6 +134,7 @@ def bake_material(mat, size, wall, res, name=None):
     name = name or mat.name
     sc = bpy.context.scene
     su, sv = size if isinstance(size, tuple) else (size, size)
+    sc.cycles.samples = BAKE_SAMPLES   # every caller (export, rebuild, rebake) bakes anti-aliased
     ob = _bake_plane(su, sv, wall)
     ob.data.materials.append(mat)
     nt = mat.node_tree
@@ -196,10 +198,11 @@ def bake_material(mat, size, wall, res, name=None):
     nrm = _tileable(results["nrm"])
     v = nrm[..., :3] * 2 - 1
     v /= np.linalg.norm(v, axis=-1, keepdims=True) + 1e-6
-    # procedural bumps bake very shallow (a few % slope): lift the slopes to a visible target, max 10x
+    # procedural bumps bake very shallow (a few % slope): lift the slopes to a visible target, max 4x
+    # (bigger lifts amplified the bake's texel noise into sparkle / aliasing)
     target = NRM_TARGET.get(name, 0.12)
     sd = float(np.sqrt((v[..., :2] ** 2).mean()))
-    v[..., :2] *= float(np.clip(target / (sd + 1e-6), 1.0, 10.0))
+    v[..., :2] *= float(np.clip(target / (sd + 1e-6), 1.0, 4.0))
     v /= np.linalg.norm(v, axis=-1, keepdims=True) + 1e-6
     nrm[..., :3] = v * 0.5 + 0.5
     nrm[..., 3] = 1
@@ -734,7 +737,7 @@ def rebuild_assets(names, res):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
-    sc.cycles.samples = 1
+    sc.cycles.samples = BAKE_SAMPLES
     m = IA.M()
     IA.weather_all(m)
     hb = hotel_base_height()
@@ -835,7 +838,7 @@ def main():
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
-    sc.cycles.samples = 1
+    sc.cycles.samples = BAKE_SAMPLES
     sc.render.bake.use_selected_to_active = False
     # the thatch tile material is only used by LOD1 roofs; make sure it exists
     import island_assets as IA

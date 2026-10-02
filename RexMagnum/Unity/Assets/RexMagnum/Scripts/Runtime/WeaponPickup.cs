@@ -62,7 +62,7 @@ namespace RexMagnum
                 if (ammoOnly && weapon == WeaponId.Coconut && !w.Has(weapon)) w.Give(weapon);   // a coconut is its own weapon
                 else if (ammoOnly) w.AddAmmo(weapon, ammoAmount);
                 else w.Give(weapon);
-                RexVoice.ShowSubtitle($"GOT: {WeaponDef.Get(weapon).name.ToUpper()}   ({RMInput.Btn("Wheel")}: weapon wheel)", 2.5f);
+                RexTestHUD.Notice($"GOT: {WeaponDef.Get(weapon).name.ToUpper()}   ({RMInput.Btn("Wheel")}: weapon wheel)", 2.5f);
                 Sfx.Play("bottle_clink", basePos, 0.6f);
                 if (Nearby == this) Nearby = null;
                 if (ammoOnly && respawnSeconds > 0f) { Show(false); backAt = Time.time + respawnSeconds; }

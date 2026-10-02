@@ -35,6 +35,37 @@ namespace RexMagnum
             var data = new NavMeshData(settings.agentTypeID);
             instance = NavMesh.AddNavMeshData(data);
             build = NavMeshBuilder.UpdateNavMeshDataAsync(data, settings, sources, bounds);
+            BlockStuckDoors(bounds);
+        }
+
+        /// <summary>The stuck door has Health (it is punched open), so the rule above leaves it out of the mesh and
+        /// agents would walk through it. A carving obstacle cuts it out instead, and goes off when the door opens.</summary>
+        static void BlockStuckDoors(Bounds bounds)
+        {
+            foreach (var door in FindObjectsByType<StuckDoor>(FindObjectsSortMode.None))
+            {
+                var dh = door.GetComponent<Health>();
+                if (dh == null || dh.IsDead || !bounds.Contains(door.transform.position)) continue;
+                foreach (var col in door.GetComponentsInChildren<Collider>())
+                {
+                    if (col.isTrigger || col.GetComponent<NavMeshObstacle>() != null) continue;   // another RuntimeNavMesh did it
+                    var ob = col.gameObject.AddComponent<NavMeshObstacle>();
+                    ob.shape = NavMeshObstacleShape.Box;
+                    if (col is BoxCollider bc) { ob.center = bc.center; ob.size = bc.size; }
+                    else
+                    {
+                        // other collider shapes: their world box, in the collider's local space
+                        var t = col.transform;
+                        Vector3 ls = t.lossyScale;
+                        ob.center = t.InverseTransformPoint(col.bounds.center);
+                        ob.size = new Vector3(col.bounds.size.x / Mathf.Max(0.001f, Mathf.Abs(ls.x)),
+                                              col.bounds.size.y / Mathf.Max(0.001f, Mathf.Abs(ls.y)),
+                                              col.bounds.size.z / Mathf.Max(0.001f, Mathf.Abs(ls.z)));
+                    }
+                    ob.carving = true;
+                    dh.Died += _ => { if (ob != null) ob.enabled = false; };   // punched open: the doorway is free
+                }
+            }
         }
 
         void Update()

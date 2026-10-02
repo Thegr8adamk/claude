@@ -11,7 +11,9 @@ namespace RexMagnum
     /// Album (photos + captions), Accomplishments (by group),
     /// Settings (SettingsPanel: graphics, camera + VR, sound, controls with keyboard and controller remap, help),
     /// Help (the controls of the device used last).
-    /// Controller: LT / RT or keys 1-5 change the tab, B / Menu resume. Settings are saved in PlayerPrefs.
+    /// Controller: LT / RT or keys 1-5 change the tab, Up / Down scroll the lists, B / Menu resume,
+    /// Y / key T: QUIT TO TITLE (asks first, saves, loads the scene again). Settings are saved in PlayerPrefs.
+    /// Ultrawide: the panel stops at ~1.9 x the screen height.
     /// </summary>
     public class PauseMenu : MonoBehaviour
     {
@@ -38,6 +40,14 @@ namespace RexMagnum
         {
             if (Open)
             {
+                if (confirmQuit)
+                {
+                    // QUIT TO TITLE asks first: YES / NO (NO is chosen first)
+                    if (MenuNav.Up || MenuNav.Down || MenuNav.Left || MenuNav.Right) quitSel = 1 - quitSel;
+                    if (MenuNav.Back) { MenuNav.Consume(); confirmQuit = false; }
+                    else if (MenuNav.Ok) { MenuNav.Consume(); if (quitSel == 0) QuitToTitle(); else confirmQuit = false; }
+                    return;
+                }
                 if (tab == 3)
                 {
                     if (panel.Update()) { SetOpen(false); return; }
@@ -53,8 +63,13 @@ namespace RexMagnum
                         if (k[Key.Digit1 + i].wasPressedThisFrame) SetTab(i);
                 if (tab != 3 && g != null)
                     scroll.y += -g.leftStick.ReadValue().y * 900f * Time.unscaledDeltaTime;   // scroll the lists with the stick
+                // arrows / W S / D-pad scroll the long lists (accomplishments, album, map info); the scroll view clamps the end
+                if (tab != 3 && MenuNav.Up) scroll.y = Mathf.Max(0f, scroll.y - 140f * Screen.height / 1080f);
+                if (tab != 3 && MenuNav.Down) scroll.y += 140f * Screen.height / 1080f;
                 if (tab != 3 && (MenuNav.Left || MenuNav.PagePrev)) SetTab(tab - 1);
                 if (tab != 3 && (MenuNav.Right || MenuNav.PageNext)) SetTab(tab + 1);
+                // controller Y / key T: QUIT TO TITLE (asks first)
+                if ((g != null && g.buttonNorth.wasPressedThisFrame) || (k != null && k[Key.T].wasPressedThisFrame)) { confirmQuit = true; quitSel = 1; MenuNav.Click(); return; }
                 if (RMInput.Pause && !panel.Waiting && !MenuNav.Consumed) SetOpen(false);
                 return;
             }
@@ -83,6 +98,7 @@ namespace RexMagnum
         {
             panel.CancelWait();
             Open = o;
+            confirmQuit = false;
             MenuNav.Click();
             if (!o) FreeThumbs();        // album pictures only live while the menu is open (phone memory)
             else { rexCached = null; nextObjective = 0f; }
@@ -99,6 +115,43 @@ namespace RexMagnum
             var rig = FindAnyObjectByType<RexCameraRig>();
             if (rig != null) rig.InputEnabled = !o;
             if (!o) { Progress.Flush(); PlayerPrefs.Save(); }
+        }
+
+        bool confirmQuit;
+        int quitSel = 1;
+
+        /// <summary>QUIT TO TITLE (after YES): save, then load the scene again; GameFlow starts on the title screen.</summary>
+        void QuitToTitle()
+        {
+            int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
+            SetOpen(false);                 // saves (Progress.Flush, PlayerPrefs.Save), sound back on
+            Time.timeScale = 1f;            // no kill cam slow motion carried over
+            if (scene < 0) return;          // scene not in the build list (editor test scene): just resume
+            UnityEngine.SceneManagement.SceneManager.LoadScene(scene);
+        }
+
+        /// <summary>"Quit to the title?" with YES / NO (mouse; keys and controller in Update).</summary>
+        void DrawQuitConfirm(float w, float h, float s)
+        {
+            var r = new Rect(w * 0.5f - 420 * s, h * 0.3f, 840 * s, 330 * s);
+            MenuSkin.DrawPanel(r);
+            GUI.Label(new Rect(r.x + 30 * s, r.y + 24 * s, r.width - 60 * s, 120 * s),
+                      "Quit to the title screen?\nYour progress is saved. You wake up in room 304 when you play again.", MenuSkin.Question);
+            string[] opts = { "YES, QUIT TO TITLE", "NO, GO BACK" };
+            for (int i = 0; i < 2; i++)
+            {
+                var b = new Rect(r.x + 30 * s + i * 400 * s, r.yMax - 100 * s, 380 * s, 66 * s);
+                bool hover = b.Contains(Event.current.mousePosition);
+                if (hover && (Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDrag)) quitSel = i;
+                if (Event.current.type == EventType.Repaint) button.Draw(b, opts[i], hover, false, quitSel == i, false);   // gold = chosen
+                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && hover)
+                {
+                    Event.current.Use();
+                    MenuNav.Click();
+                    if (i == 0) QuitToTitle(); else confirmQuit = false;
+                    return;
+                }
+            }
         }
 
         void Styles(float s)
@@ -118,15 +171,18 @@ namespace RexMagnum
             GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(new Rect(0, 20 * s, w, 50 * s), "PAUSED", title);
-            float tw = w / Tabs.Length;
+            if (confirmQuit) { DrawQuitConfirm(w, h, s); return; }
+            // ultrawide: the panel stops at ~1.9 x the screen height and stays centred (lists do not stretch apart)
+            float pw = Mathf.Min(w * 0.84f, SettingsPanel.MaxWidth), px = (w - pw) * 0.5f;
+            float tw = pw / Tabs.Length;
             for (int i = 0; i < Tabs.Length; i++)
-                if (GUI.Toggle(new Rect(i * tw + 6, 80 * s, tw - 12, 50 * s), tab == i, Tabs[i], tabStyle) && tab != i) pendingTab = i;
-            var area = new Rect(w * 0.08f, 150 * s, w * 0.84f, h - 260 * s);
+                if (GUI.Toggle(new Rect(px + i * tw + 6, 80 * s, tw - 12, 50 * s), tab == i, Tabs[i], tabStyle) && tab != i) pendingTab = i;
+            var area = new Rect(px, 150 * s, pw, h - 260 * s);
             MenuSkin.DrawPanel(new Rect(area.x - 16 * s, area.y - 12 * s, area.width + 32 * s, area.height + 24 * s));
             if (tab == 3)
             {
                 panel.Draw(area, s);
-                if (GUI.Button(new Rect(w * 0.5f - 160 * s, h - 90 * s, 320 * s, 60 * s), "RESUME", button)) SetOpen(false);
+                BottomButtons(w, h, s);
                 return;
             }
             if (tab == 0)
@@ -147,7 +203,17 @@ namespace RexMagnum
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
-            if (GUI.Button(new Rect(w * 0.5f - 160 * s, h - 90 * s, 320 * s, 60 * s), "RESUME", button)) SetOpen(false);
+            BottomButtons(w, h, s);
+        }
+
+        /// <summary>RESUME and QUIT TO TITLE under the panel (QUIT asks first). The keys / buttons show beside them.</summary>
+        void BottomButtons(float w, float h, float s)
+        {
+            var dev = RMInput.LastDevice;
+            string resume = dev == RMInput.DeviceKind.Gamepad ? "RESUME  " + Glyph.Token("B") : dev == RMInput.DeviceKind.Keyboard ? "RESUME  (Esc)" : "RESUME";
+            string quit = dev == RMInput.DeviceKind.Gamepad ? "QUIT TO TITLE  " + Glyph.Token("Y") : dev == RMInput.DeviceKind.Keyboard ? "QUIT TO TITLE  (T)" : "QUIT TO TITLE";
+            if (GUI.Button(new Rect(w * 0.5f - 350 * s, h - 90 * s, 340 * s, 60 * s), resume, button)) SetOpen(false);
+            if (GUI.Button(new Rect(w * 0.5f + 10 * s, h - 90 * s, 340 * s, 60 * s), quit, button)) { confirmQuit = true; quitSel = 1; MenuNav.Click(); }
         }
 
         Texture2D mapTex, arrowTex;
@@ -228,6 +294,7 @@ namespace RexMagnum
         void MapTab()
         {
             if (!string.IsNullOrEmpty(objective)) GUILayout.Label("NEXT: " + objective, label);
+            if (!string.IsNullOrEmpty(objective) && GameGuide.Warning != null) GUILayout.Label("<color=#9CCBFF>" + GameGuide.Warning + "</color>", label);
             GUILayout.Label("Red arrow = you.  Green = visited.  Yellow = next goal.", small);
             GUILayout.Space(10);
             GUILayout.Label("ISLAND ZONES", title);
@@ -263,7 +330,7 @@ namespace RexMagnum
         void AlbumTab(float s, float width)
         {
             var photos = Progress.Photos;
-            if (photos.Count == 0) { GUILayout.Label($"No photos yet. Press {RMInput.Btn("Photo")} near a blob or a guest.", label); return; }
+            if (photos.Count == 0) { GUILayout.Label($"No photos yet. Press {Glyph.B("Photo")} near a blob or a guest.", label); return; }
             int cols = 3;
             float cw = width / cols - 20;
             for (int i = photos.Count - 1; i >= 0; i -= cols)

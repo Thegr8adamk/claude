@@ -43,7 +43,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (fade <= 0.001f) return;
+            if (fade <= 0.001f || PhotoAlbum.Capturing) return;      // the photo grabs the view without overlays
             GUI.color = new Color(0, 0, 0, fade);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;

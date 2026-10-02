@@ -295,6 +295,12 @@ namespace RexMagnum.EditorTools
             tree.AddChild(Clip("Rex_Idle"), 0f);
             tree.AddChild(Clip("Rex_Walk"), 3.0f);          // = walkSpeed: the feet do not slide
             tree.AddChild(Clip("Rex_Run"), 6.0f);
+            // the walk clip covers ~1.3 m/s and the run ~3.2 m/s; Rex moves at 3.0 / 6.0. Play them faster so the feet
+            // slide less (walk capped at 1.6x: a faster leg cycle looks frantic)
+            var tc = tree.children;
+            tc[1].timeScale = 1.6f;
+            tc[2].timeScale = 6.0f / 3.2f;
+            tree.children = tc;
             sm.defaultState = loco;
 
             // swimming (pool, sea, river): tread water in place, doggy paddle when moving
@@ -357,7 +363,11 @@ namespace RexMagnum.EditorTools
                 limpTree.blendParameter = "Speed";
                 limpTree.useAutomaticThresholds = false;
                 limpTree.AddChild(Clip("Rex_Idle"), 0f);
-                limpTree.AddChild(limpClip, 1.6f);
+                limpTree.AddChild(limpClip, RexMagnum.RexController.LimpSpeed);
+                // the clip walks at 1.6 m/s; Rex limps at up to 2.0 (RexController.LimpSpeed): play it 1.25x so the feet do not slide
+                var lc = limpTree.children;
+                lc[1].timeScale = RexMagnum.RexController.LimpSpeed / 1.6f;
+                limpTree.children = lc;
                 var toLimp = loco.AddTransition(limp);
                 toLimp.AddCondition(AnimatorConditionMode.If, 0, "Hurt");
                 toLimp.hasExitTime = false;

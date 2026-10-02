@@ -24,6 +24,8 @@ namespace RexMagnum.EditorTools
     /// </summary>
     public static class IslandBuilder
     {
+        static BlobSpawner mainSpawner;
+
         const string Dir = "Assets/RexMagnum/Island";
         const string Mats = Dir + "/Materials";
         const string Gen = Dir + "/Generated";
@@ -113,6 +115,7 @@ namespace RexMagnum.EditorTools
                 Vector3 pool = data.pool != null && data.pool.Length == 3 ? U(data.pool) : spawn;
                 if (nav != null) { nav.center = pool + new Vector3(0f, 0f, -30f); nav.size = new Vector3(200f, 60f, 240f); }
                 var spawner = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
+                mainSpawner = spawner;          // the copy source for the factory (later spawners are not it)
                 if (spawner != null) { spawner.transform.position = pool; spawner.radius = 18f; spawner.maxAlive = 6; }
                 var game = GameObject.Find("Game") ?? new GameObject("Game");
                 var dn = game.AddComponent<DayNight>();
@@ -767,6 +770,41 @@ namespace RexMagnum.EditorTools
             e.cab = cab;
             e.floorHeights = h.elevatorFloors.Take(h.elevatorFloors.Length - 1).ToArray();
             e.landingDoors = doors.ToArray();
+            // box-projected probes inside (lobby + every guest corridor): interiors reflect walls, not the bright sky.
+            // Hotel centre: the pool doors are on the north facade (hotel-local y = 11), the hotel is 90 x 22 m.
+            Vector3 hc = U(h.poolDoors) - new Vector3(0f, 0f, 11f);
+            float fl0 = h.elevatorFloors[0];
+            BoxProbe("LobbyProbe", new Vector3(hc.x, fl0 + 1.6f, hc.z), new Vector3(89f, 3.3f, 21.4f), 0.7f, root);
+            float xa = hc.x - 39.8f, xb = doorX + 0.07f;          // stairwell side .. elevator shaft wall (hotel-local)
+            for (int f = 1; f < h.elevatorFloors.Length - 1; f++)
+                BoxProbe("CorridorProbe" + f, new Vector3((xa + xb) * 0.5f, h.elevatorFloors[f] + 1.6f, hc.z),
+                         new Vector3(xb - xa, 3.3f, 3.2f), 0.6f, root);
+        }
+
+        /// <summary>Small realtime box-projected reflection probe for an interior, rendered once on load (64 px, short
+        /// far clip). Importance 1: wins over the island probe (0), loses to room 304's own probe (2). The lower
+        /// intensity dims the sky-bright specular ambient indoors.</summary>
+        static void BoxProbe(string name, Vector3 center, Vector3 size, float intensity, Transform parent, bool dark = false)
+        {
+            var rp = new GameObject(name).AddComponent<ReflectionProbe>();
+            rp.transform.SetParent(parent, false);
+            rp.transform.position = center;
+            rp.size = size;
+            rp.boxProjection = true;
+            rp.blendDistance = 1f;
+            rp.mode = ReflectionProbeMode.Realtime;
+            rp.refreshMode = ReflectionProbeRefreshMode.OnAwake;
+            rp.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            rp.resolution = 64;
+            rp.importance = 1;
+            rp.intensity = intensity;
+            rp.farClipPlane = Mathf.Max(size.x, Mathf.Max(size.y, size.z)) + 10f;
+            rp.shadowDistance = 0f;            // six extra scene renders on load: skip their shadow maps
+            if (dark)
+            {
+                rp.clearFlags = ReflectionProbeClearFlags.SolidColor;    // underground: no sky behind gaps in the rock
+                rp.backgroundColor = new Color(0.02f, 0.02f, 0.02f);
+            }
         }
 
         // ---------------------------------------------------------------- golf: carts, chargers, golf club
@@ -892,7 +930,7 @@ namespace RexMagnum.EditorTools
             }
             fc.hallLights = hall.ToArray();
             // a blob spawner inside the factory (eggs hatching) until the core is destroyed
-            var spawnerSrc = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
+            var spawnerSrc = mainSpawner != null ? mainSpawner : UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (spawnerSrc != null)
             {
                 var sp = UnityEngine.Object.Instantiate(spawnerSrc.gameObject, root).GetComponent<BlobSpawner>();
@@ -978,6 +1016,14 @@ namespace RexMagnum.EditorTools
                 l.intensity = 2.2f;
                 l.color = i % 5 == 4 ? new Color(0.4f, 1f, 0.35f) : new Color(1f, 0.75f, 0.45f);
                 l.shadows = i % 3 == 0 ? LightShadows.Soft : LightShadows.None;
+            }
+            // one dark box probe per tunnel branch (axis-aligned box around the branch, 4 m margin)
+            foreach (var (pn, seg) in new[] { ("TunnelProbeMain", main), ("TunnelProbeRuins", ruins), ("TunnelProbeShip", ship) })
+            {
+                if (seg.Count < 2) continue;
+                Vector3 a = seg[0], b = seg[seg.Count - 1];
+                var size = new Vector3(Mathf.Abs(b.x - a.x), Mathf.Abs(b.y - a.y), Mathf.Abs(b.z - a.z)) + Vector3.one * 8f;
+                BoxProbe(pn, (a + b) * 0.5f + Vector3.up * 1.5f, size, 0.4f, root, true);
             }
             var spawner = UnityEngine.Object.FindAnyObjectByType<BlobSpawner>();
             if (spawner != null && main.Count >= 2)
@@ -1201,7 +1247,16 @@ namespace RexMagnum.EditorTools
             for (int i = 0; i < 8; i++)                                                                   // beach: on the sand
             {
                 var b = pool + new Vector3(-40f + i * 12f, -3.5f, -95f);
-                if (ter != null) b.y = ter.SampleHeight(b) + ter.transform.position.y;
+                if (ter != null)
+                {
+                    // never in the sea: walk up the beach (north) until the sand is dry
+                    for (int k = 0; k < 12; k++)
+                    {
+                        b.y = ter.SampleHeight(b) + ter.transform.position.y;
+                        if (b.y >= 0.6f) break;
+                        b.z += 3f;
+                    }
+                }
                 extra.Add(b);
             }
             extra.Add(HotelPt(h, -6f, -8f, 0)); extra.Add(HotelPt(h, 12f, 7.5f, 0)); extra.Add(HotelPt(h, 22f, 7.5f, 0));
@@ -1536,6 +1591,11 @@ namespace RexMagnum.EditorTools
             rp.resolution = 256;
             rp.transform.position = new Vector3(40f, 40f, -250f);
             rp.importance = 0;
+            // the interior probes (room 304, lobby, corridors, tunnels) are box-projected and blend at their edges
+            var urpA = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            QualityAuto.SetUrp(urpA, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
+            QualityAuto.SetUrp(urpA, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
+            if (urpA != null) EditorUtility.SetDirty(urpA);
 
             // post-processing
             var vol = new GameObject("PostProcessing").AddComponent<Volume>();
@@ -1562,6 +1622,108 @@ namespace RexMagnum.EditorTools
             EditorUtility.SetDirty(prof);
             vol.sharedProfile = prof;
             AddSSAO();
+        }
+
+        // ---------------------------------------------------------------- optional bakes (menus)
+
+        /// <summary>Optional: lightmaps for the buildings (sky light only - the sun and the lamps stay realtime because
+        /// DayNight moves them), so rooms and corridors get real occlusion instead of the flat sky ambient. Slow (GPU
+        /// lightmapper, minutes); the game works without it. Buildings get lightmap UVs (FBX reimport) first.</summary>
+        [MenuItem("Rex Magnum/Bake Lighting (slow, optional)", priority = 30)]
+        public static void BakeLighting()
+        {
+            var island = GameObject.Find("Island");
+            if (island == null) { EditorUtility.DisplayDialog("Rex Magnum", "Open Scenes/Island.unity first (Build Island makes it).", "OK"); return; }
+            if (!EditorUtility.DisplayDialog("Rex Magnum", "Bake building lightmaps? This reimports the building models " +
+                    "with lightmap UVs and can take several minutes.", "Bake", "Cancel")) return;
+            // lightmap UVs for every building FBX (not vegetation / characters)
+            var fbx = new HashSet<string>();
+            foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                if ((GameObjectUtility.GetStaticEditorFlags(r.gameObject) & StaticEditorFlags.OccluderStatic) == 0) continue;
+                string p = AssetDatabase.GetAssetPath(mf.sharedMesh);
+                if (p.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase)) fbx.Add(p);
+            }
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (var p in fbx)
+                    if (AssetImporter.GetAtPath(p) is ModelImporter mi && !mi.generateSecondaryUV)
+                    {
+                        mi.generateSecondaryUV = true;
+                        mi.SaveAndReimport();
+                    }
+            }
+            finally { AssetDatabase.StopAssetEditing(); }
+            // buildings: LOD0 in the lightmap, lower LODs and moving parts on probes / SH as before
+            foreach (var r in island.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var flags = GameObjectUtility.GetStaticEditorFlags(r.gameObject);
+                if ((flags & StaticEditorFlags.OccluderStatic) == 0) continue;
+                GameObjectUtility.SetStaticEditorFlags(r.gameObject, flags | StaticEditorFlags.ContributeGI);
+                SetProp(r, "receiveGI", r.name.EndsWith("_LOD0") ? "Lightmaps" : "LightProbes");
+            }
+            var ls = AssetDatabase.LoadAssetAtPath<LightingSettings>(Gen + "/IslandLighting.lighting");
+            if (ls == null) { ls = new LightingSettings(); AssetDatabase.CreateAsset(ls, Gen + "/IslandLighting.lighting"); }
+            ls.bakedGI = true;
+            ls.realtimeGI = false;
+            SetProp(ls, "lightmapper", "ProgressiveGPU");
+            SetProp(ls, "lightmapResolution", 2f);       // texels per metre: the hotel alone is 90 m long
+            SetProp(ls, "lightmapMaxSize", 2048);
+            SetProp(ls, "ao", true);
+            SetProp(ls, "aoMaxDistance", 1.5f);
+            EditorUtility.SetDirty(ls);
+            Lightmapping.lightingSettings = ls;
+            EditorSceneManager.MarkSceneDirty(island.scene);
+            if (!Lightmapping.BakeAsync()) Debug.LogWarning("[Rex Magnum] Lightmap bake did not start (another bake running?).");
+            else Debug.Log("[Rex Magnum] Lightmap bake started (progress bottom-right). Save the scene when it is done.");
+        }
+
+        /// <summary>Sets a property by name (enum values by name). Lighting / GI members are set this way so the
+        /// file also builds against older editor assemblies.</summary>
+        static void SetProp(object o, string name, object value)
+        {
+            var pi = o.GetType().GetProperty(name);
+            if (pi == null || !pi.CanWrite) { Debug.LogWarning($"[Rex Magnum] {o.GetType().Name}.{name} not found"); return; }
+            if (pi.PropertyType.IsEnum && value is string en) value = System.Enum.Parse(pi.PropertyType, en);
+            else value = System.Convert.ChangeType(value, pi.PropertyType);
+            pi.SetValue(o, value);
+        }
+
+        /// <summary>Occlusion culling data for the island (buildings, terrain hills and the hotel walls hide what is
+        /// behind them). Also run by the Windows / Android build menus when the scene has none yet.</summary>
+        [MenuItem("Rex Magnum/Bake Occlusion Culling", priority = 31)]
+        public static void BakeOcclusion()
+        {
+            if (GameObject.Find("Island") == null) { Debug.LogWarning("[Rex Magnum] Open Scenes/Island.unity first."); return; }
+            StaticOcclusionCulling.smallestOccluder = 4f;
+            StaticOcclusionCulling.smallestHole = 0.3f;
+            StaticOcclusionCulling.backfaceThreshold = 100f;
+            if (StaticOcclusionCulling.Compute())
+            {
+                EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+                Debug.Log($"[Rex Magnum] Occlusion culling baked ({StaticOcclusionCulling.umbraDataSize / 1024} KB).");
+            }
+            else Debug.LogWarning("[Rex Magnum] Occlusion culling bake failed.");
+        }
+
+        /// <summary>Before a build: bakes occlusion for the island scene if it has no data (opens it if needed,
+        /// then reopens the scene that was open).</summary>
+        public static void EnsureOcclusion()
+        {
+            string path = Scenes + "/Island.unity";
+            if (!File.Exists(path)) return;
+            var active = EditorSceneManager.GetActiveScene();
+            bool other = active.path != path;
+            if (other)
+            {
+                if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+                EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            }
+            if (StaticOcclusionCulling.umbraDataSize == 0) BakeOcclusion();
+            if (other && !string.IsNullOrEmpty(active.path)) EditorSceneManager.OpenScene(active.path, OpenSceneMode.Single);
         }
 
         /// <summary>Adds the URP "Screen Space Ambient Occlusion" renderer feature (contact shadows in corners).</summary>

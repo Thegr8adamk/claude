@@ -82,7 +82,7 @@ namespace RexMagnum
             RenderSettings.fogColor = fogColor.Evaluate(timeOfDay);
             RenderSettings.fogDensity = baseFog * Mathf.Lerp(1.6f, 1f, day);
             if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(0.12f, baseExposure, day));
-            foreach (var l in nightLights) if (l != null) l.enabled = Night > 0.3f;
+            if (Time.time > nextLights) { nextLights = Time.time + 0.5f; NightLights(Night > 0.3f); }
             // the glow only when Night really changed (a property block write per blob per frame added up); new blobs set it in Start
             if (Mathf.Abs(Night - glowNight) > 0.01f || (Night == 0f && glowNight != 0f))      // and exactly off by day
             {
@@ -96,8 +96,18 @@ namespace RexMagnum
             // ambient light and sky reflections follow the time of day (they were computed once, at start)
             if (Time.time > nextEnv)
             {
-                nextEnv = Time.time + 5f;
-                DynamicGI.UpdateEnvironment();
+                nextEnv = Time.time + 2f;
+                // the ambient probe re-bake only when the sky / ambient / sun colour really changed (it stalls a frame)
+                float exposure = sky != null && sky.HasProperty("_Exposure") ? sky.GetFloat("_Exposure") : 0f;
+                Color sc = sun != null ? sun.color : Color.black;
+                if (Mathf.Abs(RenderSettings.ambientIntensity - envAmbient) > 0.03f || Mathf.Abs(exposure - envExposure) > 0.03f ||
+                    Mathf.Abs(sc.r - envSun.r) + Mathf.Abs(sc.g - envSun.g) + Mathf.Abs(sc.b - envSun.b) > 0.06f)
+                {
+                    envAmbient = RenderSettings.ambientIntensity;
+                    envExposure = exposure;
+                    envSun = sc;
+                    DynamicGI.UpdateEnvironment();
+                }
                 if (islandProbe == null)
                 {
                     var go = GameObject.Find("ReflectionProbe");
@@ -117,6 +127,49 @@ namespace RexMagnum
                 nextLine = Time.time + 240f;
                 var rex = FindAnyObjectByType<RexController>();
                 if (rex != null) RexVoice.Say(rex.gameObject, "Night", true);
+            }
+        }
+
+        float envAmbient = -1f, envExposure = -1f, nextLights;
+        Color envSun = new Color(-1f, -1f, -1f);
+        // realtime point / spot lights are costly (and URP has a per-object light limit): only the nearest burn
+        const int MaxNightLights = 12;
+        Transform rexT;
+        float[] lightDist;
+
+        /// <summary>Night: the MaxNightLights lights nearest to Rex on, all others off. Day: all off.</summary>
+        void NightLights(bool night)
+        {
+            int n = nightLights.Count;
+            if (!night || n == 0)
+            {
+                foreach (var l in nightLights) if (l != null && l.enabled) l.enabled = false;
+                return;
+            }
+            if (rexT == null) { var rc = FindAnyObjectByType<RexController>(); if (rc != null) rexT = rc.transform; }
+            Vector3 c = rexT != null ? rexT.position : (Camera.main != null ? Camera.main.transform.position : Vector3.zero);
+            if (lightDist == null || lightDist.Length != n) lightDist = new float[n];
+            for (int i = 0; i < n; i++)
+                lightDist[i] = nightLights[i] != null ? (nightLights[i].transform.position - c).sqrMagnitude : float.MaxValue;
+            // the distance of the MaxNightLights-th nearest (a few passes over the list, no sorting garbage)
+            float limit = float.MaxValue;
+            if (n > MaxNightLights)
+            {
+                float below = -1f;
+                for (int k = 0; k < MaxNightLights; k++)
+                {
+                    float m = float.MaxValue;
+                    for (int i = 0; i < n; i++) if (lightDist[i] > below && lightDist[i] < m) m = lightDist[i];
+                    below = m;
+                }
+                limit = below;
+            }
+            for (int i = 0; i < n; i++)
+            {
+                var l = nightLights[i];
+                if (l == null) continue;
+                bool on = lightDist[i] <= limit;
+                if (l.enabled != on) l.enabled = on;
             }
         }
 

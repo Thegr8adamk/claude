@@ -11,7 +11,7 @@ namespace RexMagnum
     ///     SettingsPanel. NEW GAME asks first, then clears the save (Progress.ResetAll) and reloads the scene.
     ///  2. Chaos sounds, fade in on Rex face-down on the bed in room 304, wake-up line.
     ///  3. Rex stands next to the bed; controls are taught one hint at a time (look/walk, punch the stuck door,
-    ///     pick up the beer, taunt at the mirror, camera switch, towel on the balcony rail). A hint stays until the player
+    ///     pick up the beer, taunt at the mirror, camera switch, dodge, towel on the balcony rail). A hint stays until the player
     ///     does it (or a time-out), then the next one shows. Day music loops.
     /// Music and sounds load from Resources/Music and Resources/Sfx when the ElevenLabs files are added
     /// (title_theme, day_resort, chaos); without them the flow still works, silently.
@@ -45,12 +45,12 @@ namespace RexMagnum
         Vector3 titleOrbitCenter;
         float titleAngle;
 
-        const int HintCount = 6;
+        const int HintCount = 7;
 
         /// <summary>The tutorial hint with the keys / buttons the player uses now (remapped ones too).</summary>
         static string Hint(int i)
         {
-            string B(string a) => RMInput.Btn(a);
+            string B(string a) => Glyph.B(a);          // controller: coloured "[A]" tokens
             bool kb = RMInput.LastDevice == RMInput.DeviceKind.Keyboard;
             switch (i)
             {
@@ -60,6 +60,7 @@ namespace RexMagnum
                 case 2: return $"{B("Use")}: pick up the full beer bottle on the table. It is your first weapon.";
                 case 3: return $"{B("Taunt")}: taunt. Try it at the mirror.";
                 case 4: return $"{B("Camera")}: first person or third person.   {B("Shoulder")}: other shoulder.";
+                case 5: return $"{B("Dodge")}: dodge. Blobs glow red just before they hit.";
                 default: return $"The beach towel is on the balcony rail ({B("Use")}). Look at the pool. Something is wrong.";
             }
         }
@@ -213,6 +214,7 @@ namespace RexMagnum
                 case 2: done = (weapons != null && weapons.Has(WeaponId.Bottle)) || t > 45f; break;
                 case 3: done = (RMInput.Taunt && t > 1f) || t > 25f; break;
                 case 4: done = (RMInput.CameraToggle && t > 1f) || t > 20f; break;
+                case 5: done = (RMInput.Dodge && t > 1f) || t > 20f; break;
                 default: done = (weapons != null && weapons.Has(WeaponId.Towel)) || t > 60f; break;
             }
             if (done) { hint++; hintTime = Time.time; }
@@ -220,15 +222,20 @@ namespace RexMagnum
 
         void FightMusic()
         {
-            if (fight == null || fight.clip == null || rex == null) return;
-            bool battle = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;
-            float target = battle ? FightVolume : 0f;
-            // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
-            fightLevel = Mathf.MoveTowards(fightLevel, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
-            fight.volume = fightLevel * AudioMix.Music;
-            if (fightLevel > 0f && !fight.isPlaying) fight.Play();
-            else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
-            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music;   // night jungle music takes over
+            if (rex == null) return;
+            if (fight != null && fight.clip != null)
+            {
+                bool battle = !KingGlorpBoss.Fighting && Blob.LivingNear(rex.transform.position, 20f) >= 2;
+                float target = battle ? FightVolume : 0f;
+                // in fast (1 s), out slowly (4 s) so short pauses between blobs do not cut the song
+                fightLevel = Mathf.MoveTowards(fightLevel, target, Time.deltaTime * (battle ? FightVolume : FightVolume / 4f));
+                // AudioMix.Duck: music dips to 60% while a voice line plays (no AudioMixer asset needed)
+                fight.volume = fightLevel * AudioMix.Music * AudioMix.Duck;
+                if (fightLevel > 0f && !fight.isPlaying) fight.Play();
+                else if (fightLevel <= 0f && fight.isPlaying) fight.Pause();
+            }
+            // without the fight clip the day music still follows night, the boss and the voice duck
+            music.volume = KingGlorpBoss.Fighting ? 0f : dayLevel * (1f - DayNight.Night) * (1f - fightLevel / FightVolume) * AudioMix.Music * AudioMix.Duck;   // night jungle music takes over
         }
 
         IEnumerator Intro()
@@ -305,7 +312,7 @@ namespace RexMagnum
 
             if (inSettings)
             {
-                var area = new Rect(x, h * 0.3f, w * 0.88f - x, h * 0.56f);
+                var area = new Rect(x, h * 0.3f, Mathf.Min(w * 0.88f - x, SettingsPanel.MaxWidth), h * 0.56f);   // ultrawide: not stretched
                 MenuSkin.DrawPanel(new Rect(area.x - 20 * s, area.y - 20 * s, area.width + 40 * s, area.height + 110 * s));
                 settings.Draw(area, s);
                 var back = new Rect(area.x, area.yMax + 20 * s, 300 * s, 60 * s);

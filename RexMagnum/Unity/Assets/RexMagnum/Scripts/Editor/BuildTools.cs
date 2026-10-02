@@ -33,6 +33,7 @@ namespace RexMagnum.EditorTools
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.colorSpace = ColorSpace.Linear;
             IncludeShader("Universal Render Pipeline/Unlit");
+            IslandBuilder.EnsureOcclusion();      // bake occlusion culling once if the island scene has none (slow once)
         }
 
         /// <summary>Shaders the game only finds by name (Shader.Find: aim line, harpoon rope) are left out of a build

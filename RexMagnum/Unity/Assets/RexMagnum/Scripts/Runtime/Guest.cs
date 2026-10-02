@@ -76,8 +76,45 @@ namespace RexMagnum
             return best;
         }
 
+        // far away and off screen: Animator and NavMeshAgent off (dozens of guests over the island cost CPU for nothing)
+        const float SleepDistance = 70f;
+        bool dormant, hadPath;
+        float nextSleepCheck;
+        Vector3 savedDestination;
+
+        void SleepCheck()
+        {
+            if (Time.time < nextSleepCheck) return;
+            nextSleepCheck = Time.time + Random.Range(0.4f, 0.6f);          // spread over the frames
+            bool far = (rex.position - transform.position).sqrMagnitude > SleepDistance * SleepDistance;
+            bool seen = false;
+            var cam = Camera.main;
+            if (far && cam != null)
+            {
+                Vector3 v = cam.WorldToViewportPoint(transform.position + Vector3.up);
+                seen = v.z > 0f && v.x > -0.1f && v.x < 1.1f && v.y > -0.1f && v.y < 1.1f;
+            }
+            bool sleep = far && !seen && state != State.Rescued && !lockedIn;     // rescued: let them walk off and go
+            if (sleep == dormant) return;
+            dormant = sleep;
+            if (anim != null) anim.enabled = !sleep;
+            if (sleep)
+            {
+                hadPath = agent.enabled && agent.isOnNavMesh && agent.hasPath;
+                if (hadPath) savedDestination = agent.destination;
+                agent.enabled = false;
+            }
+            else
+            {
+                agent.enabled = true;
+                if (hadPath && agent.isOnNavMesh) agent.SetDestination(savedDestination);   // where it was going
+            }
+        }
+
         void Update()
         {
+            if (rex != null) SleepCheck();
+            if (dormant) return;
             if (anim != null) anim.SetFloat(SpeedHash, agent.velocity.magnitude, 0.1f, Time.deltaTime);
             if (rex == null) return;
             float rexDist = Vector3.Distance(rex.position, transform.position);
@@ -157,7 +194,8 @@ namespace RexMagnum
                     if (!agent.pathPending && agent.remainingDistance < 0.6f) { state = State.Hiding; agent.speed = 1.4f; }
                     break;
                 case State.Rescued:
-                    if (!agent.pathPending && agent.remainingDistance < 0.8f) gameObject.SetActive(false);   // safe inside
+                    // safe inside: not before 2 s, so nobody blinks out right in front of Rex
+                    if (Time.time - rescuedAt > 2f && !agent.pathPending && agent.remainingDistance < 0.8f) gameObject.SetActive(false);
                     break;
             }
         }
@@ -256,8 +294,24 @@ namespace RexMagnum
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
             else
                 Instantiate(rewardPrefabs[Random.Range(0, rewardPrefabs.Length)], drop - Vector3.up * 0.3f, Quaternion.identity);
-            agent.SetDestination(home);
+            rescuedAt = Time.time;
+            Vector3 goal = home;
+            // rescued at the home spot: go somewhere first (the nearest hide spot, or 6 m away from Rex), not vanish on the spot
+            if (Vector3.Distance(transform.position, home) < 3f)
+            {
+                var spot = NearestHideSpot();
+                if (spot != null && Vector3.Distance(spot.position, transform.position) > 3f) goal = spot.position;
+                else
+                {
+                    Vector3 away = transform.position - (rex != null ? rex.position : transform.position - transform.forward);
+                    away.y = 0f;
+                    goal = transform.position + (away.sqrMagnitude > 0.01f ? away.normalized : transform.forward) * 6f;
+                }
+                if (NavMesh.SamplePosition(goal, out NavMeshHit gh, 4f, NavMesh.AllAreas)) goal = gh.position;
+            }
+            agent.SetDestination(goal);
         }
+        float rescuedAt;
 
         IEnumerator Flirt()
         {

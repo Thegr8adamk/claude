@@ -40,7 +40,7 @@ namespace RexMagnum
             open = true;
             AnyOpen = true;
             var src = GetComponent<AudioSource>();
-            if (src != null && bang != null) src.PlayOneShot(bang);
+            if (src != null && bang != null) src.PlayOneShot(bang, AudioMix.Effects);     // effects volume setting
             else Sfx.Play("door_bang", transform.position);
             if (by != null) RexVoice.Say(by, "Door", true);
             var a = transform.localRotation;

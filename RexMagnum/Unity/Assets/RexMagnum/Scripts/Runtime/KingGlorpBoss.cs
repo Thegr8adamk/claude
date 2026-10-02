@@ -29,8 +29,12 @@ namespace RexMagnum
         public static bool Fighting { get; private set; }
         int phase = 1;
         float lastHitByRex = -999f;
-        const float LongShotRange = 45f, LongShotFactor = 0.35f;
+        const float LongShotRange = 20f, LongShotFactor = 0.35f;
         bool longShotTold;
+        // range punish: a charge after each long shot, a slime volley when Rex keeps out of reach
+        const float ChargeTime = 3f, ChargeFactor = 2f, VolleyAfter = 4f, VolleyEvery = 5f, VolleyRange = 80f;
+        float chargeUntil = -1f, farSince = -1f, nextVolley;
+        bool charging;
         float nextAbsorb, nextWave, nextMinions, nextLine;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
         AudioSource music;
@@ -94,6 +98,9 @@ namespace RexMagnum
                 started = false;
                 Fighting = false;
                 music.Stop();
+                if (charging) { charging = false; blob.speed /= ChargeFactor; }
+                chargeUntil = -1f;
+                farSince = -1f;
                 return;
             }
             int p = health.Fraction > 0.66f ? 1 : health.Fraction > 0.33f ? 2 : 3;
@@ -105,6 +112,20 @@ namespace RexMagnum
                 if (Blob.LivingNear(transform.position, 30f) < 7) Minions();     // a long fight does not pile up blobs
             }
             if (phase == 3 && Time.time > nextWave) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
+            // charge after a long shot: double speed for 3 s (the multiplier comes off again; phase 3's 1.4x stays)
+            bool charge = Time.time < chargeUntil;
+            if (charge != charging) { charging = charge; blob.speed *= charge ? ChargeFactor : 1f / ChargeFactor; }
+            // Rex stays out of his 14 m reach for over 4 s: a 3-shot slime volley every ~5 s
+            if (d > blob.attackRange && d < VolleyRange)
+            {
+                if (farSince < 0f) farSince = Time.time;
+                if (Time.time - farSince > VolleyAfter && Time.time > nextVolley && !blob.IsStunned)
+                {
+                    nextVolley = Time.time + VolleyEvery + Random.Range(-0.5f, 0.5f);
+                    StartCoroutine(Volley());
+                }
+            }
+            else farSince = -1f;
             if (Time.time > nextLine) { nextLine = Time.time + 14f; Say(GlorpLines[Random.Range(1, GlorpLines.Length)]); }
             // keep armor pieces stuck to the body (they ride along)
             for (int i = armor.Count - 1; i >= 0; i--) if (armor[i].t == null) armor.RemoveAt(i);
@@ -114,7 +135,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (!started || dead) return;
+            if (!started || dead || PhotoAlbum.Capturing) return;      // no boss bar in the photo
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             var r = new Rect(w * 0.25f, 40 * s, w * 0.5f, 22 * s);
             GUI.color = new Color(0, 0, 0, 0.6f);
@@ -145,8 +166,10 @@ namespace RexMagnum
             foreach (var c in Physics.OverlapSphere(transform.position, armorRadius))
             {
                 var rb = c.attachedRigidbody;
+                // not: blobs, Rex or anything he holds, the cart, a live coconut (it would blow up on his body)
                 if (rb == null || rb.isKinematic || rb.GetComponentInParent<Blob>() || rb.GetComponentInParent<RexController>() ||
-                    rb.GetComponent<GolfCart>()) continue;
+                    (rex != null && rb.transform.IsChildOf(rex)) || rb.GetComponent<GolfCart>() ||
+                    rb.GetComponentInParent<CoconutBomb>()) continue;
                 if (!picks.Contains(rb)) picks.Add(rb);
                 if (picks.Count >= 4) break;
             }
@@ -188,16 +211,17 @@ namespace RexMagnum
             {
                 lastHitByRex = Time.time;
                 if (!started) StartFight();
-                // his armour soaks long shots: from beyond 45 m only 35% counts (no sniping him from the approach).
+                // his armour soaks long shots: from beyond 20 m only 35% counts (no sniping him from the approach).
                 // Health has no damage hook, so the rest is given back (Damaged runs before the death check: works for a last shot too)
                 if (Vector3.Distance(rex.position, transform.position) > LongShotRange)
                 {
                     health.Heal(amount * (1f - LongShotFactor));
                     taken = amount * LongShotFactor;
+                    chargeUntil = Time.time + ChargeTime;           // and he comes for the sniper at double speed
                     if (!longShotTold)
                     {
                         longShotTold = true;
-                        RexTestHUD.Notice("His armour soaks long shots: get closer than 45 m", 4f);
+                        RexTestHUD.Notice("His armour soaks long shots: get closer than 20 m", 4f);
                         RexVoice.Subtitle?.Invoke("REX: He's soaking it up. I need to get closer.");
                     }
                 }
@@ -236,6 +260,7 @@ namespace RexMagnum
             if (minionPrefabs == null || minionPrefabs.Length == 0) return;
             for (int i = 0; i < 3; i++)
             {
+                if (Blob.AliveCount() >= BlobSpawner.GlobalCap) break;     // the island-wide blob cap counts for him too
                 Vector2 c = Random.insideUnitCircle.normalized * 8f;
                 var p = transform.position + new Vector3(c.x, 0f, c.y);
                 if (UnityEngine.AI.NavMesh.SamplePosition(p, out var hit, 5f, UnityEngine.AI.NavMesh.AllAreas))
@@ -263,12 +288,35 @@ namespace RexMagnum
                 if (!hit && Mathf.Abs(dist - r) < 0.8f && rc != null && rc.Grounded)
                 {
                     hit = true;
-                    rex.GetComponent<Health>()?.Damage(12f, rex.position, gameObject);
-                    rc.Slimed();
+                    var rh = rex.GetComponent<Health>();
+                    if (rh != null)
+                    {
+                        rh.Damage(12f, rex.position, gameObject);
+                        if (rh.LastDamageTime == Time.time) rc.Slimed();       // a dodge (invulnerable) or death: no slime
+                    }
                 }
                 yield return null;
             }
             if (ring != null) Destroy(ring);
+        }
+
+        /// <summary>Rex keeps out of reach: warning glow, then 3 slime shots, a little spread and led.</summary>
+        IEnumerator Volley()
+        {
+            blob.Telegraph();
+            yield return new WaitForSeconds(Blob.TelegraphTime);
+            for (int i = 0; i < 3; i++)
+            {
+                if (dead || rex == null || blob.IsDead || blob.IsStunned) yield break;
+                Vector3 to = rex.position - transform.position; to.y = 0f;
+                if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
+                blob.Play("Spit");
+                Sfx.Play("blob_spit", transform.position, 0.9f);
+                Vector3 mouth = transform.position + Vector3.up * 2.6f + transform.forward * 1.6f;
+                Vector3 target = rex.position + Vector3.up * 1.2f + Random.insideUnitSphere * 1.2f;
+                SlimeProjectile.Launch(mouth, target, blob.damage * 0.6f, gameObject, blob.BaseColor());
+                yield return new WaitForSeconds(0.35f);
+            }
         }
 
         IEnumerator Victory(GameObject by, Vector3 at)

@@ -59,6 +59,16 @@ namespace RexMagnum
             keys = new Key[Actions.Length];
             for (int i = 0; i < Actions.Length; i++)
                 keys[i] = (Key)PlayerPrefs.GetInt("RexMagnum_Key_" + Actions[i], (int)Defaults[i]);
+            // old save: Dodge is new and unsaved; if its default key is already taken, give it the first free one
+            int d = System.Array.IndexOf(Actions, "Dodge");
+            if (!PlayerPrefs.HasKey("RexMagnum_Key_Dodge") && KeyTakenByOther(d, keys[d]))
+                foreach (var k in new[] { Key.LeftCtrl, Key.Z, Key.X })
+                    if (!KeyTakenByOther(d, k)) { keys[d] = k; break; }
+        }
+        static bool KeyTakenByOther(int i, Key k)
+        {
+            for (int j = 0; j < keys.Length; j++) if (j != i && keys[j] == k) return true;
+            return false;
         }
         /// <summary>Assign a key; if another action had it, the two swap (no conflicts).</summary>
         public static void Rebind(string action, Key k)
@@ -183,6 +193,16 @@ namespace RexMagnum
             pad = new GamepadButton[PadActions.Length];
             for (int i = 0; i < PadActions.Length; i++)
                 pad[i] = (GamepadButton)PlayerPrefs.GetInt("RexMagnum_Pad_" + PadActions[i], (int)PadDefaults[i]);
+            // old save: an action saved on B keeps it; Dodge moves to View (Select) if that is free
+            int d = System.Array.IndexOf(PadActions, "Dodge");
+            if (!PlayerPrefs.HasKey("RexMagnum_Pad_Dodge") && PadTakenByOther(d, pad[d]))
+                foreach (var b in new[] { GamepadButton.East, GamepadButton.Select })
+                    if (!PadTakenByOther(d, b)) { pad[d] = b; break; }
+        }
+        static bool PadTakenByOther(int i, GamepadButton b)
+        {
+            for (int j = 0; j < pad.Length; j++) if (j != i && pad[j] == b) return true;
+            return false;
         }
         /// <summary>Give an action a controller button; if another action had it, the two swap.</summary>
         public static void RebindPad(string action, GamepadButton b)
@@ -281,7 +301,10 @@ namespace RexMagnum
             }
         }
         public static bool Jump => TouchState.Down("Jump") || (KDown("Jump")) || (G != null && PB("Jump").wasPressedThisFrame);
-        public static bool Dodge => TouchState.Down("Dodge") || (KDown("Dodge")) || (G != null && PB("Dodge").wasPressedThisFrame);
+        // not while a menu / kill cam has the press: closing the pause menu with B or skipping the kill cam does not dodge
+        public static bool Dodge => !MenuNav.Consumed && Time.frameCount != ActionBlockedFrame && !KillCam.Active &&
+                                    !PauseMenu.Open && !GameFlow.Busy &&
+                                    (TouchState.Down("Dodge") || (KDown("Dodge")) || (G != null && PB("Dodge").wasPressedThisFrame));
 
         // ---- controller rumble: short motor pulses on hits and shots. Only when the controller was used last and the
         // setting (PlayerPrefs "RexMagnum_Rumble", default on) allows it. RexCameraRig calls TickRumble every frame.

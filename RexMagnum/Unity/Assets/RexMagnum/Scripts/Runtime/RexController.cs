@@ -33,6 +33,9 @@ namespace RexMagnum
         public bool InputEnabled { get; set; } = true;
         public bool HandsDown { get; set; }
         public bool FaceAim { get; set; }      // set by actions (attack, aim)
+        /// <summary>Low health (set by RexLife): no run, top speed LimpSpeed (the limp clip cannot go faster).</summary>
+        public bool Limping { get; set; }
+        public const float LimpSpeed = 2.0f;
         public Vector3 Velocity => velocity;
         public bool IsRunning { get; private set; }
         public bool Grounded => cc.isGrounded;
@@ -158,7 +161,7 @@ namespace RexMagnum
             float dt = Time.deltaTime;
             Vector2 input = InputEnabled ? RMInput.Move : Vector2.zero;
             if (Time.time < lockedUntil) input = Vector2.zero;
-            bool run = InputEnabled && RMInput.Run && input.magnitude > 0.1f;
+            bool run = InputEnabled && RMInput.Run && input.magnitude > 0.1f && !(Limping && !IsSwimming);
             IsRunning = run && new Vector2(velocity.x, velocity.z).magnitude > walkSpeed;
 
             float yaw = cameraRig != null ? cameraRig.MoveYaw : transform.eulerAngles.y;   // VR: where the head looks
@@ -167,6 +170,7 @@ namespace RexMagnum
             UpdateWater();
             float target = IsSwimming ? (run ? swimFastSpeed : swimSpeed) * input.magnitude
                                       : (run ? runSpeed : walkSpeed) * (HandsDown ? handsDownBonus : 1f) * input.magnitude;
+            if (Limping && !IsSwimming) target = Mathf.Min(target, LimpSpeed);    // the limp: no sliding feet
             Vector3 planar = new Vector3(velocity.x, 0f, velocity.z);
             planar = Vector3.MoveTowards(planar, wish.normalized * target, acceleration * Mathf.Max(target, 2f) * dt);
             // dodge (Ctrl / B / touch Dodge): a quick ~4 m burst, untouchable for a moment. Fast at the start, easing out.
@@ -249,7 +253,7 @@ namespace RexMagnum
             dodgeDir = dir;
             dodgeBack = back;
             dodgeUntil = Time.time + DodgeTime;
-            nextDodge = Time.time + 0.8f;
+            nextDodge = Time.time + 1.0f;       // 1 s cooldown: no chain-dodging through every attack
             if (hp == null) hp = GetComponent<Health>();
             if (hp != null) hp.Invulnerable(0.35f);
             SetTrigger(DodgeHash);

@@ -13,7 +13,8 @@ namespace RexMagnum.EditorTools
             ti.mipmapEnabled = false;
             ti.alphaIsTransparency = true;
             ti.npotScale = TextureImporterNPOTScale.None;
-            ti.maxTextureSize = assetPath.Contains("title_bg") ? 2048 : 512;
+            // full-screen pictures (title, island map) stay sharp at 1080p+; small icons stay small
+            ti.maxTextureSize = assetPath.Contains("title_bg") || assetPath.Contains("/map.") ? 2048 : 512;
             ti.textureCompression = TextureImporterCompression.CompressedHQ;
             ti.wrapMode = UnityEngine.TextureWrapMode.Clamp;
         }

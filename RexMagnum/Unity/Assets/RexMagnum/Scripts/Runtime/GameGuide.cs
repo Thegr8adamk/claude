@@ -34,6 +34,8 @@ namespace RexMagnum
 
         public static readonly Vector3 ProShop = new Vector3(-280f, 0f, -126.4f);     // Island.json golf.proShop
         public static readonly Vector3 Factory = new Vector3(300f, 0f, 75f);          // Island.json factory.core
+        public static readonly Vector3 Pistol = new Vector3(54f, 4.28f, -304f);       // Island.json hotel pistol (casino lounge, floor 1)
+        public static readonly Vector3 Sniper = new Vector3(82f, 21.53f, -292f);      // Island.json hotel sniper (roof)
 
         public static bool Visited(string zone) => Progress.Value("zone_" + zone) > 0;
 
@@ -44,18 +46,17 @@ namespace RexMagnum
         public static string Objective(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget)
         {
             string s = Step(w, rex, out target, out hasTarget, out StepId);
-            // the first night: a warning line over the goal (the compass still points at the goal)
-            if (DayNight.Night > 0.6f && Progress.Value("nights") < 1)
-            {
-                StepId = "night";
-                return "Night: blobs glow and come in numbers. Stay near lights.";
-            }
+            // the first night: a warning on its own line under the goal (the goal and StepId stay, so the old goal
+            // is not announced again when the night ends)
+            Warning = DayNight.Night > 0.6f && Progress.Value("nights") < 1 ? "NIGHT: blobs glow and come in numbers. Stay near lights." : null;
             return s;
         }
 
-        /// <summary>Which step Objective returned last ("pool", "rescue", "clubs", "cart", "cave", "factory", "glorp",
-        /// "explore_&lt;zone&gt;", "night", "free"): the HUD announces a new goal when it changes.</summary>
+        /// <summary>Which step Objective returned last ("pool", "rescue", "pistol", "clubs", "cart", "cave", "factory",
+        /// "sniper", "glorp", "explore_&lt;zone&gt;", "free"): the HUD announces a new goal when it changes.</summary>
         public static string StepId;
+        /// <summary>A warning line under the goal (the first night), or null.</summary>
+        public static string Warning;
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
         {
@@ -66,17 +67,22 @@ namespace RexMagnum
             int rescues = Progress.Value("rescues");
             id = "rescue";
             if (rescues < 3 && NearestHidingGuest(rex, out target))
-                return $"Rescue hiding guests ({rescues}/3): go close, {RMInput.Btn("Use")}. Clear the blobs first.";
+                return $"Rescue hiding guests ({rescues}/3): go close, {Glyph.B("Use")}. Clear the blobs first.";
+            id = "pistol";
+            if (w != null && !w.Has(WeaponId.Pistol)) { target = Pistol; return "Get the chrome pistol in the casino lounge (hotel, ground floor)."; }
             id = "clubs";
             if (w != null && !w.Has(WeaponId.GolfClub)) { target = ProShop; return "Get the golf clubs at the pro shop (golf course, west)."; }
             id = "cart";
             if (Progress.Value("cart_m") < 100 && Progress.Value("cart_dead") == 0)
-            { target = ProShop; return $"Drive a golf cart: pro shop, west. {RMInput.Btn("Use")}: get in."; }
+            { target = ProShop; return $"Drive a golf cart: pro shop, west. {Glyph.B("Use")}: get in."; }
             id = "cave";
             if (!FactoryCore.Stopped && !Visited("cave") && !Visited("ruins"))
             { target = Zones[6].at; return "The cave behind the waterfall (north-west) leads to the ruins."; }
             id = "factory";
             if (!FactoryCore.Stopped) { target = Factory; return "Stop the blob factory (jungle ruins, east)."; }
+            id = "sniper";
+            if (w != null && !w.Has(WeaponId.Sniper) && PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1)
+            { target = Sniper; return "Get the sniper rifle on the hotel roof (stairs or elevator)."; }
             id = "glorp";
             if (PlayerPrefs.GetInt(KingGlorpBoss.SaveKey, 0) != 1) { target = Zones[7].at; return "Pop King Glorp (crashed ship, north)."; }
             int zones = Progress.Value("zones");
@@ -107,7 +113,7 @@ namespace RexMagnum
         /// <summary>The control list for the device used last (keys and buttons follow the remap).</summary>
         public static List<(string what, string how)> Controls()
         {
-            string B(string a) => RMInput.Btn(a);
+            string B(string a) => Glyph.B(a);          // controller: coloured "[A]" tokens
             var l = new List<(string, string)>();
             switch (RMInput.LastDevice)
             {

@@ -62,6 +62,9 @@ namespace RexMagnum.EditorTools
             RexMagnum.QualityAuto.SetUrp(urp, "supportsMainLightShadows", "m_MainLightShadowsSupported", true);
             RexMagnum.QualityAuto.SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", true);
             RexMagnum.QualityAuto.SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", true);
+            // box-projected interior reflection probes (room 304, lobby, corridors, tunnels) + soft blend between probes
+            RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
+            RexMagnum.QualityAuto.SetUrp(urp, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
             EditorUtility.SetDirty(urp);
             // 2. Linear colour space
             if (PlayerSettings.colorSpace != ColorSpace.Linear) { PlayerSettings.colorSpace = ColorSpace.Linear; notes.AppendLine("- Colour space set to Linear."); }

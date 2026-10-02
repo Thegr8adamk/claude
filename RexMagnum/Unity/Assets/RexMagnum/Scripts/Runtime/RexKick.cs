@@ -23,7 +23,7 @@ namespace RexMagnum
             if (Time.time > nextSound)
             {
                 nextSound = Time.time + 0.15f;
-                if (clink != null) AudioSource.PlayClipAtPoint(clink, hit.point, 0.6f);
+                if (clink != null) AudioSource.PlayClipAtPoint(clink, hit.point, 0.6f * AudioMix.Effects);   // effects volume setting
                 else Sfx.Play("bottle_clink", hit.point, 0.6f);
             }
         }

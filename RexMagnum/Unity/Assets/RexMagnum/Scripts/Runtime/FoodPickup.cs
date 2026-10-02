@@ -69,6 +69,7 @@ namespace RexMagnum
             h.Heal(HealAmount[(int)kind]);
             Progress.Add(kind == Kind.Cocktail ? "drinks" : "snacks");
             Sfx.Play(kind == Kind.Cocktail ? "drink" : "eat", basePos);
+            RexTestHUD.Notice($"GOT: {Names[(int)kind].ToUpper()}  (+{HealAmount[(int)kind]:0} HEALTH)", 2f);   // shows with subtitles off too
             if (Nearby == this) Nearby = null;
             if (respawnSeconds > 0f) { model.SetActive(false); backAt = Time.time + respawnSeconds; }
             else Destroy(gameObject);

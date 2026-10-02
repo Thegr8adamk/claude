@@ -96,11 +96,15 @@ namespace RexMagnum
             Capturing = true;                       // HUD, hints and touch buttons hide for the picture
             yield return null;
             yield return new WaitForEndOfFrame();
-            var tex = ScreenCapture.CaptureScreenshotAsTexture();
+            var shot = ScreenCapture.CaptureScreenshotAsTexture();
             Capturing = false;
+            // at most 1920x1080 (a 4K or ultrawide screen is scaled down): a short encode, a small file
+            float k = Mathf.Min(1f, Mathf.Min(MaxW / (float)shot.width, MaxH / (float)shot.height));
+            var tex = k < 1f ? Shrink(shot, Mathf.RoundToInt(shot.width * k), Mathf.RoundToInt(shot.height * k)) : shot;
+            if (tex != shot) Object.Destroy(shot);
             Directory.CreateDirectory(Progress.AlbumDir);
             string file = $"photo_{System.DateTime.Now:yyyyMMdd_HHmmss}.jpg";
-            File.WriteAllBytes(Path.Combine(Progress.AlbumDir, file), tex.EncodeToJPG(85));
+            WriteLater(Path.Combine(Progress.AlbumDir, file), tex.EncodeToJPG(85));     // encode here, write on a worker thread
             SaveThumb(tex, file);                   // the ALBUM tab loads only these (small: phone memory)
             Object.Destroy(tex);
             string caption;
@@ -124,14 +128,24 @@ namespace RexMagnum
         // ------------------------------------------------------------ thumbnails (album)
 
         public const int ThumbW = 384, ThumbH = 216;
+        const int MaxW = 1920, MaxH = 1080;          // biggest saved photo
         static string ThumbPath(string file) => Path.Combine(Progress.AlbumDir, "thumb_" + file);
+
+        /// <summary>Writes the encoded bytes on a worker thread (no frame hitch on a slow phone card).</summary>
+        static void WriteLater(string path, byte[] bytes)
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try { File.WriteAllBytes(path, bytes); }
+                catch (System.Exception e) { Debug.LogWarning(e); }
+            });
+        }
 
         /// <summary>Writes thumb_&lt;file&gt; (384x216 JPG) from the full picture.</summary>
         static void SaveThumb(Texture src, string file)
         {
             var t = Downscale(src);
-            try { File.WriteAllBytes(ThumbPath(file), t.EncodeToJPG(80)); }
-            catch (System.Exception e) { Debug.LogWarning(e); }
+            WriteLater(ThumbPath(file), t.EncodeToJPG(80));
             Object.Destroy(t);
         }
 
@@ -164,11 +178,14 @@ namespace RexMagnum
         }
 
         /// <summary>GPU shrink to 384x216 in halving steps (one big bilinear step would shimmer). Readable result.</summary>
-        static Texture2D Downscale(Texture src)
+        static Texture2D Downscale(Texture src) => Shrink(src, ThumbW, ThumbH);
+
+        /// <summary>GPU shrink to tw x th in halving steps. Readable result (the caller destroys it).</summary>
+        static Texture2D Shrink(Texture src, int tw, int th)
         {
             int w = src.width, h = src.height;
             RenderTexture cur = null;
-            while (w / 2 >= ThumbW && h / 2 >= ThumbH)
+            while (w / 2 >= tw && h / 2 >= th)
             {
                 w /= 2; h /= 2;
                 var next = RenderTexture.GetTemporary(w, h, 0);
@@ -176,13 +193,13 @@ namespace RexMagnum
                 if (cur != null) RenderTexture.ReleaseTemporary(cur);
                 cur = next;
             }
-            var dst = RenderTexture.GetTemporary(ThumbW, ThumbH, 0);
+            var dst = RenderTexture.GetTemporary(tw, th, 0);
             if (cur == null) Graphics.Blit(src, dst); else Graphics.Blit(cur, dst);
             if (cur != null) RenderTexture.ReleaseTemporary(cur);
             var prev = RenderTexture.active;
             RenderTexture.active = dst;
-            var t = new Texture2D(ThumbW, ThumbH, TextureFormat.RGB24, false);
-            t.ReadPixels(new Rect(0, 0, ThumbW, ThumbH), 0, 0);
+            var t = new Texture2D(tw, th, TextureFormat.RGB24, false);
+            t.ReadPixels(new Rect(0, 0, tw, th), 0, 0);
             t.Apply();
             RenderTexture.active = prev;
             RenderTexture.ReleaseTemporary(dst);

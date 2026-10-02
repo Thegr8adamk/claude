@@ -89,7 +89,7 @@ namespace RexMagnum
             for (int i = 0; i < 10; i++)
             {
                 Vector3 dir = Random.onUnitSphere;
-                if (Physics.Raycast(at, dir, out RaycastHit hit, size * 4f, ~0, QueryTriggerInteraction.Ignore))
+                if (StaticHit(at, dir, size * 4f, out RaycastHit hit))
                 {
                     var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     Object.Destroy(q.GetComponent<Collider>());
@@ -100,6 +100,25 @@ namespace RexMagnum
                     Object.Destroy(q, 30f);
                 }
             }
+        }
+
+        /// <summary>A ray that passes through characters (Rex, blobs, guests, props with a rigidbody):
+        /// a decal stuck to something that moves away would float in the air.</summary>
+        static bool StaticHit(Vector3 from, Vector3 dir, float range, out RaycastHit hit)
+        {
+            for (int i = 0; i < 4; i++)                                    // at most a few bodies in the way
+            {
+                if (!Physics.Raycast(from, dir, out hit, range, ~0, QueryTriggerInteraction.Ignore)) return false;
+                var c = hit.collider;
+                bool character = c is CharacterController || c.attachedRigidbody != null ||
+                                 c.GetComponentInParent<Health>() != null || c.GetComponentInParent<UnityEngine.AI.NavMeshAgent>() != null;
+                if (!character) return true;
+                from = hit.point + dir * 0.05f;
+                range -= hit.distance + 0.05f;
+                if (range <= 0f) return false;
+            }
+            hit = default;
+            return false;
         }
     }
 }

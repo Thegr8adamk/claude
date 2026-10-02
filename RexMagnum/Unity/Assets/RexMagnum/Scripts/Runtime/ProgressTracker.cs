@@ -32,7 +32,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (Time.unscaledTime > toastUntil) return;
+            if (Time.unscaledTime > toastUntil || PhotoAlbum.Capturing) return;     // no toast in the photo
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             MenuSkin.Use(s);                 // shared menu look, no new style per event
             var r = new Rect(w - 520 * s, h * 0.25f, 480 * s, 90 * s);

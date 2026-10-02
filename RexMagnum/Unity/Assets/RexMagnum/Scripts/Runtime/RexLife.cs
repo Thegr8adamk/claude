@@ -11,8 +11,10 @@ namespace RexMagnum
         /// <summary>Low health (under 25 %): Rex limps (animator bool Hurt). Checked on damage and twice a second.</summary>
         void UpdateLimp()
         {
-            if (ctrl != null && ctrl.bodyAnimator != null && health != null)
-                ctrl.bodyAnimator.SetBool("Hurt", !health.IsDead && health.Fraction < 0.25f);
+            if (ctrl == null || health == null) return;
+            bool limp = !health.IsDead && health.Fraction < 0.25f;
+            ctrl.Limping = limp;                       // speed cap 2 m/s, no run (RexController)
+            if (ctrl.bodyAnimator != null) ctrl.bodyAnimator.SetBool("Hurt", limp);
         }
 
         void OnEnable() => InvokeRepeating(nameof(UpdateLimp), 1f, 0.5f);

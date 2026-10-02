@@ -162,7 +162,7 @@ namespace RexMagnum
 
         void OnGUI()
         {
-            if (Driven != this) return;
+            if (Driven != this || PhotoAlbum.Capturing) return;      // no battery meter in the photo
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             var r = new Rect(w - 300 * s, h - 80 * s, 260 * s, 26 * s);
             GUI.color = new Color(0, 0, 0, 0.5f);

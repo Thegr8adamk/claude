@@ -269,6 +269,7 @@ namespace RexMagnum
             objectiveText.alignment = touch ? TextAnchor.UpperLeft : TextAnchor.UpperCenter;
             objectiveText.fontSize = touch ? 22 : 26;
             objectiveText.rectTransform.sizeDelta = new Vector2(touch ? 420 : 1400, touch ? 84 : 80);
+            objectiveText.verticalOverflow = VerticalWrapMode.Overflow;       // the night line under a long goal still shows
             Place(hpBar, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -214) : new Vector2(40, 40));
             Place(hp.rectTransform, touch ? new Vector2(0f, 1f) : new Vector2(0f, 0f), touch ? new Vector2(24, -178) : new Vector2(40, 72));
         }
@@ -388,7 +389,7 @@ namespace RexMagnum
             float t = GameFlow.PlaySeconds;
             if (GameFlow.Busy || t > 15f) { info.text = ""; return; }
             info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((15f - t) / 2f));      // fades out at the end
-            string p = RMInput.LastDevice == RMInput.DeviceKind.Touch ? "II button" : RMInput.Btn("Pause");
+            string p = RMInput.LastDevice == RMInput.DeviceKind.Touch ? "II button" : Glyph.B("Pause");
             info.text = $"{p}: pause.  Pause > HELP shows all controls.";
         }
 
@@ -497,14 +498,20 @@ namespace RexMagnum
             if (Time.unscaledTime < nextObjective) return;
             nextObjective = Time.unscaledTime + 0.5f;
             var rex = RexT;
-            if (GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
-            else objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas);
-            objectiveText.text = objective != null ? "NEXT: " + objective : "";
+            // no goal over the title / intro or the room hints: the first goal is announced when the tutorial ends
+            string warning = null;
+            if (GameFlow.Busy || GameFlow.TutorialActive || rex == null) { objective = null; objectiveHas = false; }
+            else { objective = GameGuide.Objective(actions.weapons, rex.position, out objectiveAt, out objectiveHas); warning = GameGuide.Warning; }
+            // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
+            if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
+            objectiveText.text = objective == null ? "" : "NEXT: " + objective + (warning != null ? "\n<color=#9CCBFF>" + warning + "</color>" : "");
+            if (warning != null && !nightShown) { nightShown = true; Notice(warning, 4f); MenuNav.Click(); }
             AnnounceGoal(objective != null ? GameGuide.StepId : null);
         }
 
         string goalShown, goalPending;
         float goalPendingSince;
+        bool nightShown;
 
         /// <summary>A new goal: a short notice + click. The step must hold for 1.5 s first (guests that stream in and
         /// out would flip "rescue" and the next step back and forth).</summary>
@@ -577,11 +584,11 @@ namespace RexMagnum
         /// <summary>What Use (or Action) does here: pickups, guests (rescue / knock / talk), golf cart, elevator.</summary>
         string UsePrompt()
         {
-            if (WeaponPickup.Nearby != null) return WeaponPickup.Nearby.Label;
-            if (FoodPickup.Nearby != null) return FoodPickup.Nearby.Label;
+            if (WeaponPickup.Nearby != null) return Glyph.Swap(WeaponPickup.Nearby.Label, "Use");
+            if (FoodPickup.Nearby != null) return Glyph.Swap(FoodPickup.Nearby.Label, "Use");
             var rex = RexT;
             if (rex == null || GameFlow.Busy) return "";
-            string U = RMInput.Btn("Use");
+            string U = Glyph.B("Use");
             if (GolfCart.Driven != null)
             {
                 if (drivingSince < 0f) drivingSince = Time.time;
@@ -623,8 +630,8 @@ namespace RexMagnum
             }
             if (near != null && nearD < 2.5f)
                 return actions.controller != null && actions.controller.HandsDown
-                    ? $"{RMInput.Btn("Action")}: talk to {near.guestName}"
-                    : $"{RMInput.Btn("Hands")}: hands down to talk to {near.guestName}";
+                    ? $"{Glyph.B("Action")}: talk to {near.guestName}"
+                    : $"{Glyph.B("Hands")}: hands down to talk to {near.guestName}";
             return "";
         }
     }

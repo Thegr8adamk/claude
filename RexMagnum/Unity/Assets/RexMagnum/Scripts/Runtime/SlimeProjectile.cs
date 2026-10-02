@@ -49,7 +49,8 @@ namespace RexMagnum
                 {
                     h.Damage(damage, hit.point, owner);
                     var rex = h.GetComponent<RexController>();
-                    if (rex != null) rex.Slimed();
+                    // only when the hit counted (a dodge's invulnerability or death blocks it): no slime on a miss
+                    if (rex != null && h.LastDamageTime == Time.time) rex.Slimed();
                 }
                 else if (Vector3.Dot(hit.normal, Vector3.up) > 0.6f)
                     SlimePuddle.Spawn(hit.point, color);

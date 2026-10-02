@@ -35,6 +35,7 @@ Shader "RexMagnum/Water"
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_fog
+            #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -47,7 +48,7 @@ Shader "RexMagnum/Water"
                 float _WaveHeight, _WaveLength, _WaveFade, _River;
             CBUFFER_END
 
-            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; };
+            struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct V
             {
                 float4 positionCS : SV_POSITION;
@@ -57,6 +58,7 @@ Shader "RexMagnum/Water"
                 float fog : TEXCOORD3;
                 float2 uv : TEXCOORD4;
                 float4 color : TEXCOORD5;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             float3 Gerstner(float3 p, float2 dir, float steep, float len, inout float3 tangent, inout float3 binormal)
@@ -74,6 +76,8 @@ Shader "RexMagnum/Water"
             V vert(A i)
             {
                 V o;
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);   // single-pass instanced VR: right eye index
                 float3 ws = TransformObjectToWorld(i.positionOS.xyz);
                 float3 n = TransformObjectToWorldNormal(i.normalOS);
                 if (_WaveHeight > 0)
@@ -99,6 +103,10 @@ Shader "RexMagnum/Water"
 
             half4 frag(V i) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);   // depth texture is a per-eye array in VR
+                // closed water boxes (pools, tanks): only the top face is water; the side / bottom faces
+                // z-fought with the pool walls and flickered. Ocean (waves) and rivers keep every face.
+                if (_WaveHeight <= 0 && _River < 0.5 && i.normalWS.y < 0.5) discard;
                 float2 uv = i.positionWS.xz * _NormalTiling;
                 float2 flow = normalize(_FlowDir.xy + 1e-4) * _FlowSpeed * _Time.y;
                 if (_River > 0.5)
@@ -112,7 +120,9 @@ Shader "RexMagnum/Water"
                 float3 n2 = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uv * 1.7 - flow * 1.3 + 0.37), _NormalStrength);
                 float3 nt = normalize(float3(n1.xy + n2.xy, n1.z * n2.z));
                 float3 up = normalize(i.normalWS);
-                float3 tx = normalize(cross(up, float3(0, 0, 1)));
+                // reference axis never parallel to the normal (cross with +Z alone gave NaN on +-Z faces)
+                float3 refAxis = abs(up.z) > 0.9 ? float3(1, 0, 0) : float3(0, 0, 1);
+                float3 tx = normalize(cross(up, refAxis));
                 float3 bz = cross(tx, up);
                 float3 N = normalize(tx * nt.x + bz * nt.y + up * nt.z);
 
@@ -130,7 +140,9 @@ Shader "RexMagnum/Water"
                 float spec = pow(saturate(dot(N, H)), 600 * _Smoothness + 8) * 6 * L.shadowAttenuation;
                 float diff = saturate(dot(up, L.direction)) * 0.6 + 0.4;
 
-                float3 rgb = col.rgb * diff * L.color + _Glow.rgb;
+                // sky ambient (spherical harmonics, up) so night / shaded water is lit by the sky, not black
+                float3 amb = SampleSH(float3(0, 1, 0));
+                float3 rgb = col.rgb * (diff * L.color + amb * 0.7) + _Glow.rgb;
                 rgb = lerp(rgb, refl, fres);
                 rgb += spec * L.color;
                 float alpha = saturate(col.a + fres * 0.5);
@@ -139,7 +151,7 @@ Shader "RexMagnum/Water"
                 float foam = saturate(1 - depth / _FoamDepth) * saturate(n1.x * 2 + 0.6);
                 if (_River > 0.5)   // rapids: vertex colour R, broken into streaks by the moving normal map
                     foam = max(foam, saturate(i.color.r * 1.6 - 0.35 + (n1.x + n2.y) * 0.8));
-                rgb = lerp(rgb, _FoamColor.rgb * (L.color * 0.8 + 0.2), foam * _FoamColor.a);
+                rgb = lerp(rgb, _FoamColor.rgb * (L.color * 0.8 + amb * 0.6 + 0.05), foam * _FoamColor.a);
                 alpha = max(alpha, foam);
                 rgb = MixFog(rgb, i.fog);
                 return half4(rgb, alpha);

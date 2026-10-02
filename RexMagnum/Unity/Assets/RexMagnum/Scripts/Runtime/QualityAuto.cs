@@ -9,7 +9,8 @@ namespace RexMagnum
     /// <summary>
     /// Picks safe graphics settings from the hardware at start (no manual specs check needed):
     /// video memory, system memory, CPU cores and platform. The player can override it later in Settings
-    /// (saved in PlayerPrefs "RexMagnum_Quality", -1 = auto). Tiers change render scale, shadows, MSAA,
+    /// (saved in PlayerPrefs "RexMagnum_Quality", -1 = auto). Tiers change render scale, shadows, MSAA / SMAA, SSAO,
+    /// reflection probe size,
     /// terrain trees / grass distance and density, LOD bias and frame-rate target.
     /// </summary>
     [DefaultExecutionOrder(-500)]
@@ -21,6 +22,7 @@ namespace RexMagnum
 
         void Awake()
         {
+            UsePlayCopy();
             if (terrains == null || terrains.Length == 0) terrains = Terrain.activeTerrains;
             int saved = PlayerPrefs.GetInt(PrefKey, -1);
             Apply(saved >= 0 ? (QualityTier)Mathf.Clamp(saved, 0, 3) : Detect());
@@ -30,6 +32,69 @@ namespace RexMagnum
         {
             DynamicGI.UpdateEnvironment();     // ambient light from the sky
         }
+
+        // ---- Editor: tier changes must not be saved into the project's URP asset / renderer data.
+        // Play mode runs on a copy of the URP asset; the original asset and the SSAO switch are put back on exit.
+#if UNITY_EDITOR
+        static RenderPipelineAsset origDefault, origQuality;
+        static bool swapped;
+        static readonly System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool> featureState =
+            new System.Collections.Generic.Dictionary<ScriptableRendererFeature, bool>();
+#endif
+
+        static void UsePlayCopy()
+        {
+#if UNITY_EDITOR
+            if (swapped || !(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)) return;
+            swapped = true;
+            origDefault = GraphicsSettings.defaultRenderPipeline;
+            origQuality = QualitySettings.renderPipeline;
+            var copy = Instantiate(urp);
+            copy.name = urp.name + " (play copy)";
+            copy.hideFlags = HideFlags.DontSave;
+            if (origQuality != null) QualitySettings.renderPipeline = copy;   // the quality level's asset wins if set
+            else GraphicsSettings.defaultRenderPipeline = copy;
+            UnityEditor.EditorApplication.playModeStateChanged += RestoreAfterPlay;
+#endif
+        }
+
+#if UNITY_EDITOR
+        static void RestoreAfterPlay(UnityEditor.PlayModeStateChange s)
+        {
+            if (s != UnityEditor.PlayModeStateChange.ExitingPlayMode && s != UnityEditor.PlayModeStateChange.EnteredEditMode) return;
+            UnityEditor.EditorApplication.playModeStateChanged -= RestoreAfterPlay;
+            if (!swapped) return;
+            swapped = false;
+            if (origQuality != null) QualitySettings.renderPipeline = origQuality;
+            else GraphicsSettings.defaultRenderPipeline = origDefault;
+            foreach (var kv in featureState) if (kv.Key != null) FeatureSet(kv.Key, kv.Value);
+            featureState.Clear();
+        }
+#endif
+
+        // renderer feature on/off by reflection (isActive / SetActive), like SetUrp
+        static bool FeatureActive(object f) => f.GetType().GetProperty("isActive")?.GetValue(f) is bool b ? b : true;
+        static void FeatureSet(object f, bool on) => f.GetType().GetMethod("SetActive", new[] { typeof(bool) })?.Invoke(f, new object[] { on });
+
+        /// <summary>The SSAO renderer feature on the first renderer of the URP asset (added by Build Island), or null.
+        /// The renderer list is not public in every URP version: read the serialized field.</summary>
+        static ScriptableRendererFeature FindSSAO(UniversalRenderPipelineAsset urp)
+        {
+            var f = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            var list = f != null ? f.GetValue(urp) as ScriptableRendererData[] : null;
+            if (list == null) return null;
+            foreach (var data in list)
+            {
+                if (data == null) continue;
+                foreach (var feat in data.rendererFeatures)
+                    if (feat != null && feat.GetType().Name.Contains("AmbientOcclusion")) return feat;
+            }
+            return null;
+        }
+
+        static readonly System.Collections.Generic.Dictionary<ReflectionProbe, int> probeRes =
+            new System.Collections.Generic.Dictionary<ReflectionProbe, int>();
 
         public static QualityTier Detect()
         {
@@ -54,7 +119,11 @@ namespace RexMagnum
             //                         Low    Medium High   Ultra
             float[] renderScale    = { 0.75f, 0.9f,  1f,    1f };
             float[] shadowDist     = { 40f,   80f,   140f,  220f };
-            int[]   msaa           = { 1,     2,     4,     4 };
+            // one anti-aliasing per tier: Low none, Medium SMAA (post, cheap on desktop), High / Ultra MSAA 2x / 4x.
+            // Phones: MSAA 2x on Medium instead of SMAA (MSAA is nearly free on tiled mobile GPUs, SMAA is not)
+            bool mobile = Application.isMobilePlatform;
+            int[]   msaa           = { 1,     mobile ? 2 : 1, 2, 4 };
+            bool smaa = t == QualityTier.Medium && !mobile;
             float[] treeDist       = { 250f,  400f,  650f,  900f };
             // grass: max 1 clump (~200 tris) per m2 in the map; worst-case view ~0.1 / 0.6 / 1.4 / 2.6 M triangles
             float[] detailDist     = { 35f,   60f,   80f,   100f };
@@ -76,6 +145,27 @@ namespace RexMagnum
                 urp.msaaSampleCount = msaa[i];
                 urp.supportsCameraDepthTexture = true;    // water depth colour + shore foam
                 urp.supportsCameraOpaqueTexture = false;
+                // SSAO only from Medium up (a full-screen pass + depth normals prepass: too slow on Low)
+                var ssao = FindSSAO(urp);
+                if (ssao != null)
+                {
+#if UNITY_EDITOR
+                    if (!featureState.ContainsKey(ssao)) featureState[ssao] = FeatureActive(ssao);
+#endif
+                    FeatureSet(ssao, t >= QualityTier.Medium);
+                }
+            }
+            foreach (var cam in FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (cam.targetTexture != null || !cam.TryGetComponent(out UniversalAdditionalCameraData cd)) continue;  // mirror / photo cameras keep theirs
+                cd.antialiasing = smaa ? AntialiasingMode.SubpixelMorphologicalAntiAliasing : AntialiasingMode.None;
+                cam.allowMSAA = msaa[i] > 1;
+            }
+            // reflection probes: 128 px cubemaps on Low (the island probe is 256), original size otherwise
+            foreach (var rp in FindObjectsByType<ReflectionProbe>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (!probeRes.TryGetValue(rp, out int baseRes)) probeRes[rp] = baseRes = rp.resolution;
+                rp.resolution = t == QualityTier.Low ? Mathf.Min(baseRes, 128) : baseRes;
             }
             QualitySettings.lodBias = lodBias[i];
             QualitySettings.anisotropicFiltering = t >= QualityTier.High ? AnisotropicFiltering.ForceEnable : AnisotropicFiltering.Enable;

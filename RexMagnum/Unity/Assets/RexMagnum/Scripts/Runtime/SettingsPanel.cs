@@ -112,7 +112,7 @@ namespace RexMagnum
                 case 1:
                     Header("CAMERA");
                     Choice("View", new[] { "THIRD PERSON", "FIRST PERSON" }, ViewIndex, SetView);
-                    Note($"In the game, {RMInput.Btn("Camera")} switches the view at any time.");
+                    Note($"In the game, {Glyph.B("Camera")} switches the view at any time.");
                     Toggle("Head bob (first person)", "RexMagnum_HeadBob", 1);
                     Slider("Mouse look speed", "RexMagnum_LookSpeed", 0.08f, 0.02f, 0.25f, v => v.ToString("0.00"));
                     Slider("Controller look speed", "RexMagnum_StickSpeed", 180f, 60f, 360f, v => Mathf.RoundToInt(v).ToString());
@@ -323,15 +323,19 @@ namespace RexMagnum
             btn = MenuSkin.Option; rowSel = MenuSkin.RowSel;
         }
 
+        /// <summary>Widest the panel gets (~1.9 x screen height): on an ultrawide screen the rows do not stretch apart.</summary>
+        public static float MaxWidth => Screen.height * 1.9f;
+
         public void Draw(Rect area, float s)
         {
             Styles(s);
+            if (area.width > MaxWidth) area.width = MaxWidth;
             if (Event.current.type == EventType.Layout) Build();
             float tw = area.width / Pages.Length;
             for (int i = 0; i < Pages.Length; i++)
                 if (GUI.Toggle(new Rect(area.x + i * tw + 4, area.y, tw - 8, 46 * s), page == i, Pages[i], MenuSkin.Tab) && page != i) { SetPage(i); MenuNav.Click(); }
             GUI.Label(new Rect(area.x, area.y + 50 * s, area.width, 26 * s),
-                      Gamepad.current != null ? "LB / RB: page     D-pad: choose and change     A: press     B: back"
+                      Gamepad.current != null ? $"{Glyph.Token("LB")} / {Glyph.Token("RB")}: page     D-pad: choose and change     {Glyph.Token("A")}: press     {Glyph.Token("B")}: back"
                                               : "Q / E: page     Arrows: choose and change     Enter: press     Esc: back", small);
             var inner = new Rect(area.x, area.y + 84 * s, area.width, area.height - 84 * s);
             viewH = inner.height;

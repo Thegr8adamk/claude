@@ -99,7 +99,41 @@ namespace RexMagnum
             if (main != null) c.CopyFrom(main);
             c.fieldOfView = 45f;
             c.depth = (main != null ? main.depth : 0) + 1;
+            if (main != null)
+            {
+                // CopyFrom does not copy URP's camera data: same post-processing and anti-aliasing as the game
+                var md = main.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                if (md != null)
+                {
+                    if (!c.TryGetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>(out var kd))
+                        kd = c.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                    kd.renderPostProcessing = md.renderPostProcessing;
+                    kd.antialiasing = md.antialiasing;
+                }
+                // the game view is fully covered: do not render it twice (the AudioListener on its object stays on)
+                main.enabled = false;
+                hiddenMain = main;
+            }
             return c;
+        }
+
+        Camera hiddenMain;
+
+        /// <summary>Kill cam over (done, skipped, or this object is going away): drop its camera, the game camera renders again.</summary>
+        void EndCam()
+        {
+            if (hiddenMain != null) hiddenMain.enabled = true;
+            hiddenMain = null;
+            if (cam != null) Destroy(cam.gameObject);
+            cam = null;
+        }
+
+        // scene unload / destroyed mid-show: the coroutine never reaches its end
+        void OnDestroy()
+        {
+            if (running && Time.timeScale > 0f) Time.timeScale = 1f;
+            running = riding = false;
+            EndCam();
         }
 
         IEnumerator Ride(Transform c)
@@ -137,7 +171,7 @@ namespace RexMagnum
             }
             if (Time.timeScale > 0f) Time.timeScale = 1f;   // not while the pause menu holds it at 0 (its key also skips the cam)
             XRay(last, false);
-            Destroy(cam.gameObject);
+            EndCam();
             running = riding = false;
         }
 
@@ -183,7 +217,7 @@ namespace RexMagnum
             }
             if (Time.timeScale > 0f) Time.timeScale = 1f;   // not while the pause menu holds it at 0 (its key also skips the cam)
             XRay(target, false);
-            Destroy(cam.gameObject);
+            EndCam();
             running = false;
         }
 

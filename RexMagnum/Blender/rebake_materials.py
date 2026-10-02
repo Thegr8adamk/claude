@@ -32,7 +32,7 @@ def main():
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
-    sc.cycles.samples = 1
+    sc.cycles.samples = E.BAKE_SAMPLES     # anti-aliased procedural textures (was 1)
     sc.render.bake.use_selected_to_active = False
     for cn in ("Vegetation", "Grass"):
         c = bpy.data.collections.get(cn)

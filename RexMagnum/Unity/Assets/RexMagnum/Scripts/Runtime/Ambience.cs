@@ -7,6 +7,7 @@ namespace RexMagnum
     ///  - Beach waves near the shore (low ground), jungle insects and birds inland; the jungle is louder at night.
     ///  - Footsteps (flip-flops) timed by Rex's ground speed, by surface: sand on low terrain by the beach, grass on
     ///    other terrain, tile on buildings. Swim strokes while he swims. A splash when he goes into water.
+    ///  - Listener filters: muffled (low-pass) with the camera under water, Room reverb under a roof.
     /// Clips: Resources/Sfx/amb_beach, amb_jungle, footstep, footstep_sand, footstep_grass, swim_stroke, splash (silent if
     /// missing). Volume: Settings > Sound > Effects.
     /// </summary>
@@ -77,6 +78,7 @@ namespace RexMagnum
             float wantJungle = title ? 0f : (0.22f + 0.18f * DayNight.Night) * Mathf.Clamp01((p.y - 4f) / 10f + (1f - low) * 0.5f) * outside;
             if (beach != null) beach.volume = Mathf.MoveTowards(beach.volume, wantBeach * AudioMix.Effects, dt * 0.2f);
             if (jungle != null) jungle.volume = Mathf.MoveTowards(jungle.volume, wantJungle * AudioMix.Effects, dt * 0.2f);
+            ListenerFX(title);
             if (title || cc == null) return;
 
             // footsteps: one every ~0.55 m walking, longer strides when running
@@ -102,6 +104,58 @@ namespace RexMagnum
             }
             if (inWater && !wasInWater && Mathf.Abs(v.y) + speed > 1.5f) Sfx.Play("splash", p, 0.8f);
             wasInWater = inWater;
+        }
+
+        // ------------------------------------------------------------ listener filters (no AudioMixer asset)
+
+        AudioListener listener;
+        AudioLowPassFilter lowPass;
+        AudioReverbFilter reverb;
+        float nextListener, nextUnder;
+        bool camUnder;
+
+        /// <summary>Filters on the AudioListener's GameObject (the camera), added at runtime: a low-pass while the camera
+        /// is under water (muffled), Room reverb while Rex is under a roof (hotel, cave). The whole mix goes through them.</summary>
+        void ListenerFX(bool title)
+        {
+            float now = Time.unscaledTime;
+            if (now > nextListener)
+            {
+                nextListener = now + 2f;      // the title camera and the player camera can each have a listener
+                AudioListener found = null;
+                foreach (var l in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+                    if (l.isActiveAndEnabled) { found = l; break; }
+                if (found != listener)
+                {
+                    if (lowPass != null) lowPass.enabled = false;
+                    if (reverb != null) reverb.enabled = false;
+                    listener = found;
+                    lowPass = null; reverb = null;
+                    if (listener != null)
+                    {
+                        var go = listener.gameObject;
+                        if (!go.TryGetComponent(out lowPass)) { lowPass = go.AddComponent<AudioLowPassFilter>(); lowPass.cutoffFrequency = 22000f; }
+                        if (!go.TryGetComponent(out reverb)) reverb = go.AddComponent<AudioReverbFilter>();
+                        reverb.reverbPreset = AudioReverbPreset.Room;
+                        lowPass.enabled = false;
+                        reverb.enabled = false;
+                    }
+                }
+            }
+            if (listener == null) return;
+            if (now > nextUnder)
+            {
+                nextUnder = now + 0.1f;
+                camUnder = !title && WaterVolume.Depth(listener.transform.position) > 0.05f;
+            }
+            if (lowPass != null)
+            {
+                // into the water fast (~0.3 s), out a bit slower
+                float want = camUnder ? 700f : 22000f;
+                lowPass.cutoffFrequency = Mathf.MoveTowards(lowPass.cutoffFrequency, want, Time.unscaledDeltaTime * (camUnder ? 70000f : 40000f));
+                lowPass.enabled = camUnder || lowPass.cutoffFrequency < 21500f;
+            }
+            if (reverb != null) reverb.enabled = !title && roofed && !camUnder;
         }
 
         /// <summary>What is under Rex's feet: terrain near sea level = beach sand, other terrain = grass,

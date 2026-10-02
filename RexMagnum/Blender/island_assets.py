@@ -689,6 +689,16 @@ def bottle(k, x, y, z, mat, lying=0.0, rot=0.0, base="Bottle"):
     return obs
 
 
+def spin(ob, euler):
+    """Turn an object's mesh around its own centre. (Setting rotation_euler turns it around the kit origin, which is
+    far away: the pool lights ended up 10 m above the pool and the cart headlights under the cart.)"""
+    from mathutils import Euler
+    me = ob.data
+    c = sum((v.co for v in me.vertices), Vector()) / max(1, len(me.vertices))
+    me.transform(Matrix.Translation(c) @ Euler(euler).to_matrix().to_4x4() @ Matrix.Translation(-c))
+    return ob
+
+
 def room304(m):
     """Rex's room 304 (hotel-local coordinates, same transform as the hotel). Morning after: bed, empty beer
     bottles, pizza box, shirt on the floor, TV playing Maximum Justice, the film poster, bathroom with
@@ -802,9 +812,9 @@ def room304(m):
                base=f"FloorBottle{i}x")          # separate physics props in Unity (kickable)
     k.box((-24.0, 8.0, z0 + 0.02), (-23.6, 8.4, z0 + 0.07), pizza, "PizzaBox")
     pz = k.box((-24.3, 8.5, z0 + 0.02), (-23.9, 8.9, z0 + 0.06), pizza, "PizzaBox")
-    pz.rotation_euler = (0, 0, 0.4)
+    spin(pz, (0, 0, 0.4))
     sh = k.box((-23.8, 4.8, z0 + 0.02), (-23.2, 5.5, z0 + 0.06), shirt, "Shirt", bevel=0.02)
-    sh.rotation_euler = (0, 0, -0.3)
+    spin(sh, (0, 0, -0.3))
     k.box((xa + 0.6, 4.4, z0), (xa + 1.1, 4.9, z0 + 0.85), principled("A_Fridge", (0.85, 0.85, 0.83), 0.3), "MiniFridge")
     return k.c
 
@@ -1360,7 +1370,7 @@ def pool_area(m):
                   base="Rung")
     for i in range(8):   # underwater lights in the walls
         x = px0 + 3 + i * 6.5
-        k.disc((x, py0 + 0.01, -0.9), 0.15, 0.02, m["poollight"], base="PoolLight").rotation_euler = (math.radians(-90), 0, 0)
+        spin(k.disc((x, py0 + 0.01, -0.9), 0.15, 0.02, m["poollight"], base="PoolLight"), (math.radians(-90), 0, 0))
     # swim-up bar in the pool (counter base stands on the pool floor), stools in the water, thatch roof on posts
     bx, by = 8, 0
     k.box((bx - 3, by - 1, -depth), (bx + 3, by + 1, 1.1), m["bamboo"], "BarCounter")
@@ -2032,7 +2042,7 @@ def golf_cart(m):
             w = k.cyl((x - 0.1, y, 0.24), (x + 0.1, y, 0.24), 0.24, tyre, segs=20, base="Tyre")
             k.cyl((x - 0.105, y, 0.24), (x + 0.105, y, 0.24), 0.12, m["alu"], segs=16, base="Hub")
     for x in (-0.4, 0.4):
-        k.disc((x, 1.255, 0.75), 0.07, 0.02, m["roomlight"], base="Headlight").rotation_euler = (math.radians(-90), 0, 0)
+        spin(k.disc((x, 1.255, 0.75), 0.07, 0.02, m["roomlight"], base="Headlight"), (math.radians(-90), 0, 0))
     k.text("ISLA GRANDE", 0.09, (0, 1.256, 0.6), m["sign_board"], 0.005, rot=(math.pi / 2, 0, math.pi), base="CartLogo")
     return k.c
 

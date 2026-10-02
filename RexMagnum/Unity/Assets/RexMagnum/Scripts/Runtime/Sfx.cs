@@ -23,22 +23,58 @@ namespace RexMagnum
             return c;
         }
 
+        // a small pool of sources (a new GameObject per sound was garbage and Destroy calls in every fight):
+        // a free one if there is one, else the one that started longest ago
+        const int PoolSize = 24;
+        static readonly AudioSource[] pool = new AudioSource[PoolSize];
+        static readonly float[] started = new float[PoolSize];
+        static Transform poolRoot;
+
+        static AudioSource Source()
+        {
+            if (poolRoot == null)
+            {
+                var root = new GameObject("SfxPool");
+                Object.DontDestroyOnLoad(root);
+                poolRoot = root.transform;
+                System.Array.Clear(pool, 0, PoolSize);
+            }
+            int best = 0;
+            for (int i = 0; i < PoolSize; i++)
+            {
+                if (pool[i] == null)
+                {
+                    var go = new GameObject("Sfx");
+                    go.transform.SetParent(poolRoot, false);
+                    pool[i] = go.AddComponent<AudioSource>();
+                    pool[i].playOnAwake = false;
+                    pool[i].spatialBlend = 1f;
+                    best = i;
+                    break;
+                }
+                if (!pool[i].isPlaying) { best = i; break; }
+                if (started[i] < started[best]) best = i;
+            }
+            started[best] = Time.unscaledTime;
+            return pool[best];
+        }
+
         /// <summary>One-shot 3D sound. Pitch varies +-8% each time (the same hit twice in a row sounds less canned).
-        /// Returns the source (null when the clip is missing) so a caller can cut it short.</summary>
+        /// Returns the source (null when the clip is missing) so a caller can cut it short right away; it is pooled,
+        /// so do not keep it for later (it may be playing another sound by then).</summary>
         public static AudioSource Play(string name, Vector3 pos, float volume = 1f, float pitch = 1f)
         {
             var c = Get(name);
             if (c == null) return null;
             // own source instead of PlayClipAtPoint: that one has no pitch
-            var go = new GameObject("Sfx_" + name);
-            go.transform.position = pos;
-            var a = go.AddComponent<AudioSource>();
+            var a = Source();
+            a.Stop();
+            a.transform.position = pos;
             a.clip = c;
             a.spatialBlend = 1f;
             a.volume = volume * AudioMix.Effects;
             a.pitch = pitch * Random.Range(0.92f, 1.08f);
             a.Play();
-            Object.Destroy(go, c.length / Mathf.Max(0.1f, a.pitch) + 0.1f);
             return a;
         }
     }
