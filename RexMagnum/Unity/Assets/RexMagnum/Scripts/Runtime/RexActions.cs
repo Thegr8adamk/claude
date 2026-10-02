@@ -56,7 +56,7 @@ namespace RexMagnum
                     else if (RMInput.ActionHeld && Time.time - pressTime >= holdTime)
                     {
                         Do(Heavy, 0.9f);
-                        Sfx.Play("swing", transform.position, 0.45f, 0.55f);     // charge cue (as RexWeapons)
+                        Sfx.Play("swing", transform.position, 0.45f, 0.55f);     // the only heavy sound here (no RexWeapons whoosh)
                         StartCoroutine(HitAfter(0.45f, heavyDamage, 1.6f, true));
                         pressTime = -1f;
                     }

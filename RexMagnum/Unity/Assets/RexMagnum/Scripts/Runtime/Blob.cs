@@ -145,6 +145,14 @@ namespace RexMagnum
         public void Telegraph() => telegraphUntil = Time.time + TelegraphTime;
         /// <summary>Hunts Rex for this long even beyond its sight range (BarDefense's waves come for him).</summary>
         public void Alert(float seconds) => alertUntil = Mathf.Max(alertUntil, Time.time + seconds);
+        /// <summary>A popped bouncer made a half (parent, half): BarDefense / NightSiege add it to their wave.</summary>
+        public static event System.Action<Blob, Blob> Split;
+        /// <summary>KingGlorpBoss's own moves (sweep, hop): no chasing or normal attacks for this long.</summary>
+        public void Hold(float seconds)
+        {
+            busyUntil = Mathf.Max(busyUntil, Time.time + seconds);
+            nextAttack = Mathf.Max(nextAttack, Time.time + seconds + 0.4f);
+        }
 
         // group fight: at most MaxAttackers blobs attack Rex at once; the others circle at 4-6 m and wait their turn
         const int MaxAttackers = 2;
@@ -447,13 +455,17 @@ namespace RexMagnum
         {
             if ((kind != Kind.Lifeguard && kind != Kind.Bouncer) || isHalf || Disguised || !agent.isOnNavMesh) return false;
             if (Time.time < nextSignature || Time.time < nextSignatureRoll || Time.time < nextAttack) return false;
+            // attack turns: only with a token (the 2-attacker cap); the one exception is a lifeguard's dive from far
+            // out (> 12 m), which hands its turn back as it goes under anyway
+            bool diveOnly = !hasToken;
+            if (diveOnly && kind != Kind.Lifeguard) return false;
             nextSignatureRoll = Time.time + 1f;                            // one roll per second, not per frame
             if (Random.value > 0.35f) return false;
             if (kind == Kind.Lifeguard)
             {
-                if (dist > 8f && dist < 22f && DiveRoute(out Vector3 inAt, out Vector3 outAt, out Vector3 shore))
+                if (dist > (diveOnly ? 12f : 8f) && dist < 22f && DiveRoute(out Vector3 inAt, out Vector3 outAt, out Vector3 shore))
                     StartCoroutine(Dive(inAt, outAt, shore));
-                else if (dist > 4f && dist < 9f) StartCoroutine(Lunge());
+                else if (!diveOnly && dist > 4f && dist < 9f) StartCoroutine(Lunge());
                 else return false;
             }
             else if (dist > 3.2f && dist < 7f) StartCoroutine(JumpSlam());
@@ -487,6 +499,7 @@ namespace RexMagnum
         IEnumerator Dive(Vector3 inAt, Vector3 outAt, Vector3 shore)
         {
             busyUntil = Time.time + 8f;                                    // Update leaves it alone while it swims
+            ReleaseToken();                                                // no attack turn held while it swims (Update skips it)
             Telegraph();
             yield return new WaitForSeconds(TelegraphTime);
             if (health.IsDead || IsStunned) { busyUntil = 0f; yield break; }
@@ -509,6 +522,15 @@ namespace RexMagnum
             for (float t = 0f; t < swim; t += Time.deltaTime)
             {
                 if (health.IsDead) yield break;
+                if (IsStunned)
+                {
+                    // stunned (harpoon pin, towel snap) under water: it surfaces where it is and crawls to the nearest dry
+                    // shore, no more swimming toward Rex
+                    rise = tr.position;
+                    outAt = rise + Vector3.up * 1.6f;
+                    if (BlobSpawner.DryShore(outAt, out NavMeshHit near)) shore = near.position;
+                    break;
+                }
                 tr.position = Vector3.Lerp(under, rise, t / swim);
                 yield return null;
             }
@@ -531,8 +553,11 @@ namespace RexMagnum
 
         IEnumerator Lunge()
         {
-            busyUntil = Time.time + TelegraphTime + 0.9f;
-            nextAttack = Mathf.Max(nextAttack, Time.time + 1.4f);
+            busyUntil = Time.time + TelegraphTime * 2f + 0.9f;
+            nextAttack = Mathf.Max(nextAttack, Time.time + 1.7f);
+            // two warning pulses like the slam (0.6 s): a 6 m lunge needs time to read
+            Telegraph();
+            yield return new WaitForSeconds(TelegraphTime);
             Telegraph();
             yield return new WaitForSeconds(TelegraphTime);
             if (health.IsDead || IsStunned || rex == null || !agent.isOnNavMesh) yield break;
@@ -699,6 +724,7 @@ namespace RexMagnum
         {
             if (IsStunned) return true;
             Play("Photo");
+            if (kind == Kind.KingGlorp) return false;                     // the king poses but does not stop fighting
             busyUntil = Time.time + 1.2f;
             nextAttack = Time.time + 1.2f;
             return false;
@@ -834,6 +860,7 @@ namespace RexMagnum
                     half.isHalf = true;
                     half.transform.localScale = startScale * 0.5f;
                     half.ApplyKind();
+                    Split?.Invoke(this, half);                             // set pieces count the halves to their wave
                 }
                 if (lastKiller != null && lastKiller.GetComponent<RexController>() != null)
                 {

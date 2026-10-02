@@ -194,6 +194,28 @@ namespace RexMagnum
             return d.weapons.Count > 0;
         }
 
+        // ------------------------------------------------------------ stats (pause menu, after the ending)
+
+        /// <summary>The run in numbers: play time ("play_s", GameFlow counts it), blobs popped, guests rescued, photos,
+        /// deaths, big goals and accomplishments.</summary>
+        public static List<(string what, string value)> Stats()
+        {
+            int sec = Value("play_s"), min = sec / 60;
+            int goals = (Value("factory") > 0 ? 1 : 0) + (Value("glorp") > 0 ? 1 : 0) + (Value("bar_defended") > 0 ? 1 : 0);
+            int done = 0;
+            foreach (var a in All) if (IsUnlocked(a.id)) done++;
+            return new List<(string, string)>
+            {
+                ("Play time", min >= 60 ? $"{min / 60} h {min % 60:00} min" : $"{min} min"),
+                ("Blobs popped", Value("kills").ToString()),
+                ("Guests rescued", Value("rescues").ToString()),
+                ("Photos", Value("photos").ToString()),
+                ("Deaths", Value("deaths").ToString()),
+                ("Big goals", $"{goals} / 3"),
+                ("Accomplishments", $"{done} / {All.Length}"),
+            };
+        }
+
         // ------------------------------------------------------------ new game
 
         /// <summary>

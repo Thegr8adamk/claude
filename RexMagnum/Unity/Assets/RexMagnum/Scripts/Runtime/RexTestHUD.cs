@@ -512,7 +512,8 @@ namespace RexMagnum
         void Objective()
         {
             if (Time.unscaledTime < nextObjective) return;
-            nextObjective = Time.unscaledTime + 0.5f;
+            // the bar defense marker follows a moving wave blob: refreshed 5 times a second while it runs
+            nextObjective = Time.unscaledTime + (BarActive(out _, out _) ? 0.2f : 0.5f);
             var rex = RexT;
             // no goal over the title / intro or the room hints: the first goal is announced when the tutorial ends
             string warning = null, side = null;
@@ -526,7 +527,7 @@ namespace RexMagnum
             }
             // the night warning is its own line under the goal (blue): the goal stays, so it is not announced again
             if (warning != null && layoutTouch) warning = "NIGHT: stay near lights.";
-            if (side != null && layoutTouch) side = "Side: sniper rifle on the hotel roof.";
+            if (side != null && layoutTouch) side = side == GameGuide.BarSide ? "Side: blobs head for the lounge bar!" : "Side: sniper rifle on the hotel roof.";
             // built only when one of the parts changed (twice a second otherwise: small garbage, but none needed)
             if (objective != shownObjective || warning != shownWarning || side != shownSide)
             {

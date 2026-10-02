@@ -60,7 +60,7 @@ namespace RexMagnum
                     lp.cutoffFrequency = 22000f;
                     lp.enabled = false;
                     var rv = go.AddComponent<AudioReverbFilter>();
-                    rv.reverbPreset = AudioReverbPreset.Room;
+                    rv.reverbPreset = reverbPreset;
                     rv.enabled = false;
                     lowPass[i] = lp;
                     reverb[i] = rv;
@@ -95,40 +95,69 @@ namespace RexMagnum
             return a;
         }
 
-        static AudioSource uiSrc;
+        // a few UI sources: the pitch is per source, so a cue at another pitch takes another source (setting the
+        // pitch on a playing one would re-pitch the cue still ringing out)
+        const int UISize = 3;
+        static readonly AudioSource[] uiSrc = new AudioSource[UISize];
+        static readonly float[] uiStarted = new float[UISize];
 
-        /// <summary>A 2D UI sound at the listener (no world filters, not pooled): soft cues like a new goal or a
-        /// combat tip. PlayOneShot, so a cue does not cut the one before.</summary>
+        /// <summary>A 2D UI sound at the listener (no world filters, not in the world pool): soft cues like a new goal
+        /// or a combat tip. PlayOneShot, so a cue does not cut the one before.</summary>
         public static void PlayUI(string name, float volume = 1f, float pitch = 1f)
         {
             var c = Get(name);
             if (c == null) return;
-            if (uiSrc == null)
+            // same pitch playing: share it; else a quiet one; else the one that started longest ago
+            int pick = -1, idle = -1, oldest = 0;
+            for (int i = 0; i < UISize; i++)
             {
-                var go = new GameObject("SfxUI");
-                Object.DontDestroyOnLoad(go);
-                uiSrc = go.AddComponent<AudioSource>();
-                uiSrc.playOnAwake = false;
-                uiSrc.spatialBlend = 0f;
+                if (uiSrc[i] == null)
+                {
+                    var go = new GameObject("SfxUI");
+                    Object.DontDestroyOnLoad(go);
+                    uiSrc[i] = go.AddComponent<AudioSource>();
+                    uiSrc[i].playOnAwake = false;
+                    uiSrc[i].spatialBlend = 0f;
+                }
+                var u = uiSrc[i];
+                if (u.isPlaying && Mathf.Approximately(u.pitch, pitch)) { pick = i; break; }
+                if (!u.isPlaying && idle < 0) idle = i;
+                if (uiStarted[i] < uiStarted[oldest]) oldest = i;
             }
-            uiSrc.pitch = pitch;
-            uiSrc.PlayOneShot(c, volume * AudioMix.Effects);
+            if (pick < 0) pick = idle >= 0 ? idle : oldest;
+            var a = uiSrc[pick];
+            if (a.isPlaying && !Mathf.Approximately(a.pitch, pitch)) a.Stop();     // all busy: the oldest cue ends
+            a.pitch = pitch;
+            uiStarted[pick] = Time.unscaledTime;
+            a.PlayOneShot(c, volume * AudioMix.Effects);
         }
 
         // ------------------------------------------------------------ world filters (Ambience sets them)
 
         static float cutoff = 22000f;
         static bool reverbOn;
+        static AudioReverbPreset reverbPreset = AudioReverbPreset.Room;
 
         /// <summary>Under water (low-pass cutoff) and under a roof (Room reverb) for the world sounds only: every
-        /// pool source follows at once. Ambience calls this each frame; music, voices and UI have their own sources.</summary>
-        public static void SetWorldFX(float lowPassCutoff, bool roomReverb)
+        /// pool source follows at once. Music, voices and UI have their own sources.</summary>
+        public static void SetWorldFX(float lowPassCutoff, bool roomReverb) =>
+            SetWorldFX(lowPassCutoff, roomReverb ? AudioReverbPreset.Room : AudioReverbPreset.Off);
+
+        /// <summary>As above with the reverb by place (Ambience calls this each frame): Cave in the cave and the
+        /// tunnels, Room in the hotel, Off (no reverb filter running) outside.</summary>
+        public static void SetWorldFX(float lowPassCutoff, AudioReverbPreset preset)
         {
             cutoff = lowPassCutoff;
-            reverbOn = roomReverb;
+            reverbOn = preset != AudioReverbPreset.Off;
+            bool newPreset = reverbOn && preset != reverbPreset;
+            if (reverbOn) reverbPreset = preset;
             // a short sound keeps its reverb for 1 s after it started (the tail is not cut off)
             for (int i = 0; i < PoolSize; i++)
-                if (pool[i] != null) Filter(i, pool[i].isPlaying || Time.unscaledTime - started[i] < 1f);
+            {
+                if (pool[i] == null) continue;
+                if (newPreset && reverb[i] != null) reverb[i].reverbPreset = reverbPreset;
+                Filter(i, pool[i].isPlaying || Time.unscaledTime - started[i] < 1f);
+            }
         }
 
         static void Filter(int i, bool playing)

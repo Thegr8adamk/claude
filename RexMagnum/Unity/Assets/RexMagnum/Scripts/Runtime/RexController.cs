@@ -248,7 +248,7 @@ namespace RexMagnum
 
         const float DodgeTime = 0.3f;
         static readonly int DodgeHash = Animator.StringToHash("Dodge");
-        float dodgeUntil, nextDodge;
+        float dodgeUntil, nextDodge, lastDodge = -10f;
         Vector3 dodgeDir;
         bool dodgeBack;
         Health hp;
@@ -258,7 +258,9 @@ namespace RexMagnum
             dodgeDir = dir;
             dodgeBack = back;
             dodgeUntil = Time.time + DodgeTime;
-            nextDodge = Time.time + 1.0f;       // 1 s cooldown: no chain-dodging through every attack
+            // 1 s cooldown: no chain-dodging through every attack; the 2nd dodge within 2 s adds 0.6 s (spam spacing)
+            nextDodge = Time.time + (Time.time - lastDodge < 2f ? 1.6f : 1.0f);
+            lastDodge = Time.time;
             if (hp == null) hp = GetComponent<Health>();
             if (hp != null) hp.Invulnerable(0.35f);
             SetTrigger(DodgeHash);

@@ -8,8 +8,9 @@ namespace RexMagnum
     ///    inland; the jungle is louder at night.
     ///  - Footsteps (flip-flops) timed by Rex's ground speed, by surface: sand on low terrain by the beach, grass on
     ///    other terrain, tile on buildings. Swim strokes while he swims. A splash when he goes into water.
-    ///  - World filters: muffled (low-pass) with the camera under water, Room reverb under a roof. Only on the world
-    ///    sounds (Sfx pool + these loops), never on the listener: music, voices and UI stay clear.
+    ///  - World filters: muffled (low-pass) with the camera under water, Cave reverb in the cave and the tunnels, Room
+    ///    reverb under a roof (hotel). Only on the world sounds (Sfx pool + these loops), never on the listener:
+    ///    music, voices and UI stay clear.
     /// Clips: Resources/Sfx/amb_beach, amb_jungle, footstep, footstep_sand, footstep_grass, swim_stroke, splash (silent if
     /// missing). Volume: Settings > Sound > Effects.
     /// </summary>
@@ -195,7 +196,7 @@ namespace RexMagnum
             // into the water fast (~0.3 s), out a bit slower
             float want = camUnder ? 700f : 22000f;
             cutoff = Mathf.MoveTowards(cutoff, want, Time.unscaledDeltaTime * (camUnder ? 70000f : 40000f));
-            Sfx.SetWorldFX(cutoff, !title && roofed && !camUnder);
+            Sfx.SetWorldFX(cutoff, title || camUnder ? AudioReverbPreset.Off : Place());
             if (loopLowPass != null)
             {
                 // indoors the outside loops are muffled a bit too (heard through walls and windows)
@@ -203,6 +204,15 @@ namespace RexMagnum
                 loopLowPass.cutoffFrequency = c;
                 loopLowPass.enabled = c < 21500f;
             }
+        }
+
+        /// <summary>The reverb for where Rex is: Cave in the cave tunnels (deep underground) or the cave zone, Room
+        /// under a roof (the hotel, the temple), else none.</summary>
+        AudioReverbPreset Place()
+        {
+            Vector3 p = rex.position;
+            if (p.y < -20f || (roofed && GameGuide.InZone(GameGuide.Zones[6], p))) return AudioReverbPreset.Cave;
+            return roofed ? AudioReverbPreset.Room : AudioReverbPreset.Off;
         }
 
         /// <summary>What is under Rex's feet: terrain near sea level = beach sand, other terrain = grass,

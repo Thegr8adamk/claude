@@ -56,9 +56,7 @@ namespace RexMagnum
             if (hasCheckpoint && key != "boss" && (transform.position - checkpointPos).sqrMagnitude < 900f) { checkpointKey = key; return; }
             // not next to a running blob spawner (the factory core hall): waking up among fresh blobs is a death loop.
             // Keep the old checkpoint; the next check (Rex moved on) tries again.
-            if (key != "boss")
-                foreach (var sp in FindObjectsByType<BlobSpawner>(FindObjectsSortMode.None))
-                    if (sp.isActiveAndEnabled && (sp.transform.position - transform.position).sqrMagnitude < 225f) return;
+            if (key != "boss" && NearActiveSpawner(transform.position, 15f)) return;
             checkpointKey = key;
             checkpointZone = key;
             hasCheckpoint = true;
@@ -138,17 +136,34 @@ namespace RexMagnum
             PlayerPrefs.Save();
         }
 
-        /// <summary>The saved checkpoint, if any (parsed with the invariant culture).</summary>
+        /// <summary>The saved checkpoint to wake a returning player at, if any: stale ones (goal done, old boss saves)
+        /// are deleted, one within 15 m of a running blob spawner is skipped. A hit gives Rex 3 s of wake grace
+        /// (GameFlow calls this right before the wake teleport).</summary>
         public static bool TryLoadSavedCheckpoint(out Vector3 pos, out float yaw)
         {
-            pos = Vector3.zero; yaw = 0f;
+            if (!ParseSaved(out pos, out yaw, out string zone)) return false;
+            if (zone == "boss" || Stale(zone)) { ClearSavedCheckpoint(); return false; }
+            if (NearActiveSpawner(pos, 15f)) return false;
+            WakeGrace(3f);
+            return true;
+        }
+
+        /// <summary>Parse the saved checkpoint (invariant culture). Older 4-part saves get their zone from the
+        /// position; one outside every checkpoint zone was the boss checkpoint.</summary>
+        static bool ParseSaved(out Vector3 pos, out float yaw, out string zone)
+        {
+            pos = Vector3.zero; yaw = 0f; zone = null;
             var parts = PlayerPrefs.GetString(SavedCheckpointKey, "").Split(',');
-            if (parts.Length != 4) return false;
+            if (parts.Length != 4 && parts.Length != 5) return false;
             var ic = System.Globalization.CultureInfo.InvariantCulture;
             var f = new float[4];
             for (int i = 0; i < 4; i++)
                 if (!float.TryParse(parts[i], System.Globalization.NumberStyles.Float, ic, out f[i])) return false;
             pos = new Vector3(f[0], f[1], f[2]); yaw = f[3];
+            if (parts.Length == 5) { zone = parts[4]; return true; }
+            zone = "boss";
+            foreach (var z in GameGuide.Zones)
+                if (System.Array.IndexOf(CheckpointZones, z.id) >= 0 && GameGuide.InZone(z, pos)) { zone = z.id; break; }
             return true;
         }
 
@@ -167,14 +182,16 @@ namespace RexMagnum
             if (max > oldMax) health.Heal(max - oldMax);          // the new headroom comes filled (Heal clamps, not when dead)
             else if (health.Current > max) health.Heal(0f);       // Heal clamps Current down to the lower max
             if (rose) RexTestHUD.Notice("MAX HEALTH UP!", 2f);
+            DropStaleCheckpoints();          // first call (Start) and each big goal done: ruins / ship / cave / boss go
         }
 
         void Start()
         {
             UpdateMaxHealth();
             // a returning player: a death near the saved checkpoint wakes there too (not only in this session)
-            if (!hasCheckpoint && TryLoadSavedCheckpoint(out Vector3 cp, out float cpYaw))
-            { hasCheckpoint = true; checkpointPos = cp; checkpointYaw = cpYaw; }
+            if (!hasCheckpoint && ParseSaved(out Vector3 cp, out float cpYaw, out string cpZone) && cpZone != "boss"
+                && !Stale(cpZone) && !NearActiveSpawner(cp, 15f))
+            { hasCheckpoint = true; checkpointPos = cp; checkpointYaw = cpYaw; checkpointZone = cpZone; }
         }
 
         void Update()
@@ -193,6 +210,7 @@ namespace RexMagnum
 
         void Awake()
         {
+            instance = this;
             health = GetComponent<Health>();
             ctrl = GetComponent<RexController>();
             startPos = transform.position;

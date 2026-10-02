@@ -17,6 +17,7 @@ namespace RexMagnum
     ///  4. The first fight teaches dodge (unless the room did), heavy (hold) and combo (3 taps) the same way, each once
     ///     per save, drawn under the NEXT goal line. A returning player wakes at the saved far checkpoint.
     ///  5. A big goal done (factory, King Glorp, bar defense): "BIG GOAL COMPLETE" banner + a short music sting.
+    ///     After King Glorp (the ending) a stats card follows: play time, blobs, guests, photos, deaths, goals.
     /// Music and sounds load from Resources/Music and Resources/Sfx when the ElevenLabs files are added
     /// (title_theme, day_resort, chaos); without them the flow still works, silently.
     /// </summary>
@@ -174,6 +175,7 @@ namespace RexMagnum
                 CombatHints();
                 BigGoals();
                 FightMusic();
+                CountPlayTime();
             }
             TutorialActive = state == State.Play && hint < HintCount;
         }
@@ -307,7 +309,8 @@ namespace RexMagnum
 
         static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended" };
         // the reward line: RexLife raises max health by 25 for the factory and King Glorp (its own notice says so)
-        static readonly string[] GoalNames = { "The blob factory is stopped.   MAX HEALTH +25", "King Glorp is popped.   MAX HEALTH +25", "The bar held. The guests are safe." };
+        static readonly string[] GoalNames = { "The blob factory is stopped.   MAX HEALTH +25", "King Glorp is popped.   MAX HEALTH +25",
+                                                   "The bar held. Free refill: all your guns are full." };   // BarDefense.Win shows no notice of its own
         AudioSource sting;
         float bannerUntil, stingStart = -100f, nextGoalCheck;
         string bannerLine;
@@ -325,9 +328,47 @@ namespace RexMagnum
                 Progress.Set("goal_banner_" + GoalKeys[i], 1);
                 bannerLine = GoalNames[i];
                 bannerUntil = Time.unscaledTime + 5f;
+                // King Glorp (after the ending): the run's stats card follows the banner
+                if (GoalKeys[i] == "glorp") { statsFrom = bannerUntil; statsUntil = statsFrom + StatsSeconds; }
                 Sting();
                 return;
             }
+        }
+
+        float statsFrom = -100f, statsUntil = -100f, playTime;
+        const float StatsSeconds = 10f;
+
+        /// <summary>Play time for the stats ("play_s" in the save): unpaused seconds in play, written every 5 s.</summary>
+        void CountPlayTime()
+        {
+            if (PauseMenu.Open || Busy) return;
+            playTime += Time.unscaledDeltaTime;
+            if (playTime < 5f) return;
+            int whole = (int)playTime;
+            playTime -= whole;
+            Progress.Add("play_s", whole);
+        }
+
+        /// <summary>After the ending: the run in numbers (Progress.Stats) on a card in the middle, 10 s.</summary>
+        void DrawStats(float w, float h, float s)
+        {
+            var stats = Progress.Stats();
+            float a = MenuSkin.Appear(statsFrom, 0.4f) * Mathf.Clamp01((statsUntil - Time.unscaledTime) / 0.8f);
+            float rowH = 44 * s;
+            var r = new Rect(w * 0.3f, h * 0.24f, w * 0.4f, 110 * s + stats.Count * rowH);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            MenuSkin.DrawPanel(r);
+            GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
+            GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            GUI.Label(new Rect(r.x, r.y + 10 * s, r.width, 80 * s), "YOUR VACATION", MenuSkin.Title);
+            for (int i = 0; i < stats.Count; i++)
+            {
+                float y = r.y + 92 * s + i * rowH;
+                GUI.Label(new Rect(r.x + 40 * s, y, r.width * 0.55f, rowH), stats[i].what, MenuSkin.Label);
+                GUI.Label(new Rect(r.x + r.width * 0.6f, y, r.width * 0.4f - 40 * s, rowH), stats[i].value, MenuSkin.Label);
+            }
+            GUI.color = Color.white;
         }
 
         /// <summary>Goals done before this save knew banners (an old save): marked shown, no banner on load.</summary>
@@ -351,6 +392,8 @@ namespace RexMagnum
             }
             sting.clip = clip;
             sting.time = 0f;
+            // the level before Play (else the first frame plays at the last sting's faded-out volume, or full)
+            sting.volume = 0.55f * AudioMix.Music * AudioMix.Duck;
             sting.Play();
             stingStart = Time.unscaledTime;
         }
@@ -439,6 +482,8 @@ namespace RexMagnum
                 if (returning && RexLife.TryLoadSavedCheckpoint(out Vector3 cpAt, out float cpYaw)) { wakeAt = cpAt; wakeYaw = cpYaw; }
                 rex.Revive();
                 rex.Teleport(wakeAt, wakeYaw);
+                // wake grace: a blob waiting at the checkpoint gets no free hit while the screen fades in (3 s from here)
+                if (returning) RexLife.WakeGrace(3f);
                 var wrig = playerCamera ? playerCamera.GetComponent<RexCameraRig>() : null;
                 if (wrig) wrig.SetYaw(wakeYaw);
                 if (rex.bodyAnimator) rex.bodyAnimator.Play("Locomotion", 0, 0f);
@@ -623,6 +668,7 @@ namespace RexMagnum
                 GUI.color = Color.white;
             }
             if (state == State.Play && Time.unscaledTime < bannerUntil && !PauseMenu.Open && !EndingSequence.Playing) DrawBanner(w, h, s);
+            else if (state == State.Play && Time.unscaledTime >= statsFrom && Time.unscaledTime < statsUntil && !PauseMenu.Open) DrawStats(w, h, s);
             if (fade > 0.001f)
             {
                 GUI.color = new Color(0, 0, 0, fade);

@@ -388,7 +388,8 @@ namespace RexMagnum
             if (handsFrame == Time.frameCount) return handsEvent;
             handsFrame = Time.frameCount;
             bool held = KHeld("Hands") || (G != null && PB("Hands").isPressed) || TouchState.Held("Hands");
-            bool pressed = Free && (KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame) || TouchState.Down("Hands"));
+            // held but not yet down counts as the press: a press on a frame nobody read (or inside a kill cam) still lands
+            bool pressed = Free && (held || KDown("Hands") || (G != null && PB("Hands").wasPressedThisFrame) || TouchState.Down("Hands"));
             handsEvent = false;
             if (!handsHoldDown && pressed) { handsHoldDown = true; handsEvent = true; }
             else if (handsHoldDown && !held) { handsHoldDown = false; handsEvent = true; }

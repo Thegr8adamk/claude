@@ -297,7 +297,8 @@ namespace RexMagnum
             }
             else tapCount = 0;
             StartCoroutine(MeleeHit(d, heavy, heavy ? 0.45f : 0.18f, combo));
-            if (heavy) Sfx.Play("swing", transform.position, 0.45f, 0.55f);   // charge: a low rising hum as the wind-up starts
+            // charge cue: Rex plants his feet (a low thud, not a second whoosh: the swing below is the only whoosh)
+            if (heavy) Sfx.Play("footstep", transform.position, 0.5f, 0.7f);
             if (heavy && cameraRig != null) cameraRig.FovPush(4f);   // wind-up cue: the view leans in before the big hit
             // a whoosh on every swing: the towel and golf club have their own sound, the rest a plain swing
             // (lower and louder for a heavy attack)

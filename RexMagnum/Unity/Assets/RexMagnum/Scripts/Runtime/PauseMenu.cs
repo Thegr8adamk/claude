@@ -8,7 +8,7 @@ namespace RexMagnum
     /// <summary>
     /// Pause menu (brief section 7: Pause = map, album, accomplishments, settings). Esc / Menu / touch II.
     /// Tabs: Map (island picture with Rex, zones and the next goal; next goal, zones visited, big goals, rescue clues),
-    /// Album (photos + captions), Accomplishments (by group),
+    /// Album (photos + captions), Accomplishments (the run's stats, then the list by group),
     /// Settings (SettingsPanel: graphics, camera + VR, sound, controls with keyboard and controller remap, help),
     /// Help (the controls of the device used last).
     /// Controller: LT / RT or keys 1-5 change the tab, Up / Down scroll the lists, B / Menu resume,
@@ -129,6 +129,7 @@ namespace RexMagnum
         void QuitToTitle()
         {
             int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
+            RexLife.SaveQuitSpot();         // where Rex stands (calm spots only); before SetOpen: its PlayerPrefs.Save writes it
             SetOpen(false);                 // saves (Progress.Flush, PlayerPrefs.Save), sound back on
             Time.timeScale = 1f;            // no kill cam slow motion carried over
             if (scene < 0) return;          // scene not in the build list (editor test scene): just resume
@@ -140,8 +141,8 @@ namespace RexMagnum
         {
             var r = new Rect(w * 0.5f - 420 * s, h * 0.3f, 840 * s, 330 * s);
             MenuSkin.DrawPanel(r);
-            GUI.Label(new Rect(r.x + 30 * s, r.y + 24 * s, r.width - 60 * s, 120 * s),
-                      "Quit to the title screen?\nYour progress is saved. You wake up in room 304 when you play again.", MenuSkin.Question);
+            GUI.Label(new Rect(r.x + 30 * s, r.y + 24 * s, r.width - 60 * s, 160 * s),
+                      "Quit to the title screen?\nYour progress is saved. You wake up here when you play again\n(at your last checkpoint if blobs are near).", MenuSkin.Question);
             string[] opts = { "YES, QUIT TO TITLE", "NO, GO BACK" };
             for (int i = 0; i < 2; i++)
             {
@@ -430,6 +431,15 @@ namespace RexMagnum
             int done = 0;
             foreach (var a in Progress.All) if (Progress.IsUnlocked(a.id)) done++;
             GUILayout.Label($"{done} / {Progress.All.Length}", title);
+            // the run in numbers first (the same list as the card after the ending)
+            Section("STATS");
+            foreach (var st in Progress.Stats())
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(st.what, label, GUILayout.Width(300 * ui));
+                GUILayout.Label(st.value, label);
+                GUILayout.EndHorizontal();
+            }
             foreach (var a in Progress.All)
             {
                 if (a.group != group) { group = a.group; Section(group.ToUpper()); }

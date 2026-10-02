@@ -11,6 +11,8 @@ namespace RexMagnum
     ///    until heavy attacks knock it off. He re-absorbs new pieces from time to time.
     ///  - 3 phases by health: crown spikes grow each phase; phase 2 calls tourist blobs out of the slime;
     ///    phase 3 sends slime shockwaves (jump over them) and he moves faster. Phase 2+ spits marked slime pools around Rex.
+    ///  - Dodge moves: phase 2+ a tentacle sweep (120 degrees in front, 0.8 s glow + orange fan), phase 3 a hop toward Rex
+    ///    with a landing ring. Phases only go forward (heals never repeat a phase change).
     ///  - On death: big pop, kill cam, Rex's win line, then the ending (viral video, agent call, bar tab, "I'm back").
     ///  Saved: PlayerPrefs "RexMagnum_GlorpDefeated". Free play continues after the ending.
     /// </summary>
@@ -41,6 +43,11 @@ namespace RexMagnum
         bool dizzyTold;
         bool Dizzy => Time.time < dizzyUntil;
         float nextAbsorb, nextWave, nextMinions, nextLine, nextPools;
+        // dodge moves: phase 2+ tentacle sweep (120 degrees in front), phase 3 hop + landing ring; one at a time
+        const float SweepRange = 7.5f, SweepHalfAngle = 60f, SweepWarn = 0.8f, SweepDamage = 14f;
+        const float HopWarn = 0.6f, HopTime = 0.6f, HopMax = 8f, HopRing = 8f, HopDamage = 14f;
+        float nextSweep, nextHop;
+        bool inMove;
         // slime pools (phase 2/3): 2-3 marked spots near Rex turn into burning slime for PoolTime seconds
         const float PoolWarn = 1.1f, PoolTime = 6f, PoolRadius = 1.6f, PoolDamage = 5f, PoolTick = 0.5f;
         readonly List<(Transform t, float hp)> armor = new List<(Transform, float)>();
@@ -100,7 +107,7 @@ namespace RexMagnum
             return 2f;
         }
 
-        void OnDisable() { Fighting = false; }
+        void OnDisable() { Fighting = false; inMove = false; }
 
         void Update()
         {
@@ -123,15 +130,31 @@ namespace RexMagnum
                 farSince = -1f;
                 return;
             }
+            // phases only go forward: armor / long-shot heals can lift him back over a line, but the crown, the speed
+            // and the line must not come again
             int p = health.Fraction > 0.66f ? 1 : health.Fraction > 0.33f ? 2 : 3;
-            if (p != phase) { phase = p; StartCoroutine(PhaseChange()); }
+            if (p > phase) { phase = p; StartCoroutine(PhaseChange()); }
             if (Time.time > nextAbsorb) { nextAbsorb = Time.time + (phase == 3 ? 12f : 18f); StartCoroutine(Absorb()); }
             if (phase >= 2 && Time.time > nextMinions)
             {
                 nextMinions = Time.time + 25f;
                 if (Blob.LivingNear(transform.position, 30f) < 7) Minions();     // a long fight does not pile up blobs
             }
-            if (phase == 3 && Time.time > nextWave) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
+            if (phase == 3 && Time.time > nextWave && !inMove) { nextWave = Time.time + 7f; StartCoroutine(Shockwave()); }
+            // the dodge moves: phase 2+ a tentacle sweep in front (jump or dodge), phase 3 a hop with a landing ring
+            if (!inMove && !blob.IsStunned && !Dizzy && !charging)
+            {
+                if (phase >= 2 && d < SweepRange + 1f && Time.time > nextSweep)
+                {
+                    nextSweep = Time.time + 9f + Random.Range(-1f, 2f);
+                    StartCoroutine(Sweep());
+                }
+                else if (phase == 3 && d > 4f && d < 16f && Time.time > nextHop)
+                {
+                    nextHop = Time.time + 11f + Random.Range(-1f, 2f);
+                    StartCoroutine(Hop());
+                }
+            }
             // phase 2+: slime pools spat on the ground around Rex (not while he snipes from far: the volley covers that)
             if (phase >= 2 && Time.time > nextPools && d < 35f && !blob.IsStunned)
             {
@@ -191,6 +214,8 @@ namespace RexMagnum
                 for (float t = 0; t < 1f; t += Time.deltaTime) { crown.localScale = Vector3.Lerp(a, b, t); yield return null; }
             }
             if (phase == 3) blob.speed *= 1.4f;
+            if (phase == 2) nextSweep = Mathf.Max(nextSweep, Time.time + 4f);   // the new moves come a little after the line
+            if (phase == 3) nextHop = Mathf.Max(nextHop, Time.time + 5f);
         }
 
         IEnumerator Absorb()
@@ -357,8 +382,7 @@ namespace RexMagnum
                 mark.transform.position = nh.position + Vector3.up * 0.03f;
                 mark.transform.localScale = new Vector3(0.3f, 0.01f, 0.3f);
                 var mr = mark.GetComponent<Renderer>();
-                if (poolWarnMat == null) poolWarnMat = new Material(mr.sharedMaterial) { color = new Color(1f, 0.45f, 0.1f) };   // one, kept
-                mr.sharedMaterial = poolWarnMat;
+                mr.sharedMaterial = WarnMat(mr);                     // one, kept
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 spots.Add(nh.position);
                 marks.Add(mark);
@@ -406,6 +430,170 @@ namespace RexMagnum
                 yield return null;
             }
             foreach (var m in marks) if (m != null) Destroy(m);
+        }
+
+        /// <summary>The orange warning material (the slime pools' marks), made once from a primitive's material.</summary>
+        static Material WarnMat(Renderer from)
+        {
+            if (poolWarnMat == null) poolWarnMat = new Material(from.sharedMaterial) { color = new Color(1f, 0.45f, 0.1f) };
+            return poolWarnMat;
+        }
+
+        static Mesh fanMesh;
+
+        /// <summary>A flat orange fan on the ground: the sweep's 120 degrees out to SweepRange (blinks in the wind-up).</summary>
+        GameObject WarnFan(Vector3 at, Vector3 fwd)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(go.GetComponent<Collider>());
+            Destroy(go, SweepWarn + 0.5f);                           // gone even if the coroutine stops (Glorp popped)
+            if (fanMesh == null)
+            {
+                const int Seg = 12;
+                var v = new Vector3[Seg + 2];
+                var tri = new int[Seg * 3];
+                for (int i = 0; i <= Seg; i++)
+                {
+                    float a = Mathf.Lerp(-SweepHalfAngle, SweepHalfAngle, i / (float)Seg) * Mathf.Deg2Rad;
+                    v[i + 1] = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * SweepRange;
+                }
+                for (int i = 0; i < Seg; i++) { tri[i * 3] = 0; tri[i * 3 + 1] = i + 1; tri[i * 3 + 2] = i + 2; }   // clockwise from above: faces up
+                fanMesh = new Mesh();
+                fanMesh.vertices = v;
+                fanMesh.triangles = tri;
+                fanMesh.RecalculateNormals();
+                fanMesh.RecalculateBounds();
+            }
+            go.GetComponent<MeshFilter>().sharedMesh = fanMesh;
+            go.transform.SetPositionAndRotation(at + Vector3.up * 0.04f, Quaternion.LookRotation(fwd));
+            go.transform.localScale = Vector3.one;
+            var mr = go.GetComponent<Renderer>();
+            mr.sharedMaterial = WarnMat(mr);
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return go;
+        }
+
+        /// <summary>Phase 2+: he turns to Rex and winds up a tentacle (SweepWarn s of warning glow + an orange fan on the
+        /// ground), then sweeps 120 degrees in front of him. Out of the fan (step round him), a jump or a dodge avoids it.</summary>
+        IEnumerator Sweep()
+        {
+            if (rex == null) yield break;
+            inMove = true;
+            blob.Hold(SweepWarn + 0.6f);
+            Vector3 to = rex.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude < 0.01f) to = transform.forward;
+            Vector3 fwd = to.normalized;                            // locked at the wind-up: moving round him works
+            transform.rotation = Quaternion.LookRotation(fwd);
+            var fan = WarnFan(transform.position, fwd);
+            var fanR = fan.GetComponent<Renderer>();
+            int pulses = 0;
+            for (float t = 0f; t < SweepWarn; t += Time.deltaTime)
+            {
+                if (dead || blob.IsDead || blob.IsStunned) { if (fan != null) Destroy(fan); inMove = false; yield break; }
+                if (t >= pulses * Blob.TelegraphTime) { pulses++; blob.Telegraph(); }    // back-to-back pulses: a long glow
+                if (fanR != null) fanR.enabled = Mathf.Repeat(t * 6f, 1f) < 0.6f;
+                yield return null;
+            }
+            if (fan != null) Destroy(fan);
+            blob.Play("Whip");
+            Sfx.Play("blob_whip", transform.position, 1f, 0.7f);    // the whip, deeper
+            Vector3 at = transform.position;
+            for (int i = -2; i <= 2; i++)
+            {
+                Vector3 dir = Quaternion.Euler(0f, i * 30f, 0f) * fwd;
+                SlimeFX.Splat(at + dir * SweepRange * 0.75f + Vector3.up * 0.6f, dir, blob.BaseColor(), 6);
+            }
+            if (rex != null)
+            {
+                Vector3 off = rex.position - at;
+                var rc = rex.GetComponent<RexController>();
+                var rh = rex.GetComponent<Health>();
+                bool high = Mathf.Abs(off.y) > 2f;
+                off.y = 0f;
+                bool inFan = off.sqrMagnitude < SweepRange * SweepRange && Vector3.Angle(fwd, off) < SweepHalfAngle;
+                if (inFan && !high && rc != null && rc.Grounded && rh != null && !rh.IsDead)     // in the air: it passes under him
+                {
+                    rh.Damage(SweepDamage, rex.position + Vector3.up, gameObject);
+                    if (rh.LastDamageTime == Time.time) rc.Slimed();   // a dodge (invulnerable): no slime
+                }
+            }
+            yield return new WaitForSeconds(0.4f);
+            inMove = false;
+        }
+
+        /// <summary>Phase 3: two warning pulses and an orange mark where he will land, a short hop toward Rex (up to HopMax m),
+        /// then a fast slime ring out from the landing (HopRing m): jump it or be out of reach.</summary>
+        IEnumerator Hop()
+        {
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (rex == null || agent == null || !agent.enabled || !agent.isOnNavMesh) yield break;
+            inMove = true;
+            nextWave = Mathf.Max(nextWave, Time.time + HopWarn + HopTime + 3f);   // not on top of the big shockwave
+            blob.Hold(HopWarn + HopTime + 0.8f);
+            Vector3 to = rex.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
+            Vector3 step = to.normalized * Mathf.Clamp(to.magnitude - 2f, 0f, HopMax);
+            var mark = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(mark.GetComponent<Collider>());
+            Destroy(mark, HopWarn + HopTime + 0.5f);
+            mark.transform.position = transform.position + step + Vector3.up * 0.04f;
+            var markR = mark.GetComponent<Renderer>();
+            markR.sharedMaterial = WarnMat(markR);
+            markR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            blob.Telegraph();
+            bool second = false;
+            for (float t = 0f; t < HopWarn; t += Time.deltaTime)
+            {
+                if (dead || blob.IsDead || blob.IsStunned || mark == null) { if (mark != null) Destroy(mark); inMove = false; yield break; }
+                if (!second && t >= Blob.TelegraphTime) { second = true; blob.Telegraph(); }
+                float s = Mathf.Lerp(1f, 4f, t / HopWarn);
+                mark.transform.localScale = new Vector3(s, 0.01f, s);
+                markR.enabled = Mathf.Repeat(t * 6f, 1f) < 0.6f;
+                yield return null;
+            }
+            Sfx.Play("blob_slide", transform.position, 1f, 0.6f);
+            float baseOff = agent.baseOffset, done = 0f;
+            for (float t = 0f; t < HopTime; t += Time.deltaTime)
+            {
+                if (dead || blob.IsDead || !agent.enabled || !agent.isOnNavMesh) break;
+                float k = Mathf.Clamp01((t + Time.deltaTime) / HopTime);
+                agent.Move(step * (k - done));                      // Move keeps him on the NavMesh
+                done = k;
+                agent.baseOffset = baseOff + Mathf.Sin(k * Mathf.PI) * 2.2f;   // the whole body (armor too) goes up
+                yield return null;
+            }
+            agent.baseOffset = baseOff;
+            if (mark != null) Destroy(mark);
+            if (dead || blob.IsDead || rex == null) { inMove = false; yield break; }
+            // landing: the shockwave's sound and ring, short and fast
+            Vector3 land = transform.position;
+            Sfx.Play("shockwave", land, 1f, 0.85f);
+            SlimeFX.Splat(land + Vector3.up * 0.3f, Vector3.up, blob.BaseColor(), 24);
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(ring.GetComponent<Collider>());
+            Destroy(ring, 1.5f);
+            ring.transform.position = land + Vector3.up * 0.05f;
+            ring.GetComponent<Renderer>().material.color = new Color(1f, 0.85f, 0.2f);
+            var rc = rex.GetComponent<RexController>();
+            var rh = rex.GetComponent<Health>();
+            bool hit = false;
+            for (float r = 1f; r < HopRing; r += Time.deltaTime * 14f)
+            {
+                if (ring == null || rex == null) break;
+                ring.transform.localScale = new Vector3(r * 2f, 0.05f, r * 2f);
+                Vector3 off = rex.position - land;
+                bool level = Mathf.Abs(off.y) < 1.5f;
+                off.y = 0f;
+                if (!hit && level && Mathf.Abs(off.magnitude - r) < 0.9f && rc != null && rc.Grounded && rh != null && !rh.IsDead)
+                {
+                    hit = true;
+                    rh.Damage(HopDamage, rex.position, gameObject);
+                    if (rh.LastDamageTime == Time.time) rc.Slimed();
+                }
+                yield return null;
+            }
+            if (ring != null) Destroy(ring);
+            inMove = false;
         }
 
         /// <summary>Rex keeps out of reach: warning glow, then 3 slime shots, a little spread and led.</summary>
@@ -480,6 +668,7 @@ namespace RexMagnum
             }
             PlayerPrefs.SetInt(SaveKey, 1);
             PlayerPrefs.Save();
+            RexLife.ClearSavedCheckpoint();          // the boss checkpoint must not wake him next to an empty ship
             yield return new WaitForSeconds(4f);
             var ending = new GameObject("Ending").AddComponent<EndingSequence>();
         }

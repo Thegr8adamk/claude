@@ -386,6 +386,7 @@ namespace RexMagnum.EditorTools
                         m.SetFloat("_Metallic", r.metallic);
                         m.SetFloat("_Smoothness", Mathf.Clamp01(r.smoothness));
                         var nm = Tex(r.normalMap);
+                        if (r.name == "A_Stucco" && FlatNormalMap(r.normalMap)) nm = StuccoNormal();
                         if (nm != null) { m.SetTexture("_BumpMap", nm); m.EnableKeyword("_NORMALMAP"); }
                         // re-baked tiles on old FBX UVs (2 m per UV unit): scale so the tile keeps its real size
                         m.SetTextureScale("_BaseMap", r.uvTile > 0f && r.tile > 0f
@@ -1080,9 +1081,6 @@ namespace RexMagnum.EditorTools
                 float ang = Vector3.SignedAngle(dir, Flat(end - fork), Vector3.up);    // + = to the right
                 return ang > 30f ? label + "  -->" : ang < -30f ? "<--  " + label : "^  " + label + "  ^";
             }
-            Font font = null;
-            foreach (var fn in new[] { "LegacyRuntime.ttf", "Arial.ttf" })      // Unity 6 / older editors
-                if (font == null) try { font = Resources.GetBuiltinResource<Font>(fn); } catch (Exception) { }
             var sign = new GameObject("TunnelSign").transform;
             sign.SetParent(root, false);
             var at = Vector3.Lerp(prev.Value, fork + Vector3.up * 2.5f, 0.6f);
@@ -1098,32 +1096,115 @@ namespace RexMagnum.EditorTools
             bm.SetFloat("_Smoothness", 0.15f);
             EditorUtility.SetDirty(bm);
             board.GetComponent<MeshRenderer>().sharedMaterial = bm;
-            if (font == null) return;
-            var tg = new GameObject("Text");
-            tg.transform.SetParent(sign, false);
-            tg.transform.localPosition = new Vector3(0f, 0f, -0.04f);     // just in front of the plank's face (-0.025)
-            var tm = tg.AddComponent<TextMesh>();
-            tm.font = font;
-            tm.text = Arrow(shipEnd, "SHIP") + "\n" + Arrow(ruinsEnd, "RUINS");
-            tm.fontSize = 64;
-            tm.characterSize = 0.06f;
-            tm.lineSpacing = 1.1f;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = new Color(1f, 0.85f, 0.4f);                        // unlit: readable in the dark cavern
-            var tr = tg.GetComponent<MeshRenderer>();
-            // the font's own material (GUI/Text Shader) has ZTest [unity_GUIZTestMode] = Always: it drew through the rock
-            // from the other tunnels. A saved copy with LessEqual: same glyph texture, hidden behind walls
-            string tmp = Gen + "/TunnelSignText.mat";
-            var txm = AssetDatabase.LoadAssetAtPath<Material>(tmp);
-            if (txm == null) { txm = new Material(font.material) { name = "TunnelSignText" }; AssetDatabase.CreateAsset(txm, tmp); }
-            else { txm.shader = font.material.shader; txm.CopyPropertiesFromMaterial(font.material); }
-            txm.mainTexture = font.material.mainTexture;
-            txm.SetFloat("unity_GUIZTestMode", (float)CompareFunction.LessEqual);
-            txm.renderQueue = 3000;                                          // after the opaque plank and rock
-            EditorUtility.SetDirty(txm);
-            tr.sharedMaterial = txm;
-            tr.shadowCastingMode = ShadowCastingMode.Off;
+            // the words are painted into the face texture at build time (a dynamic-font TextMesh needed the GUI/Text shader
+            // at runtime: unlit, its own ZTest quirks, glyph atlas rebuilds). A quad on the plank's front, normal lit material
+            var face = SignTexture(new[] { Arrow(shipEnd, "SHIP"), Arrow(ruinsEnd, "RUINS") }, "TunnelSign");
+            var oldTxt = Gen + "/TunnelSignText.mat";                       // the old font material: no longer used
+            if (AssetDatabase.LoadAssetAtPath<Material>(oldTxt) != null) AssetDatabase.DeleteAsset(oldTxt);
+            if (face == null) return;
+            var fq = GameObject.CreatePrimitive(PrimitiveType.Quad);         // a quad faces -Z: towards the player walking in
+            UnityEngine.Object.DestroyImmediate(fq.GetComponent<Collider>());
+            fq.name = "Face";
+            fq.transform.SetParent(sign, false);
+            fq.transform.localPosition = new Vector3(0f, 0f, -0.027f);       // just in front of the plank's face (-0.025)
+            fq.transform.localScale = new Vector3(2.5f, 1.0f, 1f);
+            var fm = Asset("TunnelSignFace", Shader.Find("Universal Render Pipeline/Lit"));
+            fm.SetTexture("_BaseMap", face);
+            fm.SetColor("_BaseColor", Color.white);
+            fm.SetFloat("_Smoothness", 0.2f);
+            // luminous paint: the letters stay readable in the dark cavern (the brown ground glows next to nothing)
+            fm.EnableKeyword("_EMISSION");
+            fm.SetTexture("_EmissionMap", face);
+            fm.SetColor("_EmissionColor", new Color(0.55f, 0.55f, 0.55f));
+            fm.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(fm);
+            var fr = fq.GetComponent<MeshRenderer>();
+            fr.sharedMaterial = fm;
+            fr.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        // 5 x 7 glyphs for the sign's words (only what the arrows / names use)
+        static readonly Dictionary<char, string[]> SignGlyphs = new Dictionary<char, string[]>
+        {
+            ['S'] = new[] { " ### ", "#   #", "#    ", " ### ", "    #", "#   #", " ### " },
+            ['H'] = new[] { "#   #", "#   #", "#   #", "#####", "#   #", "#   #", "#   #" },
+            ['I'] = new[] { " ### ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", " ### " },
+            ['P'] = new[] { "#### ", "#   #", "#   #", "#### ", "#    ", "#    ", "#    " },
+            ['R'] = new[] { "#### ", "#   #", "#   #", "#### ", "# #  ", "#  # ", "#   #" },
+            ['U'] = new[] { "#   #", "#   #", "#   #", "#   #", "#   #", "#   #", " ### " },
+            ['N'] = new[] { "#   #", "##  #", "# # #", "# # #", "#  ##", "#   #", "#   #" },
+            ['<'] = new[] { "   # ", "  #  ", " #   ", "#    ", " #   ", "  #  ", "   # " },
+            ['>'] = new[] { " #   ", "  #  ", "   # ", "    #", "   # ", "  #  ", " #   " },
+            ['-'] = new[] { "     ", "     ", "     ", "#####", "     ", "     ", "     " },
+            ['^'] = new[] { "  #  ", " # # ", "#   #", "     ", "     ", "     ", "     " },
+        };
+
+        /// <summary>Paints text lines (block letters, anti-aliased) on an old plank colour with a little grain and saves
+        /// it as Generated/{name}.png. CPU only: works in batch mode without a GPU. 1024 x 512 on a 2.5 x 1 m face.</summary>
+        static Texture2D SignTexture(string[] lines, string name)
+        {
+            const int W = 1024, H = 512;
+            int maxChars = Mathf.Max(1, lines.Max(l => l.Length));
+            // glyph cell 6 x 9 "dots"; the face is 2.5 : 1 and the texture 2 : 1, so a dot is 0.8 as wide as tall
+            float sy = Mathf.Min(400f / (lines.Length * 9f), 940f / (maxChars * 6f * 0.8f)), sx = sy * 0.8f;
+            float top = (H + (lines.Length * 9f - 2f) * sy) * 0.5f;        // first line's top, block centred (texture y grows upwards)
+            var bg = new Color(0.17f, 0.105f, 0.055f);
+            var ink = new Color(1f, 0.83f, 0.38f);
+            var px = new Color[W * H];
+            bool Dot(float gx, float gy)                                     // gx, gy in texture pixels
+            {
+                float ly = (top - gy) / (9f * sy);
+                int li = Mathf.FloorToInt(ly);
+                if (li < 0 || li >= lines.Length) return false;
+                string ln = lines[li];
+                float x0 = (W - ln.Length * 6f * sx) * 0.5f;
+                float cx = (gx - x0) / (6f * sx);
+                int ci = Mathf.FloorToInt(cx);
+                if (ci < 0 || ci >= ln.Length || !SignGlyphs.TryGetValue(ln[ci], out var g)) return false;
+                int dx = Mathf.FloorToInt((cx - ci) * 6f), dy = Mathf.FloorToInt((ly - li) * 9f);
+                return dx < 5 && dy < 7 && g[dy][dx] == '#';
+            }
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    int cov = 0;                                             // 3 x 3 samples: soft letter edges
+                    for (int sj = 0; sj < 3; sj++)
+                        for (int si = 0; si < 3; si++)
+                            if (Dot(x + (si + 0.5f) / 3f, y + (sj + 0.5f) / 3f)) cov++;
+                    // grain along the plank, and worn paint
+                    float grain = Mathf.PerlinNoise(x * 0.004f, y * 0.09f) * 0.5f + Mathf.PerlinNoise(x * 0.02f, y * 0.4f) * 0.5f;
+                    float wear = Mathf.Clamp01(Mathf.PerlinNoise(x * 0.03f + 17f, y * 0.03f + 5f) * 1.6f - 0.25f);
+                    var c = bg * Mathf.Lerp(0.75f, 1.2f, grain);
+                    c = Color.Lerp(c, ink * Mathf.Lerp(0.8f, 1f, wear), cov / 9f * Mathf.Lerp(0.75f, 1f, wear));
+                    c.a = 1f;
+                    px[y * W + x] = c;
+                }
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false);
+            tex.SetPixels(px);
+            tex.Apply();
+            return SaveGenPng(tex, name, false);
+        }
+
+        /// <summary>Saves a generated texture as Generated/{name}.png (and destroys the in-memory one), imports it with
+        /// mips (sRGB colour or a normal map) and returns the asset.</summary>
+        static Texture2D SaveGenPng(Texture2D tex, string name, bool normal)
+        {
+            string png = $"{Gen}/{name}.png";
+            File.WriteAllBytes(png, tex.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(png, ImportAssetOptions.ForceUpdate);
+            if (AssetImporter.GetAtPath(png) is TextureImporter ti)
+            {
+                ti.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                ti.sRGBTexture = !normal;
+                ti.alphaSource = TextureImporterAlphaSource.None;
+                ti.mipmapEnabled = true;
+                ti.wrapMode = normal ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+                ti.anisoLevel = 4;
+                ti.textureCompression = TextureImporterCompression.CompressedHQ;
+                ti.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(png);
         }
 
         static Transform DoorPair(string name, Vector3 a, Vector3 aOut, Vector3 b, Vector3 bOut, Transform root)
@@ -1709,6 +1790,59 @@ namespace RexMagnum.EditorTools
 
         // ---------------------------------------------------------------- terrain
 
+        /// <summary>True when a baked normal map has (almost) no relief: std of red / green under 0.01 (the stucco bake
+        /// came out flat, std 0.002: the hotel walls read as painted cardboard up close).</summary>
+        static bool FlatNormalMap(string file)
+        {
+            string path = Dir + "/" + file;
+            if (string.IsNullOrEmpty(file) || !File.Exists(path)) return true;
+            var px = LoadPng(path, out _, out _);
+            if (px.Length == 0) return true;
+            double sr = 0, sg = 0, qr = 0, qg = 0;
+            foreach (var c in px) { sr += c.r; sg += c.g; qr += c.r * c.r; qg += c.g * c.g; }
+            double n = px.Length, vr = qr / n - (sr / n) * (sr / n), vg = qg / n - (sg / n) * (sg / n);
+            return Math.Sqrt(Math.Max(vr, vg)) / 255.0 < 0.01;
+        }
+
+        /// <summary>Procedural roughcast stucco normal map (tileable value noise, three octaves + fine grit), saved as
+        /// Generated/A_Stucco_nrm_gen.png. Used only while the baked one is flat.</summary>
+        static Texture2D StuccoNormal()
+        {
+            const int N = 512;
+            var hgt = new float[N * N];
+            // tileable: the four wrapped Perlin samples blended by position (seamless at the edges)
+            float Tile(float x, float y, float f)
+            {
+                float u = x / N, v = y / N, o = 300f;                          // o: keeps the shifted samples positive
+                float n00 = Mathf.PerlinNoise(x * f + o, y * f + o), n10 = Mathf.PerlinNoise((x - N) * f + o, y * f + o);
+                float n01 = Mathf.PerlinNoise(x * f + o, (y - N) * f + o), n11 = Mathf.PerlinNoise((x - N) * f + o, (y - N) * f + o);
+                return Mathf.Lerp(Mathf.Lerp(n00, n10, u), Mathf.Lerp(n01, n11, u), v);
+            }
+            var rng = new System.Random(304);
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float blobs = Tile(x, y, 1f / 24f), mid = Tile(x, y, 1f / 9f), fine = Tile(x, y, 1f / 3f);
+                    // trowel blobs: flattened tops (plaster pressed smooth), grit between them
+                    float hv = Mathf.SmoothStep(0.3f, 0.75f, blobs) * 0.55f + mid * 0.3f + fine * 0.15f;
+                    hgt[y * N + x] = hv + (float)rng.NextDouble() * 0.03f;
+                }
+            var px = new Color[N * N];
+            const float k = 3.5f;                                                // relief strength
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float dx = hgt[y * N + (x + 1) % N] - hgt[y * N + (x + N - 1) % N];
+                    float dy = hgt[((y + 1) % N) * N + x] - hgt[((y + N - 1) % N) * N + x];
+                    var nv = new Vector3(-dx * k, -dy * k, 1f).normalized;          // green up (Unity / OpenGL convention)
+                    px[y * N + x] = new Color(nv.x * 0.5f + 0.5f, nv.y * 0.5f + 0.5f, nv.z * 0.5f + 0.5f, 1f);
+                }
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false, true);
+            tex.SetPixels(px);
+            tex.Apply();
+            return SaveGenPng(tex, "A_Stucco_nrm_gen", true);
+        }
+
         static Color32[] LoadPng(string file, out int w, out int h)
         {
             var t = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
@@ -2036,12 +2170,20 @@ namespace RexMagnum.EditorTools
             rp.transform.position = new Vector3(40f, 40f, -250f);
             rp.importance = 0;
             // the interior probes (room 304, lobby, corridors, tunnels) are box-projected and blend at their edges
-            var urpA = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-            QualityAuto.SetUrp(urpA, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
-            QualityAuto.SetUrp(urpA, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
-            // dithered LOD cross-fade (also here, not only in Project Setup: a project set up before it had pops)
-            QualityAuto.SetUrp(urpA, "enableLODCrossFade", "m_EnableLODCrossFade", true);
-            if (urpA != null) EditorUtility.SetDirty(urpA);
+            // on every URP asset in use (the default and each quality level's own, like Project Setup): QualityAuto can
+            // switch to a level whose asset still had cross-fade off (the tree impostors popped again on that tier)
+            var urpAll = new List<UniversalRenderPipelineAsset>();
+            if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urpCur) urpAll.Add(urpCur);
+            for (int qi = 0; qi < QualitySettings.names.Length; qi++)
+                if (QualitySettings.GetRenderPipelineAssetAt(qi) is UniversalRenderPipelineAsset urpQ && !urpAll.Contains(urpQ)) urpAll.Add(urpQ);
+            foreach (var urpA in urpAll)
+            {
+                QualityAuto.SetUrp(urpA, "reflectionProbeBoxProjection", "m_ReflectionProbeBoxProjection", true);
+                QualityAuto.SetUrp(urpA, "reflectionProbeBlending", "m_ReflectionProbeBlending", true);
+                // dithered LOD cross-fade (also here, not only in Project Setup: a project set up before it had pops)
+                QualityAuto.SetUrp(urpA, "enableLODCrossFade", "m_EnableLODCrossFade", true);
+                EditorUtility.SetDirty(urpA);
+            }
 
             // post-processing
             var vol = new GameObject("PostProcessing").AddComponent<Volume>();
