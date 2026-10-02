@@ -337,7 +337,9 @@ def make_skirt(body, L, mat, name, bodice, rings=12, segs=48):
             if r_i == 0 and top[k] > 0:
                 base = top[k] + 0.0015                # top ring: right on the bodice
             else:
-                base = max(widest[k] + 0.009 + 0.012 * t, top[k] + 0.0015)   # never inside the bodice or body
+                ease = min(r_i / 3.0, 1.0)
+                ease = ease * ease * (3 - 2 * ease)       # ease the gap in over 3 rings: no step below the waist
+                base = max(widest[k] + 0.003 + (0.006 + 0.012 * t) * ease, top[k] + 0.0015)   # never inside
             rr = (base + flare) * (1 + 0.035 * t * math.sin(a * 8))
             ring.append(bm.verts.new((math.cos(a) * rr, cy + math.sin(a) * rr, z)))
         if prev:
