@@ -104,7 +104,7 @@ namespace RexMagnum
                 clickSrc.spatialBlend = 0f;
                 clickSrc.ignoreListenerPause = true;
             }
-            clickSrc.PlayOneShot(clip, 0.35f * AudioMix.Effects);
+            clickSrc.PlayOneShot(clip, 0.35f * AudioMix.UI);
         }
     }
 }
