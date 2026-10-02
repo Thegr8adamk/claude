@@ -120,7 +120,7 @@ namespace RexMagnum
         void AlbumTab(float s, float width)
         {
             var photos = Progress.Photos;
-            if (photos.Count == 0) { GUILayout.Label("No photos yet. Press P (D-pad right) near a blob or a guest.", label); return; }
+            if (photos.Count == 0) { GUILayout.Label($"No photos yet. Press {RMInput.Btn("Photo")} near a blob or a guest.", label); return; }
             int cols = 3;
             float cw = width / cols - 20;
             for (int i = photos.Count - 1; i >= 0; i -= cols)

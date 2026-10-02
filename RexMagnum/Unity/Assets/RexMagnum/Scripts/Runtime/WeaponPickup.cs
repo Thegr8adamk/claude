@@ -47,6 +47,7 @@ namespace RexMagnum
             }
         }
 
-        public string Label => ammoOnly ? $"F: take ammo ({WeaponDef.Get(weapon).name})" : $"F: pick up {WeaponDef.Get(weapon).name}";
+        public string Label => ammoOnly ? $"{RMInput.Btn("Use")}: take ammo ({WeaponDef.Get(weapon).name})"
+                                        : $"{RMInput.Btn("Use")}: pick up {WeaponDef.Get(weapon).name}";
     }
 }

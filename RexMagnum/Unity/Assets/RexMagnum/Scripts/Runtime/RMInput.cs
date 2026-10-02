@@ -105,6 +105,41 @@ namespace RexMagnum
 
         public static float MouseSensitivity = 0.08f;   // degrees per pixel
         public static float StickSensitivity = 180f;    // degrees per second
+        // ---- on-screen button names follow the device used last (brief section 7: icons change per device)
+        public enum DeviceKind { Keyboard, Gamepad, Touch }
+        public static DeviceKind LastDevice
+        {
+            get
+            {
+                if (TouchState.Active) return DeviceKind.Touch;
+                double k = System.Math.Max(K != null ? K.lastUpdateTime : 0, M != null ? M.lastUpdateTime : 0);
+                return G != null && G.lastUpdateTime > k ? DeviceKind.Gamepad : DeviceKind.Keyboard;
+            }
+        }
+
+        static readonly System.Collections.Generic.Dictionary<string, string> PadNames = new System.Collections.Generic.Dictionary<string, string>
+        {
+            { "Use", "X" }, { "Jump", "A" }, { "Taunt", "D-pad up" }, { "Photo", "D-pad right" }, { "Hands", "D-pad down" },
+            { "Camera", "R-stick click" }, { "Shoulder", "D-pad left" }, { "Pause", "Menu" }, { "Wheel", "hold Y" },
+            { "Run", "L-stick click" }, { "Action", "RT" }, { "Aim", "LT" }, { "NextWeapon", "RB" }, { "PrevWeapon", "LB" },
+        };
+
+        /// <summary>The name to show for an action's button on the device used last ("F", "X", "Use").</summary>
+        public static string Btn(string action)
+        {
+            switch (LastDevice)
+            {
+                case DeviceKind.Gamepad: return PadNames.TryGetValue(action, out var p) ? p : action;
+                case DeviceKind.Touch: return action == "Wheel" ? "hold Weapon" : action == "NextWeapon" ? "Weapon" : action;
+                default:
+                    if (action == "Action") return "Left click";
+                    if (action == "Aim") return "Right click";
+                    var key = KeyFor(action);
+                    string n = key.ToString();
+                    return n.StartsWith("Left") || n.StartsWith("Right") ? n.Substring(n.StartsWith("Left") ? 4 : 5) : n;
+            }
+        }
+
         public static bool InvertY;
         public static float LookScaleX = 1f, LookScaleY = 1f;     // separate X / Y look speed (settings)
 

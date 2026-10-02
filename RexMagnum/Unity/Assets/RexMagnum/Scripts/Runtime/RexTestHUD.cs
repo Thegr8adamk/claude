@@ -93,9 +93,13 @@ namespace RexMagnum
                 rig.InputEnabled = !paused;
                 actions.controller.InputEnabled = !paused;
             }
-            info.text = $"REX MAGNUM — test scene\nCamera: {(rig.Mode == RexCameraRig.CameraMode.FirstPerson ? "FIRST person" : "THIRD person")}  (V / R-stick)\n" +
-                        "WASD move · Shift run · Space jump · Mouse look\nLeft click: tap = jab, hold = heavy punch\n" +
-                        "T taunt · P photo · H hands down/up · C swap shoulder · Esc pause";
+            string B(string a) => RMInput.Btn(a);
+            bool kb = RMInput.LastDevice == RMInput.DeviceKind.Keyboard;
+            info.text = $"REX MAGNUM\nCamera: {(rig.Mode == RexCameraRig.CameraMode.FirstPerson ? "FIRST person" : "THIRD person")}  ({B("Camera")})\n" +
+                        (kb ? $"{B("Forward")}{B("Left")}{B("Back")}{B("Right")} move · {B("Run")} run · {B("Jump")} jump · Mouse look\n"
+                            : $"Left stick move · {B("Run")} run · {B("Jump")} jump · right stick look\n") +
+                        $"{B("Action")}: tap = light, hold = heavy · {B("Wheel")}: weapon wheel\n" +
+                        $"{B("Taunt")} taunt · {B("Photo")} photo · {B("Hands")} hands down/up · {B("Shoulder")} swap shoulder · {B("Pause")} pause";
             action.text = actions.ActionWord;
             if (Time.time > subtitleUntil) subtitle.text = "";
             prompt.text = WeaponPickup.Nearby != null ? WeaponPickup.Nearby.Label : FoodPickup.Nearby != null ? FoodPickup.Nearby.Label : "";

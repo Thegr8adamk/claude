@@ -23,7 +23,7 @@ namespace RexMagnum
         float backAt = -1f;
         Transform rex;
 
-        public string Label => $"F: {(kind == Kind.Cocktail ? "drink" : "eat")} the {Names[(int)kind]} (+{HealAmount[(int)kind]:0})";
+        public string Label => $"{RMInput.Btn("Use")}: {(kind == Kind.Cocktail ? "drink" : "eat")} the {Names[(int)kind]} (+{HealAmount[(int)kind]:0})";
 
         /// <summary>Spawn a food pickup (rescue reward, bars, buffet).</summary>
         public static FoodPickup Spawn(Kind kind, Vector3 at, float respawn, Transform parent = null)

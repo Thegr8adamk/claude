@@ -30,7 +30,7 @@ namespace UnityEngine.InputSystem {
     Home, End, Insert, Delete, CapsLock, NumLock, PrintScreen, ScrollLock, Pause, NumpadEnter, NumpadDivide, NumpadMultiply, NumpadPlus,
     NumpadMinus, NumpadPeriod, NumpadEquals, Numpad0, Numpad1, Numpad2, Numpad3, Numpad4, Numpad5, Numpad6, Numpad7, Numpad8, Numpad9,
     F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, OEM1, OEM2, OEM3, OEM4, OEM5, IMESelected }
-  public class InputDevice { public string displayName, name; }
+  public class InputDevice { public string displayName, name; public double lastUpdateTime; }
   public class Keyboard : InputDevice { public static Keyboard current; public KeyControl this[Key key] => null; public AnyKeyControl anyKey; public UnityEngine.InputSystem.Utilities.ReadOnlyArray<KeyControl> allKeys; }
   public class Pointer : InputDevice { public Vector2Control position; public DeltaControl delta; }
   public class Mouse : Pointer { public static new Mouse current; public ButtonControl leftButton, rightButton, middleButton; public DeltaControl scroll; }
