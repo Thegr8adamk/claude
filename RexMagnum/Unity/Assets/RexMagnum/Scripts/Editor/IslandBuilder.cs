@@ -134,6 +134,7 @@ namespace RexMagnum.EditorTools
                     Hotel(data.hotel);
                     Guests(data.hotel, pool);
                 }
+                Beach(world);
 
                 string path = Scenes + "/Island.unity";
                 EditorSceneManager.SaveScene(scene, path);
@@ -555,6 +556,46 @@ namespace RexMagnum.EditorTools
             flow.bedPoint = bed.transform;
             flow.wakePoint = wake.transform;
             flow.disableDuringTitle = new Behaviour[] { rex.GetComponent<RexActions>(), rex.GetComponent<RexWeapons>(), rig };
+        }
+
+        // ---------------------------------------------------------------- beach: dive shop + tiki bar pickups
+
+        /// <summary>Brief section 5: harpoon gun at the beach dive shop, exploding coconuts on the beach and at the
+        /// tiki bar (+ a cocktail there). Placed on the floor found by a ray down inside each building.</summary>
+        static void Beach(Transform world)
+        {
+            Physics.SyncTransforms();
+            var root = new GameObject("Beach_Gameplay").transform;
+            Vector3? Floor(string building, Vector3 offset)
+            {
+                var b = world.Find(building);
+                if (b == null) return null;
+                var rs = b.GetComponentsInChildren<Renderer>();
+                if (rs.Length == 0) return null;
+                var bounds = rs[0].bounds;
+                foreach (var r in rs) bounds.Encapsulate(r.bounds);
+                Vector3 from = new Vector3(bounds.center.x, bounds.min.y + 1.6f, bounds.center.z) + offset;
+                if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, 8f)) return hit.point;
+                return new Vector3(from.x, bounds.min.y, from.z);
+            }
+            var dive = Floor("DiveShop", Vector3.zero);
+            if (dive.HasValue)
+            {
+                Pickup("Pickup_Harpoon", dive.Value + Vector3.up * 0.9f, root);
+                Pickup("Ammo_Harpoon", dive.Value + new Vector3(0.8f, 0.9f, 0f), root);
+            }
+            var tiki = Floor("TikiBar", Vector3.zero);
+            if (tiki.HasValue)
+            {
+                Pickup("Pickup_Coconut", tiki.Value + new Vector3(0.9f, 1.0f, 0f), root);
+                FoodPickup.Spawn(FoodPickup.Kind.Cocktail, tiki.Value + new Vector3(-0.9f, 1.0f, 0f), 120f, root);
+            }
+            if (dive.HasValue && tiki.HasValue)            // coconuts on the sand between the two
+            {
+                Vector3 mid = (dive.Value + tiki.Value) * 0.5f;
+                if (Physics.Raycast(mid + Vector3.up * 30f, Vector3.down, out RaycastHit sand, 60f))
+                    Pickup("Ammo_Coconut", sand.point + Vector3.up * 0.1f, root);
+            }
         }
 
         // ---------------------------------------------------------------- hotel: pickups + elevator

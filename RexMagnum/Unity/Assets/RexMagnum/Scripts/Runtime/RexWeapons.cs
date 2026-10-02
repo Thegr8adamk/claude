@@ -112,7 +112,7 @@ namespace RexMagnum
             if (!owned.Contains(id))
             {
                 owned.Add(id);
-                if (d.isGun) ammo[id] = d.startAmmo;
+                if (d.isGun) ammo[id] = Mathf.Min(d.maxAmmo, Ammo(id) + d.startAmmo);   // keep ammo found before the weapon
                 Equip(id);
                 RexVoice.Say(gameObject, "WeaponFound", true);
             }

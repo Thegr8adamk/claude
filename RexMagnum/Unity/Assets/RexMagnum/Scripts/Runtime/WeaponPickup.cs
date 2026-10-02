@@ -39,7 +39,8 @@ namespace RexMagnum
                 var w = p.GetComponent<RexWeapons>();
                 if (w == null) return;
                 RMInput.ConsumeUse();
-                if (ammoOnly) w.AddAmmo(weapon, ammoAmount);
+                if (ammoOnly && weapon == WeaponId.Coconut && !w.Has(weapon)) w.Give(weapon);   // a coconut is its own weapon
+                else if (ammoOnly) w.AddAmmo(weapon, ammoAmount);
                 else w.Give(weapon);
                 if (Nearby == this) Nearby = null;
                 Destroy(gameObject);
