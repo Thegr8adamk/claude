@@ -1123,6 +1123,15 @@ namespace RexMagnum.EditorTools
                 cc.height = 6f;
                 cc.center = new Vector3(0f, 3f, 0f);
             }
+            else if (pr.kind == "rock")
+            {
+                // boulders are solid too (terrain trees only take capsule colliders): a squat capsule from the mesh size
+                var b = mesh.bounds;
+                var cc = root.AddComponent<CapsuleCollider>();
+                cc.radius = Mathf.Max(0.2f, Mathf.Min(b.extents.x, b.extents.z) * 0.9f);
+                cc.height = Mathf.Max(cc.radius * 2f, b.size.y);
+                cc.center = new Vector3(b.center.x, b.center.y, b.center.z);
+            }
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{Prefabs}/Veg_{pr.name}.prefab");
             UnityEngine.Object.DestroyImmediate(root);
             return prefab;
