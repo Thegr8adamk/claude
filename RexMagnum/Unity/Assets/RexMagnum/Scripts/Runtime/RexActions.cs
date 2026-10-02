@@ -93,6 +93,7 @@ namespace RexMagnum
                 Guest guest = null;
                 foreach (var g in FindObjectsByType<Guest>(FindObjectsSortMode.None))
                 {
+                    if (g.LockedIn) continue;                 // behind a locked door (hidden) for the night
                     float d = Vector3.Distance(g.transform.position, transform.position);
                     if (d < best) { best = d; guest = g; nearest = null; }
                 }

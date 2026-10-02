@@ -124,7 +124,11 @@ namespace RexMagnum
         static System.Collections.IEnumerator ReEnable(UnityEngine.AI.NavMeshAgent ag, float after)
         {
             yield return new WaitForSeconds(after);
-            if (ag != null) ag.enabled = true;
+            if (ag == null) yield break;
+            // back onto the NavMesh (the wall pin may have pushed the blob off it)
+            if (UnityEngine.AI.NavMesh.SamplePosition(ag.transform.position, out var hit, 3f, UnityEngine.AI.NavMesh.AllAreas))
+                ag.transform.position = hit.position;
+            ag.enabled = true;
         }
     }
 }

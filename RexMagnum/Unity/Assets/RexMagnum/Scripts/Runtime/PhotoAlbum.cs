@@ -34,6 +34,8 @@ namespace RexMagnum
         {
             Camera selfie = null;
             var hidden = new System.Collections.Generic.List<Renderer>();
+            var arms = new System.Collections.Generic.List<Renderer>();
+            var rig = Object.FindFirstObjectByType<RexCameraRig>();
             if (rex != null)
             {
                 // pull the subject to Rex's side (a stunned blob or a guest comes along; NavMesh agents warp)
@@ -58,6 +60,10 @@ namespace RexMagnum
                         hidden.Add(r);
                         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                     }
+                // the first-person arms float at the eye camera, right in front of the selfie camera: hide them
+                if (rig != null && rig.fpArms != null)
+                    foreach (var r in rig.fpArms.GetComponentsInChildren<Renderer>())
+                        if (r.enabled) { arms.Add(r); r.enabled = false; }
                 // front-camera selfie: held out in front of Rex, looking back at him (and the subject)
                 var go = new GameObject("SelfieCam");
                 selfie = go.AddComponent<Camera>();
@@ -89,7 +95,10 @@ namespace RexMagnum
                 yield return new WaitForSeconds(0.6f);
                 Object.Destroy(selfie.gameObject);
             }
-            foreach (var r in hidden) if (r != null) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+            // back to shadows only, unless the player switched to third person meanwhile (the rig set the body back)
+            if (rig == null || rig.Mode == RexCameraRig.CameraMode.FirstPerson)
+                foreach (var r in hidden) if (r != null) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+            foreach (var r in arms) if (r != null) r.enabled = true;
         }
     }
 }

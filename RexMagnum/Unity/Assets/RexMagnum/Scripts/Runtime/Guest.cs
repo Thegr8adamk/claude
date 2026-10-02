@@ -121,6 +121,8 @@ namespace RexMagnum
         }
 
         bool lockedIn;
+        /// <summary>Inside the room for the night (hidden): no photos, no rescue.</summary>
+        public bool LockedIn => lockedIn;
         static readonly string[] LockedLines =
         {
             "We are NOT opening this door!", "Go away! Come back when it's light!", "Is that Rex? Definitely not opening.",

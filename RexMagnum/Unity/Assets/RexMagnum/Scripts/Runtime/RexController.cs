@@ -73,28 +73,40 @@ namespace RexMagnum
         /// <summary>0 = clean shirt, 1 = covered in slime.</summary>
         public float SlimeAmount { get; private set; }
         Renderer[] shirt;
+        Color[] shirtColor;
+        float[] shirtSmooth;
         MaterialPropertyBlock slimeBlock;
-        float shownSlime = -1f;
+        float shownSlime;
         bool inSlimeWater;
 
         void UpdateSlimeLook()
         {
             float wash = IsSwimming ? (inSlimeWater ? -0.2f : 0.35f) : 0.012f;   // slime water adds, clean water washes
             SlimeAmount = Mathf.Clamp01(SlimeAmount - wash * Time.deltaTime);
-            if (Mathf.Abs(SlimeAmount - shownSlime) < 0.01f) return;
+            if (Mathf.Abs(SlimeAmount - shownSlime) < 0.01f && (SlimeAmount > 0f || shownSlime == 0f)) return;
             shownSlime = SlimeAmount;
             if (shirt == null)
             {
                 shirt = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r.name.Contains("Shirt"));
                 slimeBlock = new MaterialPropertyBlock();
+                // the shirt's own color and shine: the slime look is blended over them, not over plain white
+                shirtColor = new Color[shirt.Length];
+                shirtSmooth = new float[shirt.Length];
+                for (int i = 0; i < shirt.Length; i++)
+                {
+                    var m = shirt[i].sharedMaterial;
+                    shirtColor[i] = m != null && m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : Color.white;
+                    shirtSmooth[i] = m != null && m.HasProperty("_Smoothness") ? m.GetFloat("_Smoothness") : 0.3f;
+                }
             }
-            var tint = Color.Lerp(Color.white, new Color(0.55f, 1f, 0.4f), SlimeAmount * 0.8f);
-            foreach (var r in shirt)
+            for (int i = 0; i < shirt.Length; i++)
             {
+                var r = shirt[i];
                 if (r == null) continue;
+                if (SlimeAmount <= 0f) { r.SetPropertyBlock(null); continue; }        // clean: the shirt's own material again
                 r.GetPropertyBlock(slimeBlock);
-                slimeBlock.SetColor("_BaseColor", tint);
-                slimeBlock.SetFloat("_Smoothness", Mathf.Lerp(0.3f, 0.85f, SlimeAmount));   // wet shine
+                slimeBlock.SetColor("_BaseColor", shirtColor[i] * Color.Lerp(Color.white, new Color(0.55f, 1f, 0.4f), SlimeAmount * 0.8f));
+                slimeBlock.SetFloat("_Smoothness", Mathf.Lerp(shirtSmooth[i], 0.85f, SlimeAmount));   // wet shine
                 r.SetPropertyBlock(slimeBlock);
             }
         }

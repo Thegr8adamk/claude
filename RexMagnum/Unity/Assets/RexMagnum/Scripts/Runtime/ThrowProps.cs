@@ -66,7 +66,7 @@ namespace RexMagnum
             void Part(Vector3 pos, Vector3 size, Vector3 euler, Material m)
             {
                 var p = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                Object.Destroy(p.GetComponent<Collider>());
+                Object.DestroyImmediate(p.GetComponent<Collider>());   // now: the first throw copies the template this frame
                 p.transform.SetParent(chair.transform, false);
                 p.transform.localPosition = pos;
                 p.transform.localEulerAngles = euler;

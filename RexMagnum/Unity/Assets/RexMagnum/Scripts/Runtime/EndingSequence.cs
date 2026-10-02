@@ -13,7 +13,7 @@ namespace RexMagnum
         float t;
         Camera cam;
         RexController rex;
-        bool slipped, heroed;
+        bool slipped, heroed, hadInput;
 
         static readonly string[] Marty =
         {
@@ -32,7 +32,7 @@ namespace RexMagnum
         void Start()
         {
             rex = FindFirstObjectByType<RexController>();
-            if (rex != null) rex.InputEnabled = false;
+            if (rex != null) { hadInput = rex.InputEnabled; rex.InputEnabled = false; }
             var main = Camera.main;
             cam = new GameObject("EndingCam").AddComponent<Camera>();
             if (main != null) { cam.CopyFrom(main); cam.depth = main.depth + 20f; }
@@ -42,7 +42,7 @@ namespace RexMagnum
         void OnDestroy()
         {
             if (cam != null) Destroy(cam.gameObject);
-            if (rex != null) rex.InputEnabled = true;
+            if (rex != null) rex.InputEnabled = hadInput;     // still off if he was at the golf cart's wheel
         }
 
         void Update()

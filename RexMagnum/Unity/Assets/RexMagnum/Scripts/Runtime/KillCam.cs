@@ -103,7 +103,7 @@ namespace RexMagnum
                 if (rideKilled) XRay(last, true);
                 yield return null;
             }
-            Time.timeScale = 1f;
+            if (Time.timeScale > 0f) Time.timeScale = 1f;   // not while the pause menu holds it at 0 (its key also skips the cam)
             XRay(last, false);
             Destroy(cam.gameObject);
             running = riding = false;
@@ -148,7 +148,7 @@ namespace RexMagnum
                 if (t > 0.3f && RMInput.AnyKey) break;     // skippable
                 yield return null;
             }
-            Time.timeScale = 1f;
+            if (Time.timeScale > 0f) Time.timeScale = 1f;   // not while the pause menu holds it at 0 (its key also skips the cam)
             XRay(target, false);
             Destroy(cam.gameObject);
             running = false;

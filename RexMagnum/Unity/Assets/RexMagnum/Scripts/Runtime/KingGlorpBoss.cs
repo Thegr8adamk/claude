@@ -44,7 +44,13 @@ namespace RexMagnum
             health = GetComponent<Health>();
             var rc = FindFirstObjectByType<RexController>();
             if (rc != null) rex = rc.transform;
-            health.Died += by => StartCoroutine(Victory(by));
+            health.Died += by =>
+            {
+                // the blob destroys itself about 0.5 s after dying (Blob.PopRoutine), which would stop this coroutine
+                // before the ending starts: run it on Rex instead
+                MonoBehaviour host = rex != null ? rex.GetComponent<RexController>() : null;
+                (host != null ? host : this).StartCoroutine(Victory(by, transform.position));
+            };
             music = gameObject.AddComponent<AudioSource>();
             music.clip = Resources.Load<AudioClip>("Music/glorp_ballad");
             music.loop = true;
@@ -206,7 +212,7 @@ namespace RexMagnum
             Destroy(ring);
         }
 
-        IEnumerator Victory(GameObject by)
+        IEnumerator Victory(GameObject by, Vector3 at)
         {
             dead = true;
             Fighting = false;
@@ -214,7 +220,7 @@ namespace RexMagnum
             Say("Glorp... is... not... eternaaal...");
             for (int i = 0; i < 10; i++)
             {
-                SlimeFX.Splat(transform.position + Random.insideUnitSphere * 3f + Vector3.up * 2f, Random.onUnitSphere, new Color(1f, 0.8f, 0.2f), 40);
+                SlimeFX.Splat(at + Random.insideUnitSphere * 3f + Vector3.up * 2f, Random.onUnitSphere, new Color(1f, 0.8f, 0.2f), 40);
                 yield return new WaitForSeconds(0.1f);
             }
             if (rex != null) RexVoice.Say(rex.gameObject, "GlorpWin", true);
