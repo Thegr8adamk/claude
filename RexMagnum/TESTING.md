@@ -18,9 +18,14 @@
 - A window "Rex Magnum setup" opens. Click **OK**. If it asks to restart, click **Restart**.
 - If it says the **Input System** is missing: Window > Package Manager > Unity Registry > Input System > Install.
 
-## 4. Build the island and play
-1. Menu **Rex Magnum > Build Island**. Wait (a progress bar shows; 5–15 minutes).
-2. Open `Assets/RexMagnum/Scenes/Island.unity`. Press **Play**.
+## 4. Build the island and play (in this order)
+1. Menu **Rex Magnum > Setup Project**.
+2. Menu **Rex Magnum > Build Rex + Test Scene**. Wait. (This also makes the blob and weapon prefabs the island needs.)
+3. Menu **Rex Magnum > Build Island**. Wait (a progress bar shows; 5–15 minutes).
+4. Open `Assets/RexMagnum/Scenes/Island.unity`. Press **Play**.
+
+## Getting a newer version later
+Download the ZIP again. Close Unity. Delete the old `Assets\RexMagnum` folder, copy in the new one, open Unity, then do step 4.3 and 4.4 again.
 
 ### New things to try (2026-10-02)
 | Try this | What you should see |
