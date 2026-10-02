@@ -76,7 +76,72 @@ namespace RexMagnum
                 Side = BarSide;
                 if (InZone(Zones[0], rex) && StepId != "rescue") { target = BarDefense.Center; hasTarget = true; }   // a guest to save comes first
             }
+            // the cave siege starts only at night near the cave mouth (after the factory): a night side line says so and
+            // the marker leads to the cave mouth (not from the tunnels or the ship: those have their own way out)
+            if (CaveSiegeOpen())
+            {
+                Side = CaveSide;
+                if (!InTunnels(rex) && !InZone(Zones[7], rex) && SiegeStatic("Center") is Vector3 caveAt) { target = caveAt; hasTarget = true; }
+            }
+            // a set piece just won: its summary (LastSummary) as the side line for ~8 s
+            string won = EventSummary();
+            if (won != null) Side = won;
             return s;
+        }
+
+        public const string CaveSide = "Night: the cave is stirring. Defend the cave mouth (north-west)!";
+
+        /// <summary>The cave siege can start: night, the factory stopped, not done, not running (NightSiege, by name).</summary>
+        static bool CaveSiegeOpen()
+        {
+            if (DayNight.Night <= 0.6f || !FactoryCore.Stopped || Progress.Value("cave_siege") > 0 || KingGlorpBoss.Fighting || BarDefense.Active) return false;
+            LookSiege();
+            return siegeType != null && !(SiegeStatic("Active") is bool running && running);
+        }
+
+        /// <summary>A set piece running now (Defend the Bar, the cave siege): no fast travel.</summary>
+        public static bool EventRunning => BarDefense.Active || SiegeObjective(out _, out _, out _);
+
+        // ------------------------------------------------------------ event summaries (read by name, if present)
+
+        static readonly string[] SummaryTypes = { "RexMagnum.BarDefense", "RexMagnum.NightSiege" };
+        static readonly string[] SummaryDoneKeys = { "bar_defended", "cave_siege" };
+        static readonly string[] summarySeen = new string[2];
+        static System.Type[] summaryTypes;
+        static bool summaryLooked;
+        static string summaryShown;
+        static float summaryUntil;
+
+        /// <summary>The static LastSummary of BarDefense / NightSiege when it changed after a win (its goal is saved
+        /// done), for 8 s; else null. The first look after a load only notes the old text (not news).</summary>
+        static string EventSummary()
+        {
+            if (summaryTypes == null)
+            {
+                summaryTypes = new System.Type[SummaryTypes.Length];
+                for (int i = 0; i < SummaryTypes.Length; i++) summaryTypes[i] = typeof(GameGuide).Assembly.GetType(SummaryTypes[i]);
+            }
+            for (int i = 0; i < summaryTypes.Length; i++)
+            {
+                if (summaryTypes[i] == null) continue;
+                string v = StaticOf(summaryTypes[i], "LastSummary") as string;
+                if (!summaryLooked) { summarySeen[i] = v; continue; }
+                // a new text counts once the goal is saved done (the event may write the text and the save in either order)
+                if (v == summarySeen[i] || (!string.IsNullOrEmpty(v) && Progress.Value(SummaryDoneKeys[i]) <= 0)) continue;
+                if (!string.IsNullOrEmpty(v)) { summaryShown = v; summaryUntil = Time.unscaledTime + 8f; }
+                summarySeen[i] = v;
+            }
+            summaryLooked = true;
+            return Time.unscaledTime < summaryUntil ? summaryShown : null;
+        }
+
+        static object StaticOf(System.Type t, string name)
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+            var pi = t.GetProperty(name, F);
+            if (pi != null) return pi.GetValue(null, null);
+            var fi = t.GetField(name, F);
+            return fi != null ? fi.GetValue(null) : null;
         }
 
         public const string SniperSide = "Side: the sniper rifle is on the hotel roof (stairs or elevator to the top).";
@@ -144,11 +209,7 @@ namespace RexMagnum
         public static bool SiegeObjective(out string line, out Vector3 at, out bool hasAt)
         {
             line = null; at = Vector3.zero; hasAt = false;
-            if (!siegeLooked)
-            {
-                siegeLooked = true;
-                foreach (var n in SiegeTypes) { siegeType = typeof(GameGuide).Assembly.GetType(n); if (siegeType != null) break; }
-            }
+            LookSiege();
             if (siegeType == null || !(SiegeStatic("Active") is bool on) || !on) return false;
             line = SiegeStatic("Objective") as string;
             if (string.IsNullOrEmpty(line)) line = "Hold out at the cave until the blobs stop coming!";
@@ -157,8 +218,16 @@ namespace RexMagnum
             return true;
         }
 
+        static void LookSiege()
+        {
+            if (siegeLooked) return;
+            siegeLooked = true;
+            foreach (var n in SiegeTypes) { siegeType = typeof(GameGuide).Assembly.GetType(n); if (siegeType != null) break; }
+        }
+
         static object SiegeStatic(string name)
         {
+            if (siegeType == null) return null;
             const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
             var pi = siegeType.GetProperty(name, F);
             if (pi != null) return pi.GetValue(null, null);
@@ -180,7 +249,8 @@ namespace RexMagnum
         static bool rescueCalm;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { siegeLooked = false; siegeType = null; barNearestLooked = false; barNearest = null; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null; }   // editor with Domain Reload off
+        static void ResetStatics() { siegeLooked = false; siegeType = null; barNearestLooked = false; barNearest = null; rescueSeen = -100f; nextFind = 0f; carts = null; lifts = null; doors = null; rescueCalm = false; StepId = null; Warning = null; Side = null;
+                                     summaryTypes = null; summaryLooked = false; summaryShown = null; summaryUntil = 0f; summarySeen[0] = summarySeen[1] = null; }   // editor with Domain Reload off
 
         static string Step(RexWeapons w, Vector3 rex, out Vector3 target, out bool hasTarget, out string id)
         {

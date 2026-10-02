@@ -10,7 +10,9 @@ namespace RexMagnum
     /// when Rex comes within StartRadius of the cave mouth (ZoneDoor "Cave_DoorA"): two waves of glowing blobs come out
     /// of the cave (at most MaxAlive at once; bouncer halves count to their wave); the spawners near the cave hold off
     /// meanwhile (BlobSpawner). Reward: coconuts + ammo for every owned gun, Progress "cave_siege" (saved: never again).
-    /// Rex dies, goes more than AbortRadius away or the night ends: the event stops cleanly and can start again later.
+    /// Rex dies, goes more than AbortRadius away (or 15 m up/down: the tunnels) or the night ends: the event stops
+    /// cleanly and can start again later (after a death the wave blobs go too). The fight is MouthOut m out in front of
+    /// the door, and the cave doors do not take Rex while it runs (ZoneDoor). A win sets LastSummary.
     /// No builder step: it attaches itself to Rex when a scene loads (like BarDefense).
     /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target.
     /// </summary>
@@ -23,6 +25,7 @@ namespace RexMagnum
         public const float HoldRadius = 70f;
         const float StartRadius = 25f, AbortRadius = 60f, RetryAfter = 30f, SpawnEvery = 1.8f, StartNight = 0.6f, EndNight = 0.25f;
         const float StuckAfter = 20f, StuckRexDistance = 15f;
+        const float MouthOut = 9f, DoorClear = 4f, AbortHeight = 15f;
         const int MaxAlive = 4;
         static readonly int[] WaveSize = { 5, 7 };
 
@@ -33,12 +36,14 @@ namespace RexMagnum
         public static int Waves => WaveSize.Length;
         /// <summary>Blobs of this wave still to beat (alive + not yet out).</summary>
         public static int Left { get; private set; }
-        /// <summary>The cave mouth (the cave door when found, else the cave zone at Rex's height).</summary>
+        /// <summary>The fight's centre: MouthOut m in front of the cave door when found, else the cave zone at Rex's height.</summary>
         public static Vector3 Center { get; private set; } = CaveZone;
         /// <summary>Objective line for the HUD while active, else null.</summary>
         public static string Objective => Active ? $"CAVE SIEGE! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
         /// <summary>Done before (saved).</summary>
         public static bool Done => Progress.Value(DoneKey) > 0;
+        /// <summary>One line about the last won siege ("Cave held in 2:41 - 17 blobs popped") for the UI, else null.</summary>
+        public static string LastSummary { get; private set; }
 
         static NightSiege inst;
 
@@ -61,7 +66,7 @@ namespace RexMagnum
         public static Vector3 Target { get { var b = NearestBlob(); return b != null ? b.transform.position : Center; } }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; Wave = 0; Left = 0; Center = CaveZone; }   // editor with Domain Reload off
+        static void ResetStatics() { Active = false; Wave = 0; Left = 0; Center = CaveZone; LastSummary = null; }   // editor with Domain Reload off
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -81,8 +86,11 @@ namespace RexMagnum
 
         Health rexHealth;
         RexWeapons weapons;
-        float nextCheck, retryAt;
+        float nextCheck, retryAt, startedAt;
+        int popped;
         bool mouthFound;
+        Vector3 doorAt;                                                       // the cave door's trigger (spawns stay clear of it)
+        Light waveLight;                                                      // one glow for the wave, not one per blob
         readonly List<Blob> prefabs = new List<Blob>();
         readonly List<Blob> mine = new List<Blob>();
 
@@ -100,6 +108,7 @@ namespace RexMagnum
             if (inst == this) inst = null;
             // a scene reload / NEW GAME mid-event: the spawners must not stay on hold
             if (Active) { Active = false; Wave = 0; Left = 0; }
+            DropLight();
         }
 
         /// <summary>A wave bouncer popped: its halves belong to the wave too.</summary>
@@ -110,13 +119,28 @@ namespace RexMagnum
             half.Alert(6f);
         }
 
-        /// <summary>The cave mouth: the cave door (ZoneDoor "Cave_DoorA") once found, else the cave zone at Rex's height.</summary>
+        /// <summary>The fight's centre: MouthOut m out of the cave door (ZoneDoor "Cave_DoorA") along its way out (toward
+        /// the tunnel door's exit point "Cave_ExitA" in front of it), on the NavMesh; no door: the cave zone at Rex's height.</summary>
         void FindMouth()
         {
             if (mouthFound) return;
-            foreach (var d in FindObjectsByType<ZoneDoor>(FindObjectsSortMode.None))
-                if (d != null && d.name == "Cave_DoorA") { Center = d.transform.position; mouthFound = true; return; }
-            Center = new Vector3(CaveZone.x, transform.position.y, CaveZone.z);
+            ZoneDoor mouth = null;
+            Transform outside = null;
+            foreach (var zd in FindObjectsByType<ZoneDoor>(FindObjectsSortMode.None))
+            {
+                if (zd == null) continue;
+                if (zd.name == "Cave_DoorA") mouth = zd;
+                else if (zd.name == "Cave_DoorB" && zd.exit != null) outside = zd.exit;
+            }
+            if (mouth == null) { Center = new Vector3(CaveZone.x, transform.position.y, CaveZone.z); return; }
+            doorAt = mouth.transform.position;
+            Vector3 dir = outside != null ? outside.position - doorAt : -mouth.transform.forward;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) dir = Vector3.back;                 // the cave faces south (Island.json mouth -> mouthOut)
+            Vector3 c = doorAt + dir.normalized * MouthOut;
+            if (NavMesh.SamplePosition(c, out NavMeshHit nh, 4f, NavMesh.AllAreas)) c = nh.position;
+            Center = c;
+            mouthFound = true;
         }
 
         void Update()
@@ -161,7 +185,9 @@ namespace RexMagnum
         {
             if (rexHealth != null && rexHealth.IsDead) return true;
             if (DayNight.Night < EndNight) return true;                     // dawn: they crawl back in
-            Vector3 flat = transform.position - Center; flat.y = 0f;
+            Vector3 flat = transform.position - Center;
+            if (Mathf.Abs(flat.y) > AbortHeight) return true;              // in the tunnels under the island (or way up)
+            flat.y = 0f;
             return flat.sqrMagnitude > AbortRadius * AbortRadius;
         }
 
@@ -170,7 +196,17 @@ namespace RexMagnum
             Active = false;
             Wave = 0;
             Left = 0;
-            mine.Clear();                                                     // the blobs stay: they just stop being a wave
+            // Rex died: the wave goes (bouncer halves too; a popping bouncer goes before it splits), so he does not
+            // come back into the same siege. Else the blobs stay: they just stop being a wave.
+            if (rexHealth != null && rexHealth.IsDead)
+                foreach (var b in mine)
+                {
+                    if (b == null) continue;
+                    SlimeFX.Splat(b.transform.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 8);
+                    Destroy(b.gameObject);
+                }
+            mine.Clear();
+            DropLight();
             retryAt = Time.time + RetryAfter;
             RexTestHUD.Notice("The cave siege is off. Come back at night to finish it.", 4f);
         }
@@ -179,6 +215,8 @@ namespace RexMagnum
         {
             Active = true;
             mine.Clear();
+            startedAt = Time.time;
+            popped = 0;
             RexVoice.Subtitle?.Invoke("REX: Something's glowing in that cave. Lots of somethings.");
             for (int w = 0; w < Waves; w++)
             {
@@ -195,9 +233,10 @@ namespace RexMagnum
                     int living = 0;
                     for (int i = mine.Count - 1; i >= 0; i--)
                     {
-                        if (mine[i] == null) mine.RemoveAt(i);
+                        if (mine[i] == null) { mine.RemoveAt(i); popped++; }    // gone = popped (halves count too)
                         else if (!mine[i].IsDead) living++;
                     }
+                    FollowLight();
                     if (toSpawn > 0 && Time.time >= nextSpawn && mine.Count < MaxAlive && Blob.AliveCount() < BlobSpawner.GlobalCap)
                     {
                         nextSpawn = Time.time + SpawnEvery;
@@ -213,6 +252,7 @@ namespace RexMagnum
                     else if (living > 0 && Time.time - lastProgress > StuckAfter) { lastProgress = Time.time; Unstick(); }
                     yield return null;
                 }
+                DropLight();
                 if (w == Waves - 1) break;
                 RexTestHUD.Notice($"Wave {Wave}/{Waves} cleared. The cave is still glowing!", 3f);
                 for (float t = 0f; t < 5f; t += Time.deltaTime)
@@ -224,7 +264,8 @@ namespace RexMagnum
             Win();
         }
 
-        /// <summary>Out of the cave mouth (2-6 m around it); Rex stands right there: a wider ring (10-16 m).</summary>
+        /// <summary>Out in front of the cave mouth (2-6 m around Center, never on the door); Rex stands right there: a
+        /// wider ring (10-16 m).</summary>
         bool SpawnOne(int wave)
         {
             for (int tries = 0; tries < 10; tries++)
@@ -234,22 +275,43 @@ namespace RexMagnum
                 if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 4f, NavMesh.AllAreas)) continue;
                 if (WaterVolume.Depth(hit.position + Vector3.up * 0.1f) > 0.2f) continue;
                 if ((hit.position - transform.position).sqrMagnitude < 8f * 8f) continue;      // never next to Rex
+                if (mouthFound && (hit.position - doorAt).sqrMagnitude < DoorClear * DoorClear) continue;   // not in the doorway
                 var b = Instantiate(PrefabFor(wave), hit.position, Quaternion.identity);
                 b.Alert(6f);
-                // glowing: a small light in its own colour (readable in the dark cave mouth; at most MaxAlive lights)
-                var lt = new GameObject("SiegeGlow").AddComponent<Light>();
-                lt.transform.SetParent(b.transform, false);
-                lt.transform.localPosition = Vector3.up * 1.2f;
-                lt.type = LightType.Point;
-                lt.range = 5f;
-                lt.intensity = 2f;
-                lt.color = b.BaseColor();
-                lt.shadows = LightShadows.None;
+                // the wave's glow: one light in the first blob's colour (readable in the dark cave mouth)
+                if (waveLight == null)
+                {
+                    waveLight = new GameObject("SiegeGlow").AddComponent<Light>();
+                    waveLight.type = LightType.Point;
+                    waveLight.range = 9f;
+                    waveLight.intensity = 2.5f;
+                    waveLight.color = b.BaseColor();
+                    waveLight.shadows = LightShadows.None;
+                    waveLight.transform.position = hit.position + Vector3.up * 1.5f;
+                }
                 SlimeFX.Splat(hit.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 10);
                 mine.Add(b);
                 return true;
             }
             return false;
+        }
+
+        /// <summary>The wave's light drifts to the middle of its living blobs (one light for the whole wave).</summary>
+        void FollowLight()
+        {
+            if (waveLight == null) return;
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (var b in mine) if (b != null && !b.IsDead) { sum += b.transform.position; n++; }
+            if (n == 0) return;
+            Vector3 to = sum / n + Vector3.up * 1.5f;
+            waveLight.transform.position = Vector3.Lerp(waveLight.transform.position, to, Mathf.Clamp01(Time.deltaTime * 3f));
+        }
+
+        void DropLight()
+        {
+            if (waveLight != null) Destroy(waveLight.gameObject);
+            waveLight = null;
         }
 
         /// <summary>Wave blobs far from Rex: warped to a dry NavMesh point near the cave mouth (not next to Rex); none
@@ -268,6 +330,7 @@ namespace RexMagnum
                     Vector2 o = Random.insideUnitCircle.normalized * Random.Range(3f, 8f);
                     if (!NavMesh.SamplePosition(Center + new Vector3(o.x, 0f, o.y), out NavMeshHit nh, 3f, NavMesh.AllAreas)) continue;
                     if (WaterVolume.Depth(nh.position + Vector3.up * 0.1f) > 0.2f || (nh.position - rexAt).sqrMagnitude < 6f * 6f) continue;
+                    if (mouthFound && (nh.position - doorAt).sqrMagnitude < DoorClear * DoorClear) continue;
                     agent.Warp(nh.position);
                     SlimeFX.Splat(nh.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 10);
                     b.Alert(6f);
@@ -283,6 +346,8 @@ namespace RexMagnum
             Wave = 0;
             Left = 0;
             Progress.Set(DoneKey, 1);
+            int secs = Mathf.RoundToInt(Time.time - startedAt);
+            LastSummary = $"Cave held in {secs / 60}:{secs % 60:00} - {popped} blob{(popped == 1 ? "" : "s")} popped";
             // the reward: coconuts (kept even before Rex has found one) + half a load for every gun he owns
             if (weapons != null)
             {

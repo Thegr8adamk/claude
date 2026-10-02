@@ -11,8 +11,9 @@ namespace RexMagnum
     /// blobs come in from the pool doors, or the buffet-terrace doors when Rex stands at the pool doors (at most MaxAlive
     /// at once); bouncer halves count to their wave; a wave blob that makes no progress for StuckAfter s is moved next
     /// to the bar. The spawners around the hotel hold off meanwhile (BlobSpawner).
-    /// Reward: all owned guns full + Progress "bar_defended" (saved: never again). Rex dies or goes more than
-    /// AbortRadius away: the event stops cleanly and can start again later.
+    /// Reward: all owned guns full + Progress "bar_defended" (saved: never again). Rex dies, goes more than
+    /// AbortRadius away or stays upstairs over UpstairsAbort s: the event stops cleanly and can start again later
+    /// (after a death the wave blobs go too). A win sets LastSummary.
     /// No builder step: it attaches itself to Rex when a scene loads (like Ambience).
     /// HUD: Active, Wave, Waves, Left, Objective, NearestBlob(), Target.
     /// </summary>
@@ -30,6 +31,7 @@ namespace RexMagnum
         const float StartRadius = 7f, StartTop = 6.5f, AbortRadius = 60f, RetryAfter = 30f, SpawnEvery = 1.6f;
         const int MaxAlive = 4;
         const float StuckAfter = 20f, StuckRexDistance = 15f;
+        const float UpstairsAbort = 20f;                                  // this long above the ground floor: he left the bar
         static readonly int[] WaveSize = { 4, 6, 7 };
 
         /// <summary>True while the waves run.</summary>
@@ -43,6 +45,8 @@ namespace RexMagnum
         public static string Objective => Active ? $"DEFEND THE BAR! Wave {Wave}/{Waves}: {Left} blob{(Left == 1 ? "" : "s")} left" : null;
         /// <summary>Done before (saved).</summary>
         public static bool Done => Progress.Value(DoneKey) > 0;
+        /// <summary>One line about the last won defence ("Bar held in 2:41 - 17 blobs popped") for the UI, else null.</summary>
+        public static string LastSummary { get; private set; }
 
         static BarDefense inst;
 
@@ -65,7 +69,7 @@ namespace RexMagnum
         public static Vector3 Target { get { var b = NearestBlob(); return b != null ? b.transform.position : Center; } }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Active = false; Wave = 0; Left = 0; }   // editor with Domain Reload off
+        static void ResetStatics() { Active = false; Wave = 0; Left = 0; LastSummary = null; }   // editor with Domain Reload off
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init()
@@ -85,7 +89,8 @@ namespace RexMagnum
 
         Health rexHealth;
         RexWeapons weapons;
-        float nextCheck, retryAt;
+        float nextCheck, retryAt, startedAt, highSince = -1f;
+        int popped;
         readonly List<Blob> prefabs = new List<Blob>();
         readonly List<Blob> mine = new List<Blob>();
 
@@ -154,6 +159,13 @@ namespace RexMagnum
         bool Aborted()
         {
             if (rexHealth != null && rexHealth.IsDead) return true;          // he wakes in room 304 (inside the 60 m)
+            // upstairs (above the ground floor, like the start check) for UpstairsAbort s: the bar is left to them
+            if (transform.position.y > StartTop)
+            {
+                if (highSince < 0f) highSince = Time.time;
+                else if (Time.time - highSince > UpstairsAbort) return true;
+            }
+            else highSince = -1f;
             Vector3 flat = transform.position - Center; flat.y = 0f;
             return flat.sqrMagnitude > AbortRadius * AbortRadius;
         }
@@ -163,7 +175,16 @@ namespace RexMagnum
             Active = false;
             Wave = 0;
             Left = 0;
-            mine.Clear();                                                     // the blobs stay: they just stop being a wave
+            // Rex died: the wave goes (bouncer halves too; a popping bouncer goes before it splits), so he does not
+            // wake in room 304 with the wave still in the lobby. Else the blobs stay: they just stop being a wave.
+            if (rexHealth != null && rexHealth.IsDead)
+                foreach (var b in mine)
+                {
+                    if (b == null) continue;
+                    SlimeFX.Splat(b.transform.position + Vector3.up * 0.3f, Vector3.up, b.BaseColor(), 8);
+                    Destroy(b.gameObject);
+                }
+            mine.Clear();
             retryAt = Time.time + RetryAfter;
             RexTestHUD.Notice("The bar fell. Come back to defend it again.", 4f);
         }
@@ -172,6 +193,9 @@ namespace RexMagnum
         {
             Active = true;
             mine.Clear();
+            startedAt = Time.time;
+            highSince = -1f;
+            popped = 0;
             RexVoice.Subtitle?.Invoke("REX: Nobody touches my bar. I have a tab here.");
             for (int w = 0; w < Waves; w++)
             {
@@ -188,7 +212,7 @@ namespace RexMagnum
                     int living = 0;
                     for (int i = mine.Count - 1; i >= 0; i--)
                     {
-                        if (mine[i] == null) mine.RemoveAt(i);
+                        if (mine[i] == null) { mine.RemoveAt(i); popped++; }    // gone = popped (halves count too)
                         else if (!mine[i].IsDead) living++;
                     }
                     if (toSpawn > 0 && Time.time >= nextSpawn && mine.Count < MaxAlive && Blob.AliveCount() < BlobSpawner.GlobalCap)
@@ -272,6 +296,8 @@ namespace RexMagnum
             Wave = 0;
             Left = 0;
             Progress.Set(DoneKey, 1);
+            int secs = Mathf.RoundToInt(Time.time - startedAt);
+            LastSummary = $"Bar held in {secs / 60}:{secs % 60:00} - {popped} blob{(popped == 1 ? "" : "s")} popped";
             // the reward: every gun Rex owns gets full ammo
             if (weapons != null)
                 foreach (var id in weapons.OwnedInOrder())

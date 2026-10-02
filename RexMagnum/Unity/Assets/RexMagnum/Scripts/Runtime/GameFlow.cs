@@ -93,7 +93,7 @@ namespace RexMagnum
         static bool newGameStart;        // set before the NEW GAME reload: skip the title once
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { Busy = false; TutorialActive = false; playStart = -1f; newGameStart = false; }   // editor with Domain Reload off
+        static void ResetStatics() { Busy = false; TutorialActive = false; playStart = -1f; newGameStart = false; playTime = 0f; }   // editor with Domain Reload off
 
         void Start()
         {
@@ -317,7 +317,8 @@ namespace RexMagnum
         string bannerLine;
 
         /// <summary>A big goal is done: "BIG GOAL COMPLETE" + its reward line and a short music sting,
-        /// once per goal per save ("goal_banner_&lt;key&gt;"). Waits while the ending plays.</summary>
+        /// once per goal per save ("goal_banner_&lt;key&gt;"). Waits while the ending plays; King Glorp's waits until the
+        /// ending is over (he pops ~5 s before it starts: the banner and the stats card must not show over it).</summary>
         void BigGoals()
         {
             if (Time.unscaledTime < nextGoalCheck) return;
@@ -326,34 +327,54 @@ namespace RexMagnum
             for (int i = 0; i < GoalKeys.Length; i++)
             {
                 if (Progress.Value(GoalKeys[i]) <= 0 || Progress.Value("goal_banner_" + GoalKeys[i]) > 0) continue;
+                if (GoalKeys[i] == "glorp" && !EndingSequence.Finished) continue;
                 Progress.Set("goal_banner_" + GoalKeys[i], 1);
                 bannerLine = GoalNames[i];
                 bannerUntil = Time.unscaledTime + 5f;
                 // King Glorp (after the ending): the run's stats card follows the banner
-                if (GoalKeys[i] == "glorp") { statsFrom = bannerUntil; statsUntil = statsFrom + StatsSeconds; }
+                if (GoalKeys[i] == "glorp") { statsFrom = bannerUntil; statsUntil = statsFrom + StatsSeconds; statsList = null; }
                 Sting();
                 return;
             }
         }
 
-        float statsFrom = -100f, statsUntil = -100f, playTime;
+        float statsFrom = -100f, statsUntil = -100f;
+        System.Collections.Generic.List<(string what, string value)> statsList;      // built once per card (OnGUI runs several times a frame)
         const float StatsSeconds = 10f;
+        static float playTime;          // unsaved play seconds (static: QUIT TO TITLE flushes it after this object is gone)
+        float playFlushAt;
 
-        /// <summary>Play time for the stats ("play_s" in the save): unpaused seconds in play, written every 5 s.</summary>
+        /// <summary>Play time for the stats ("play_s" in the save): unpaused seconds in play, counted in memory and
+        /// handed to Progress once a minute, on pause, quit to title and app quit / background (not a save every 5 s).</summary>
         void CountPlayTime()
         {
             if (PauseMenu.Open || Busy) return;
             playTime += Time.unscaledDeltaTime;
-            if (playTime < 5f) return;
+            if (Time.unscaledTime < playFlushAt) return;
+            playFlushAt = Time.unscaledTime + 60f;
+            FlushPlayTime();
+        }
+
+        /// <summary>Adds the counted play seconds to the save ("play_s"; Progress writes the file within 2 s, or on Flush).
+        /// PauseMenu calls it when it opens (its stats show the time) and before QUIT TO TITLE.</summary>
+        public static void FlushPlayTime()
+        {
             int whole = (int)playTime;
+            if (whole <= 0) return;
             playTime -= whole;
             Progress.Add("play_s", whole);
         }
 
+        // the app closes or goes to the background (phones kill background apps): the play time is written now.
+        // ProgressTracker may flush before this runs, so Progress.Flush here too (it writes only when dirty)
+        void OnApplicationQuit() { FlushPlayTime(); Progress.Flush(); }
+        void OnApplicationPause(bool paused) { if (paused) { FlushPlayTime(); Progress.Flush(); } }
+
         /// <summary>After the ending: the run in numbers (Progress.Stats) on a card in the middle, 10 s.</summary>
         void DrawStats(float w, float h, float s)
         {
-            var stats = Progress.Stats();
+            if (statsList == null) { FlushPlayTime(); statsList = Progress.Stats(); }
+            var stats = statsList;
             float a = MenuSkin.Appear(statsFrom, 0.4f) * Mathf.Clamp01((statsUntil - Time.unscaledTime) / 0.8f);
             float rowH = 44 * s;
             var r = new Rect(w * 0.3f, h * 0.24f, w * 0.4f, 110 * s + stats.Count * rowH);
@@ -669,7 +690,8 @@ namespace RexMagnum
                 GUI.color = Color.white;
             }
             if (state == State.Play && Time.unscaledTime < bannerUntil && !PauseMenu.Open && !EndingSequence.Playing) DrawBanner(w, h, s);
-            else if (state == State.Play && Time.unscaledTime >= statsFrom && Time.unscaledTime < statsUntil && !PauseMenu.Open) DrawStats(w, h, s);
+            else if (state == State.Play && Time.unscaledTime >= statsFrom && Time.unscaledTime < statsUntil && !PauseMenu.Open && !EndingSequence.Playing) DrawStats(w, h, s);
+            else if (statsList != null && Time.unscaledTime >= statsUntil) statsList = null;      // the card is gone: free its list
             if (fade > 0.001f)
             {
                 GUI.color = new Color(0, 0, 0, fade);

@@ -58,6 +58,7 @@ Shader "RexMagnum/Water"
                 float fog : TEXCOORD3;
                 float2 uv : TEXCOORD4;
                 float4 color : TEXCOORD5;
+                float2 crest : TEXCOORD6;        // ocean: wave height (-1..1 of the peak) and steepness, for crest foam
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -80,6 +81,7 @@ Shader "RexMagnum/Water"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);   // single-pass instanced VR: right eye index
                 float3 ws = TransformObjectToWorld(i.positionOS.xyz);
                 float3 n = TransformObjectToWorldNormal(i.normalOS);
+                o.crest = 0;
                 if (_WaveHeight > 0)
                 {
                     float fade = saturate(1 - distance(ws.xz, _WorldSpaceCameraPos.xz) / _WaveFade);
@@ -90,6 +92,8 @@ Shader "RexMagnum/Water"
                                + Gerstner(ws, float2(0.7, -0.6), s * 0.2, _WaveLength * 0.37, t, b);
                     ws += off;
                     n = normalize(cross(b, t));
+                    // the three amplitudes add up to ~0.79 x _WaveHeight; far (faded) waves stay low: no crest foam there
+                    o.crest = float2(off.y / (_WaveHeight * 0.79 + 1e-4), 1 - n.y);
                 }
                 o.positionWS = ws;
                 o.normalWS = n;
@@ -151,6 +155,12 @@ Shader "RexMagnum/Water"
                 float foam = saturate(1 - depth / _FoamDepth) * saturate(n1.x * 2 + 0.6);
                 if (_River > 0.5)   // rapids: vertex colour R, broken into streaks by the moving normal map
                     foam = max(foam, saturate(i.color.r * 1.6 - 0.35 + (n1.x + n2.y) * 0.8));
+                if (_WaveHeight > 0)
+                {
+                    // ocean whitecaps: on the high, steep part of each crest, torn into streaks by the normal maps
+                    float crest = smoothstep(0.4, 0.85, i.crest.x) * saturate(0.35 + i.crest.y * 6);
+                    foam = max(foam, crest * saturate((n1.x + n2.y) * 1.5 + 0.45) * 0.85);
+                }
                 rgb = lerp(rgb, _FoamColor.rgb * (L.color * 0.8 + amb * 0.6 + 0.05), foam * _FoamColor.a);
                 alpha = max(alpha, foam);
                 rgb = MixFog(rgb, i.fog);

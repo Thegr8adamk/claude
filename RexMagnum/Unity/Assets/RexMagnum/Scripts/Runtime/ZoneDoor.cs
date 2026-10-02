@@ -26,6 +26,12 @@ namespace RexMagnum
         {
             var rex = other.GetComponentInParent<RexController>();
             if (rex == null || exit == null || Time.time < busyUntil || GolfCart.Driven != null) return;
+            if (NightSiege.Active)                                           // no running from the cave siege into the tunnels
+            {
+                busyUntil = Time.time + 2f;                                  // one notice, not one per touch
+                RexTestHUD.Notice("Not now: the cave is under siege!", 2f);
+                return;
+            }
             busyUntil = Time.time + 2f;
             fadeOwner = this;
             rex.StartCoroutine(Go(rex));
