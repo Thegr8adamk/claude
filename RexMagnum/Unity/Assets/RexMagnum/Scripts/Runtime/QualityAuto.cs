@@ -125,6 +125,7 @@ namespace RexMagnum
             featureNow.Clear();
             ssaoOrig.Clear();
             treeMidShadow.Clear();
+            treeMidOff.Clear();
             playCopy = null;
         }
 
@@ -143,7 +144,7 @@ namespace RexMagnum
                     SetPipeline(playCopy);
                     foreach (var kv in featureNow) if (kv.Key != null) FeatureSet(kv.Key, kv.Value);
                     foreach (var kv in ssaoNow) kv.Key.f.SetValue(kv.Key.o, kv.Value);
-                    foreach (var kv in treeMidShadow) if (kv.Key != null) kv.Key.shadowCastingMode = treeMidOn ? kv.Value : ShadowCastingMode.Off;
+                    foreach (var kv in treeMidShadow) if (kv.Key != null) kv.Key.shadowCastingMode = treeMidOff.Contains(kv.Key) ? ShadowCastingMode.Off : kv.Value;
                 };
                 return paths;
             }
@@ -334,8 +335,14 @@ namespace RexMagnum
                 ter.drawInstanced = true;
             }
             // middle tree LOD (~1k-tri palms / jungle trees inside the shadow distance on Low's 0.6 LOD bias):
-            // no shadows on Low / phones
-            TreeMidShadows(terrains, t != QualityTier.Low && !mobile);
+            // no shadows on phones; on Low only the jungle trees lose them (dense canopy hides it), the palms keep
+            // theirs (an open beach showed a ring where palm shadows popped off at the LOD 1 switch)
+            TreeMidShadows(terrains, t != QualityTier.Low && !mobile, !mobile);
+            // trees: High / Ultra's 1.5 / 2 LOD bias kept the 4.7k-tri LOD 0 out to 130-175 m (~1200 trees within
+            // 200 m); the terrain's own multiplier brings trees back to an effective bias of ~0.9 there. Terrain is a
+            // scene object: the editor reverts it after play, nothing to put back
+            float treeBiasMul = t >= QualityTier.High ? Mathf.Clamp(0.9f / Mathf.Max(0.01f, lodBias[i]), 0.3f, 1f) : 1f;
+            foreach (var ter in terrains) TreeLodBias(ter, treeBiasMul);
             ApplyDisplay();
             Debug.Log($"[Rex Magnum] Graphics: {t} (GPU {SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB, " +
                       $"RAM {SystemInfo.systemMemorySize} MB, {SystemInfo.processorCount} cores)");
@@ -344,14 +351,14 @@ namespace RexMagnum
         // LOD 1 renderers of the Veg_* tree prefabs (LODGroups of 3: mesh, LOD1 mesh, picture) and their built shadow mode
         static readonly System.Collections.Generic.Dictionary<Renderer, ShadowCastingMode> treeMidShadow =
             new System.Collections.Generic.Dictionary<Renderer, ShadowCastingMode>();
-        static bool treeMidOn = true;
+        // the LOD 1 renderers switched off now (the editor's save guard puts the same state back after a save)
+        static readonly System.Collections.Generic.HashSet<Renderer> treeMidOff = new System.Collections.Generic.HashSet<Renderer>();
 
-        /// <summary>Shadows of the terrain trees' middle LOD on / off. The terrain draws trees from its prototype
-        /// prefabs, so this sets the prefab renderers (the editor puts them back after play) and refreshes the
-        /// prototypes only when something changed.</summary>
-        static void TreeMidShadows(Terrain[] ters, bool on)
+        /// <summary>Shadows of the terrain trees' middle LOD on / off (jungle trees and palms apart). The terrain draws
+        /// trees from its prototype prefabs, so this sets the prefab renderers (the editor puts them back after play)
+        /// and refreshes the prototypes only when something changed.</summary>
+        static void TreeMidShadows(Terrain[] ters, bool jungleOn, bool palmOn)
         {
-            treeMidOn = on;
             foreach (var ter in ters)
             {
                 if (ter == null || ter.terrainData == null) continue;
@@ -360,10 +367,12 @@ namespace RexMagnum
                 {
                     var lg = tp.prefab != null ? tp.prefab.GetComponent<LODGroup>() : null;
                     if (lg == null || lg.lodCount != 3) continue;
+                    bool on = tp.prefab.name.Contains("Jungle") ? jungleOn : palmOn;     // Veg_Jungle* / Veg_Palm*
                     foreach (var r in lg.GetLODs()[1].renderers)
                     {
                         if (r == null) continue;
                         if (!treeMidShadow.TryGetValue(r, out var built)) treeMidShadow[r] = built = r.shadowCastingMode;
+                        if (on) treeMidOff.Remove(r); else treeMidOff.Add(r);
                         var want = on ? built : ShadowCastingMode.Off;
                         if (r.shadowCastingMode == want) continue;
                         r.shadowCastingMode = want;
@@ -372,6 +381,22 @@ namespace RexMagnum
                 }
                 if (changed) ter.terrainData.RefreshPrototypes();
             }
+        }
+
+        static System.Reflection.PropertyInfo treeBiasProp;
+        static bool treeBiasLooked;
+
+        /// <summary>Terrain.treeLODBiasMultiplier (by reflection: the compile-check DLLs may not have it).</summary>
+        static void TreeLodBias(Terrain ter, float mul)
+        {
+            if (ter == null) return;
+            if (!treeBiasLooked)
+            {
+                treeBiasLooked = true;
+                treeBiasProp = typeof(Terrain).GetProperty("treeLODBiasMultiplier",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            }
+            if (treeBiasProp != null && treeBiasProp.CanWrite) treeBiasProp.SetValue(ter, mul);
         }
 
         /// <summary>Sets a URP asset setting on every URP version: the public property if it has a public setter,

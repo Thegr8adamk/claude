@@ -16,7 +16,7 @@ namespace RexMagnum
         ReflectionProbe[] probes;
         int band = -1;
         bool busy, again;
-        Vector3? pinned;                       // ZoneStreamer.EnsureShown position of the probe rendering now
+        Bounds? pinned;                        // ZoneStreamer.EnsureShown box of the probe rendering now (same key to release)
 
         void Start()
         {
@@ -52,8 +52,9 @@ namespace RexMagnum
                 foreach (var p in probes)
                 {
                     if (p == null || !p.isActiveAndEnabled) continue;
-                    // the probe's zone at full detail while it renders (a streamed-out zone sits at its lowest LOD)
-                    pinned = p.transform.position;
+                    // every zone the probe's box reaches at full detail while it renders (a streamed-out zone sits at
+                    // its lowest LOD); a tunnel box can reach into the ruins zone, not only the zone at its centre
+                    pinned = p.bounds;
                     ZoneStreamer.EnsureShown(pinned.Value);
                     for (int f = 0; f < 60 && !ZoneStreamer.Ready(pinned.Value); f++) yield return null;   // sliced show
                     if (p == null || !p.isActiveAndEnabled) { Unpin(); continue; }

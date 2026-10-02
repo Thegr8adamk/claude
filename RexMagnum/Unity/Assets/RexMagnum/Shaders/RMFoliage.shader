@@ -94,10 +94,18 @@ Shader "RexMagnum/Foliage"
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
+            // probe blending / box projection: UniversalFragmentPBR reaches GlossyEnvironmentReflection with
+            // d.positionWS and d.normalizedScreenSpaceUV (URP 17 signature), both set in frag below
+            #pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
+            #pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
             #pragma multi_compile _ _FORWARD_PLUS _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            // terrain trees are drawn instanced: without lodfade unity_LODFade is one value per draw call, so the
+            // cross-fade of every tree in the batch used the same (wrong) fade; lodfade makes it per instance (the
+            // SpeedTree shaders do the same). Non-instanced and SRP-batched draws are unaffected
+            #pragma instancing_options lodfade
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 
@@ -212,6 +220,7 @@ Shader "RexMagnum/Foliage"
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
+            #pragma instancing_options lodfade      // per-instance fade for instanced terrain trees (see ForwardLit)
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
             float3 _LightDirection;     // set by URP for the shadow pass
@@ -269,6 +278,7 @@ Shader "RexMagnum/Foliage"
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
+            #pragma instancing_options lodfade      // per-instance fade for instanced terrain trees (see ForwardLit)
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 
             struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };
@@ -313,6 +323,7 @@ Shader "RexMagnum/Foliage"
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
+            #pragma instancing_options lodfade      // per-instance fade for instanced terrain trees (see ForwardLit)
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 
             struct A { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float4 color : COLOR; UNITY_VERTEX_INPUT_INSTANCE_ID };

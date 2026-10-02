@@ -548,8 +548,23 @@ namespace RexMagnum.EditorTools
                 {
                     var ls = owner.transform.lossyScale;
                     float sc = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y), Mathf.Abs(ls.z));
+                    float partLocal = lg.size;                                // the part's own size (RecalculateBounds)
                     lg.localReferencePoint = owner.transform.InverseTransformPoint(wholeBox.center);
                     lg.size = sc > 0f ? wholeSize / sc : wholeSize;          // LODGroup.size is in local units
+                    // ...but each part still CULLS by its own size: measured with the shared (whole) size, a part's
+                    // own-size cull threshold h becomes h * whole / part (a small balcony vanishes as early as a small
+                    // building would, instead of drawing as far as the whole hotel). Kept below the level before it
+                    // (heights must strictly decrease) and above 0. LOD switches above stay shared (no seams).
+                    if (partLocal > 0f && lg.size > partLocal)
+                    {
+                        var lods = lg.GetLODs();
+                        int last = lods.Length - 1;
+                        float cull = lods[last].screenRelativeTransitionHeight;
+                        float scaled = Mathf.Max(cull, cull * lg.size / partLocal);
+                        float cap = last > 0 ? lods[last - 1].screenRelativeTransitionHeight * 0.95f : 0.95f;
+                        lods[last].screenRelativeTransitionHeight = Mathf.Max(1e-4f, Mathf.Min(scaled, cap));
+                        lg.SetLODs(lods);
+                    }
                 }
             }
             MarkUnreadable();
