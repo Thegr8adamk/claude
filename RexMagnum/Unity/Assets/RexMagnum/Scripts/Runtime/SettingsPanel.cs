@@ -29,6 +29,8 @@ namespace RexMagnum
         string waitKey, waitPad;
         int waitFrame;
         public bool Waiting => waitKey != null || waitPad != null;
+        /// <summary>The menu closed (mouse BACK / RESUME) while a rebind waited: stop waiting.</summary>
+        public void CancelWait() { waitKey = null; waitPad = null; }
 
         class Row
         {

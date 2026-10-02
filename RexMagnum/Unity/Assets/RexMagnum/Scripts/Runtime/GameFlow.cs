@@ -127,7 +127,7 @@ namespace RexMagnum
         {
             if (inSettings)
             {
-                if (settings.Update()) { inSettings = false; PlayerPrefs.Save(); }
+                if (settings.Update()) { inSettings = false; settings.CancelWait(); PlayerPrefs.Save(); }
                 return;
             }
             int n = Application.isMobilePlatform ? 2 : 3;      // phones have no QUIT
@@ -182,8 +182,7 @@ namespace RexMagnum
             state = State.Intro;
             fadeTarget = 1f;
             while (fade < 0.99f) yield return null;
-            var chaos = Resources.Load<AudioClip>("Sfx/chaos");
-            if (chaos != null) AudioSource.PlayClipAtPoint(chaos, bedPoint != null ? bedPoint.position : Vector3.zero, 1f);
+            Sfx.Play("chaos", bedPoint != null ? bedPoint.position : Vector3.zero, 1f);     // follows Settings > Sound > Sound effects
             music.Stop();
             if (titleCamera != null) titleCamera.enabled = false;
             if (playerCamera != null) playerCamera.enabled = true;
@@ -269,7 +268,7 @@ namespace RexMagnum
                 if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && back.Contains(Event.current.mousePosition))
                 {
                     Event.current.Use();
-                    inSettings = false;
+                    inSettings = false; settings.CancelWait();
                     PlayerPrefs.Save();
                 }
                 return;
@@ -322,7 +321,7 @@ namespace RexMagnum
             Styles();
             float w = Screen.width, h = Screen.height, s = h / 1080f;
             if (state == State.Title) DrawTitle(w, h, s);
-            else if (state == State.Play && hint < Hints.Length)
+            else if (state == State.Play && hint < Hints.Length && !PauseMenu.Open)
             {
                 box.fontSize = (int)(30 * s);
                 var r = new Rect(w * 0.18f, h * 0.05f, w * 0.64f, 92 * s);

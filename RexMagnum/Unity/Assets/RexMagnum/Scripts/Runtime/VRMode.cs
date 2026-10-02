@@ -79,6 +79,7 @@ namespace RexMagnum
         IEnumerator StartXR()
         {
             busy = true;
+            stopAfterStart = false;      // an "off" from a start that failed must not stop this one
             Status = "Starting VR...";
             var m = Manager();
             if (m == null)

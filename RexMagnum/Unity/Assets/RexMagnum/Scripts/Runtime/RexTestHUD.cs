@@ -13,7 +13,7 @@ namespace RexMagnum
         GameObject scope;
         float subtitleUntil;
         GameObject cross;
-        bool paused;
+        bool paused, hudHidden;
 
         void Awake()
         {
@@ -115,7 +115,13 @@ namespace RexMagnum
         void Update()
         {
             if (canvas == null) canvas = GetComponentInChildren<Canvas>(true);
-            if (canvas != null) canvas.enabled = !GameFlow.Busy;     // no HUD over the title / intro
+            if (canvas != null && hudHidden != GameFlow.Busy)
+            {
+                // no HUD over the title / intro, but the subtitles stay (the wake-up line)
+                hudHidden = GameFlow.Busy;
+                foreach (Transform c in canvas.transform)
+                    if (c != subtitle.transform && c != scope.transform) c.gameObject.SetActive(!hudHidden);
+            }
             if (false && RMInput.Pause)   // PauseMenu handles pause now
             {
                 paused = !paused;

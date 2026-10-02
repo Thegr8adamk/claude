@@ -58,6 +58,7 @@ namespace RexMagnum
         }
 
         int pendingTab = -1;
+        bool rexHadInput = true;
 
         void LateUpdate()
         {
@@ -73,13 +74,16 @@ namespace RexMagnum
 
         void SetOpen(bool o)
         {
+            panel.CancelWait();
             Open = o;
             Time.timeScale = o ? 0f : 1f;
             AudioListener.pause = o;
             Cursor.lockState = o ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = o;
             var rex = FindAnyObjectByType<RexController>();
-            if (rex != null && GolfCart.Driven == null) rex.InputEnabled = !o;
+            // resume gives back the input Rex had (still off at the golf cart's wheel or in the ending)
+            if (rex != null && o) rexHadInput = rex.InputEnabled || GolfCart.Driven != null;
+            if (rex != null && GolfCart.Driven == null) rex.InputEnabled = !o && rexHadInput;
             var rig = FindAnyObjectByType<RexCameraRig>();
             if (rig != null) rig.InputEnabled = !o;
             if (!o) { Progress.Flush(); PlayerPrefs.Save(); }
