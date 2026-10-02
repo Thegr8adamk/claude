@@ -307,10 +307,11 @@ namespace RexMagnum
 
         // ------------------------------------------------------------ big goals: banner + music sting
 
-        static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended" };
+        static readonly string[] GoalKeys = { "factory", "glorp", "bar_defended", "cave_siege" };
         // the reward line: RexLife raises max health by 25 for the factory and King Glorp (its own notice says so)
         static readonly string[] GoalNames = { "The blob factory is stopped.   MAX HEALTH +25", "King Glorp is popped.   MAX HEALTH +25",
-                                                   "The bar held. Free refill: all your guns are full." };   // BarDefense.Win shows no notice of its own
+                                                   "The bar held. Free refill: all your guns are full.",
+                                                   "The cave siege is over. +5 coconuts and ammo for all your guns." };   // the events show no notice of their own
         AudioSource sting;
         float bannerUntil, stingStart = -100f, nextGoalCheck;
         string bannerLine;

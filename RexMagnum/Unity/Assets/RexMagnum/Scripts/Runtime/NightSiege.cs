@@ -293,7 +293,7 @@ namespace RexMagnum
                     if (d.isGun && id != WeaponId.Coconut) weapons.AddAmmo(id, Mathf.Max(1, d.maxAmmo / 2));
                 }
             }
-            RexTestHUD.Notice("THE CAVE IS QUIET. Reward: +5 coconuts and ammo for all your guns.", 5f);
+            // the reward line is in GameFlow's BIG GOAL banner
             RexVoice.Subtitle?.Invoke("REX: And stay in there. Lights out.");
         }
     }
