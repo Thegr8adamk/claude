@@ -1724,9 +1724,9 @@
    "tris": 186856
   },
   {
-   "name": "GolfCart",
-   "fbx": "Buildings/GolfCart.fbx",
-   "tris": 3428
+   "name": "PoolArea",
+   "fbx": "Buildings/PoolArea.fbx",
+   "tris": 98230
   },
   {
    "name": "Room304",
@@ -1734,9 +1734,9 @@
    "tris": 4808
   },
   {
-   "name": "PoolArea",
-   "fbx": "Buildings/PoolArea.fbx",
-   "tris": 98230
+   "name": "GolfCart",
+   "fbx": "Buildings/GolfCart.fbx",
+   "tris": 3428
   }
  ],
  "vegetation": {

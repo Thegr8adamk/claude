@@ -774,6 +774,9 @@ def rebuild_assets(names, res):
                     Bridges=lambda m_: IA.bridges(m_, ha, I.heightmap()[3], I.road_river_crossings(I.heightmap()[3])))
     for n in names:
         coll = builders[n](m)
+        # evaluate first: matrix_world is still identity for objects whose location / rotation the kit just set,
+        # and writing T @ matrix_world back would throw their own placement away
+        bpy.context.view_layer.update()
         if n in ("Golf", "GolfCart", "JungleFalls", "RiverRocks", "Bridges"):
             pass                     # golf is built in world coordinates; the cart is a vehicle at the origin
         elif n == "Ruins":           # same placement as build_island_v2: on the highest ground under the temple

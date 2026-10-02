@@ -89,7 +89,9 @@ namespace RexMagnum
             int w = Mathf.Max(256, Screen.width / div), h = Mathf.Max(256, Screen.height / div);
             if (rt != null && rt.width == w && rt.height == h) return;
             if (rt != null) { rt.Release(); Destroy(rt); }
-            rt = new RenderTexture(w, h, 16) { name = "MirrorRT" };
+            // HDR like the main view: an LDR target clipped bright lamps / sky in the reflection (and banded at night)
+            var fmt = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR) ? RenderTextureFormat.DefaultHDR : RenderTextureFormat.Default;
+            rt = new RenderTexture(w, h, 16, fmt) { name = "MirrorRT" };
             if (mirrorCam != null) mirrorCam.targetTexture = rt;
             if (mirrorMat != null) mirrorMat.SetTexture("_BaseMap", rt);
         }
