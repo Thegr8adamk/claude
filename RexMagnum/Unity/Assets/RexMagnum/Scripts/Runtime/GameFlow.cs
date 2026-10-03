@@ -204,7 +204,7 @@ namespace RexMagnum
             if (MenuNav.Ok || (g != null && g.startButton.wasPressedThisFrame)) { MenuNav.Consume(); Choose(menuSel); }
         }
 
-        static int MenuCount => Application.isMobilePlatform ? MenuItems.Length - 1 : MenuItems.Length;      // phones have no QUIT
+        static int MenuCount => Application.isMobilePlatform || Application.platform == RuntimePlatform.WebGLPlayer ? MenuItems.Length - 1 : MenuItems.Length;      // phones and the web version have no QUIT
 
         void Choose(int i)
         {

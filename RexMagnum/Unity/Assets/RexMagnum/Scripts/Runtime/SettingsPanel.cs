@@ -141,6 +141,7 @@ namespace RexMagnum
                     Toggle("Camera tilt when hit", RexCameraRig.HitTiltKey, 1);      // ApplyAll sets HitTiltEnabled
                     Choice("Kill cam", new[] { "OFF", "LESS OFTEN", "ALWAYS" }, () => PlayerPrefs.GetInt("RexMagnum_KillCam", 1),
                         v => PlayerPrefs.SetInt("RexMagnum_KillCam", v));
+                    if (Application.platform == RuntimePlatform.WebGLPlayer) break;   // the web version has no VR
                     Header("VR");
                     Choice("VR mode", new[] { "OFF", "ON" }, () => VRMode.Wanted ? 1 : 0, v => VRMode.Set(v == 1));
                     Note(VRMode.Status);

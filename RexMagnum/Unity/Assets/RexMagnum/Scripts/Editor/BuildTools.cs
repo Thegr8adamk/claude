@@ -7,7 +7,7 @@ using UnityEngine;
 namespace RexMagnum.EditorTools
 {
     /// <summary>
-    /// Menu "Rex Magnum > Make Windows Game (.exe)" and "Make Android Game (.apk)" (brief section 10).
+    /// Menu "Rex Magnum > Make Windows Game (.exe)", "Make Android Game (.apk)" and "Make Web Game (HTML)" (brief section 10).
     /// Output: &lt;project&gt;/Builds/Windows/RexMagnum.exe and &lt;project&gt;/Builds/Android/RexMagnum.apk.
     /// Android: IL2CPP, ARM64, landscape, ASTC textures, Vulkan + OpenGL ES 3, minimum Android 8.
     /// </summary>
@@ -72,6 +72,49 @@ namespace RexMagnum.EditorTools
             var r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = Scenes(), locationPathName = path, target = BuildTarget.StandaloneWindows64, options = BuildOptions.None
+            });
+            Report(r, path);
+        }
+
+        /// <summary>Sets a PlayerSettings.WebGL property by name when this Unity version has it (names differ by version).</summary>
+        static void WebSetting(string name, object value)
+        {
+            var p = typeof(PlayerSettings.WebGL).GetProperty(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (p == null || !p.CanWrite) return;
+            try { p.SetValue(null, value); } catch (System.Exception) { }
+        }
+
+        /// <summary>
+        /// Menu "Rex Magnum > Make Web Game (HTML)": a WebGL 2 build in &lt;project&gt;/Builds/Web (index.html + Build/
+        /// + TemplateData/). Needs the "WebGL Build Support" module (Unity Hub > Installs > Add modules). Unity then opens
+        /// the game in the browser through its own small local web server (a double-click on index.html does not work:
+        /// browsers block game files opened from a folder). Low quality tier by default (browser memory).
+        /// </summary>
+        [MenuItem("Rex Magnum/Make Web Game (HTML)", priority = 22)]
+        public static void Web()
+        {
+            if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, BuildTarget.WebGL))
+            {
+                EditorUtility.DisplayDialog("Rex Magnum", "WebGL Build Support is not installed.\n\nOpen Unity Hub > Installs > " +
+                    "this Unity version > the gear icon > Add modules > tick \"WebGL Build Support\" > Install. Then run this menu again.", "OK");
+                return;
+            }
+            if (!Common()) return;
+            // compressed files that still load from any simple web host (itch.io, GitHub Pages) and from Unity's server
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            WebSetting("decompressionFallback", true);
+            WebSetting("dataCaching", true);
+            WebSetting("nameFilesAsHashes", false);
+            WebSetting("exceptionSupport", WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly);
+            // the island is big: let the browser memory grow up to 4 GB (Unity 6 property names)
+            var growth = typeof(PlayerSettings.WebGL).Assembly.GetType("UnityEditor.WebGLMemoryGrowthMode");
+            if (growth != null && growth.IsEnum) WebSetting("memoryGrowthMode", System.Enum.ToObject(growth, 2));   // 2 = geometric
+            WebSetting("maximumMemorySize", 4096);
+            WebSetting("initialMemorySize", 512);
+            string path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Web");
+            var r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.AutoRunPlayer
             });
             Report(r, path);
         }

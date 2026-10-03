@@ -293,6 +293,7 @@ namespace RexMagnum
             int vram = SystemInfo.graphicsMemorySize;      // MB
             int ram = SystemInfo.systemMemorySize;         // MB
             int cores = SystemInfo.processorCount;
+            if (Application.platform == RuntimePlatform.WebGLPlayer) return QualityTier.Low;   // web version: browser memory and WebGL 2
             if (Application.isMobilePlatform)
                 return (ram >= 8000 && vram >= 3000) ? QualityTier.Medium : QualityTier.Low;
             if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) return QualityTier.Low;

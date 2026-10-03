@@ -141,6 +141,11 @@ namespace RexMagnum
         /// <summary>Writes the encoded bytes on a worker thread (no frame hitch on a slow phone card).</summary>
         static void WriteLater(string path, byte[] bytes)
         {
+            if (Application.platform == RuntimePlatform.WebGLPlayer)               // the web player has no worker threads
+            {
+                try { File.WriteAllBytes(path, bytes); } catch (System.Exception e) { Debug.LogWarning(e); }
+                return;
+            }
             System.Threading.Tasks.Task.Run(() =>
             {
                 try { File.WriteAllBytes(path, bytes); }
