@@ -139,7 +139,7 @@ namespace RexMagnum.EditorTools
                 RestoreModes(modes);
                 PlayerSettings.defaultInterfaceOrientation = oldOrient;
             }
-            if (r.summary.result == BuildResult.Succeeded) WriteWebLauncher(path);
+            if (r.summary.result == BuildResult.Succeeded) { WriteWebLauncher(path); ZipForWeb(path); }
             Report(r, path);
             if (r.summary.result == BuildResult.Succeeded) PlayWeb();
         }
@@ -252,6 +252,20 @@ namespace RexMagnum.EditorTools
                 so.ApplyModifiedPropertiesWithoutUndo();
             }
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>Builds/RexMagnum_Web.zip: the web folder in one zip with index.html at the top, ready to upload as an
+        /// HTML game on itch.io (free; gives a link that opens on phones and PCs).</summary>
+        static void ZipForWeb(string folder)
+        {
+            string zip = Path.Combine(Path.GetDirectoryName(folder), "RexMagnum_Web.zip");
+            try
+            {
+                if (File.Exists(zip)) File.Delete(zip);
+                System.IO.Compression.ZipFile.CreateFromDirectory(folder, zip, System.IO.Compression.CompressionLevel.NoCompression, false);
+                Debug.Log($"[Rex Magnum] Upload file for itch.io: {zip} ({new FileInfo(zip).Length / (1024 * 1024)} MB)");
+            }
+            catch (System.Exception e) { Debug.LogWarning("[Rex Magnum] Web zip: " + e.Message); }
         }
 
         static string WebFolder => Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Web");
