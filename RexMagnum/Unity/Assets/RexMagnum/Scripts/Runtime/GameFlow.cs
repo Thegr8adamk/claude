@@ -532,6 +532,7 @@ namespace RexMagnum
             }
             MarkGoalsShown();
             state = State.Play;
+            if (Application.platform == RuntimePlatform.WebGLPlayer) Debug.Log(QualityAuto.WebLine("Web play"));   // browser console (F12)
             dayMixSet = false;
             Busy = false;
             SetPlayerActive(true);
@@ -544,6 +545,7 @@ namespace RexMagnum
         }
 
         GUIStyle menuBtn, menuSelStyle;
+        Texture2D leftShade;
 
         void DrawTitle(float w, float h, float s)
         {
@@ -558,13 +560,17 @@ namespace RexMagnum
                 var uv = new Rect(0.5f - uw / 2f + Mathf.Sin(t * 0.7f) * 0.01f, 0.5f - uh / 2f, uw, uh);
                 GUI.DrawTextureWithTexCoords(new Rect(0, 0, w, h), titleBg, uv);
             }
-            // dark band on the left: the menu reads on any picture
-            for (int i = 0; i < 24; i++)
+            // dark band on the left: the menu reads on any picture. One smooth gradient texture: the old 24 strips
+            // overlapped by 1 px and the double-dark overlaps showed as thin vertical stripes (web build)
+            if (leftShade == null)
             {
-                GUI.color = new Color(0f, 0f, 0f, 0.62f * (1f - i / 24f));
-                GUI.DrawTexture(new Rect(i * w * 0.025f, 0, w * 0.025f + 1, h), Texture2D.whiteTexture);
+                leftShade = new Texture2D(64, 1, TextureFormat.RGBA32, false)
+                    { hideFlags = HideFlags.HideAndDontSave, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                for (int i = 0; i < 64; i++) leftShade.SetPixel(i, 0, new Color(0f, 0f, 0f, 0.62f * Mathf.Max(0f, 1f - i / 63f)));
+                leftShade.Apply();
             }
             GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(0, 0, w * 0.6f, h), leftShade);
             float x = w * 0.06f;
             // the logo slides down into place once the title fades in
             if (fade > 0.35f) titleSince = Time.unscaledTime;

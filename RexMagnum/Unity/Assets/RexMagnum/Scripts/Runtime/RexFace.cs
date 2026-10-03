@@ -69,7 +69,9 @@ namespace RexMagnum
 
             // Talk: mouth opens with the loudness of the voice line
             float level = 0f;
-            if (voice != null && voice.isPlaying)
+            if (voice != null && voice.isPlaying && Application.platform == RuntimePlatform.WebGLPlayer)
+                level = 0.5f;          // web audio has no sample read-back (GetOutputData): a steady talk flap
+            else if (voice != null && voice.isPlaying)
             {
                 voice.GetOutputData(samples, 0);
                 foreach (float s in samples) level += s * s;

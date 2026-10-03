@@ -40,7 +40,7 @@ namespace RexMagnum
         void Awake()
         {
             // the menus' OS font (one look for menus and HUD); Unity's built-in one if the system has none of them
-            var font = MenuSkin.UiFont != null ? MenuSkin.UiFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var font = MenuSkin.UiFont != null ? MenuSkin.UiFont : MenuSkin.BuiltinFont();     // (web: always the built-in one)
             var go = new GameObject("HUD", typeof(Canvas), typeof(CanvasScaler));
             go.transform.SetParent(transform, false);
             go.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;

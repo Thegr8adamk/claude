@@ -13,7 +13,7 @@ namespace RexMagnum.EditorTools
     public class AudioImport : AssetPostprocessor
     {
         // bump when the rules below change: Unity then reimports the clips with them
-        public override uint GetVersion() => 2;
+        public override uint GetVersion() => 3;
 
         // preload stays at Unity's default (on)
         void OnPreprocessAudio()
@@ -29,6 +29,14 @@ namespace RexMagnum.EditorTools
             s.compressionFormat = AudioCompressionFormat.Vorbis;
             s.quality = music ? 0.6f : 0.7f;
             ai.defaultSampleSettings = s;
+            // web build: the browser decodes every clip whole (AAC); a lower bit rate and an optimised sample rate
+            // keep the download smaller (Web.data was 217 MB). PC / phone keep the settings above
+            var web = s;
+            web.loadType = AudioClipLoadType.CompressedInMemory;
+            web.compressionFormat = AudioCompressionFormat.AAC;
+            web.quality = music ? 0.4f : 0.3f;
+            web.sampleRateSetting = AudioSampleRateSetting.OptimizeSampleRate;
+            ai.SetOverrideSampleSettings("WebGL", web);
             ai.loadInBackground = music;
             ai.forceToMono = !music;          // 3D voices and effects: mono is correct and half the size
         }

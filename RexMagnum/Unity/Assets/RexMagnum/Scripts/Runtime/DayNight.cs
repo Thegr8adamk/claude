@@ -248,7 +248,7 @@ namespace RexMagnum
                 // whole island without re-showing every detail renderer (that was a hitch on phones). Very far zones
                 // (fully culled) get their lowest LOD back for the pass (ZoneStreamer.KeepLowAll).
                 int band = Night < 0.3f ? 0 : Night < 0.7f ? 1 : 2;
-                if (probeBand < 0) probeBand = band;
+                if (probeBand < 0 || Application.platform == RuntimePlatform.WebGLPlayer) probeBand = band;   // web: the on-awake render only (a whole-island render)
                 if (probeId >= 0 && (islandProbe == null || islandProbe.IsFinishedRendering(probeId)))
                 {
                     probeId = -1;

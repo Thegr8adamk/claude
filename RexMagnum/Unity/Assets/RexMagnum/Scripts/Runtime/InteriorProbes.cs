@@ -58,6 +58,8 @@ namespace RexMagnum
             float n = DayNight.Night;
             int b = n < 0.3f ? 0 : n < 0.7f ? 1 : 2;
             if (b == band) return;
+            // web: the first pass only (each probe is six more scene renders; the browser has the frame budget for once)
+            if (band >= 0 && Application.platform == RuntimePlatform.WebGLPlayer) return;
             band = b;
             if (busy) again = true;            // a crossing during a pass: one more pass when it ends
             else StartCoroutine(RenderAll());

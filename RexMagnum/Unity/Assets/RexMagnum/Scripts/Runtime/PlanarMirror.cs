@@ -171,6 +171,8 @@ namespace RexMagnum
             if (cam == null || rendering) return;
             if (VRMode.Active != vrLook) SetVRLook(VRMode.Active);
             if (vrLook) return;
+            // web: no second scene render (one frame of the island twice was too slow in the browser): shiny surface
+            if (Application.platform == RuntimePlatform.WebGLPlayer) { if (showingMirror) ShowMirror(false); return; }
             // the selfie / kill cam / ending cameras would sample the main camera's reflection: shiny surface instead
             if (KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing || Time.time < PhotoAlbum.PoseUntil) { if (showingMirror) ShowMirror(false); return; }
             // a full scene render is costly: only the nearest mirror in front of the player and on screen

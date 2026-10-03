@@ -277,7 +277,17 @@ namespace RexMagnum
                 if (LookBlocked) return v;
                 // the mouse only with the window focused, and not on the first frames after focus comes back
                 // (the editor's Game view sent one big jump: the view swung to the sky / the floor)
-                if (M != null && Application.isFocused && Time.frameCount > mouseSkipFrame) v += M.delta.ReadValue() * MouseSensitivity;
+                if (M != null && Time.frameCount > mouseSkipFrame)
+                {
+                    if (Application.platform == RuntimePlatform.WebGLPlayer)
+                    {
+                        // web: the page only gets mouse events while the pointer is over it (no focus check needed). No
+                        // pointer lock (refused, or a test tool's fake mouse): turn while a button is held (drag to look)
+                        if (Cursor.lockState == CursorLockMode.Locked || M.leftButton.isPressed || M.rightButton.isPressed)
+                            v += M.delta.ReadValue() * MouseSensitivity;
+                    }
+                    else if (Application.isFocused) v += M.delta.ReadValue() * MouseSensitivity;
+                }
                 if (G != null) v += LookCurve(LookStick) * StickSensitivity * Time.unscaledDeltaTime;
                 if (TouchState.Active) v += TouchState.LookDelta;
                 v.x *= LookScaleX; v.y *= LookScaleY;

@@ -79,11 +79,29 @@ namespace RexMagnum
                 if (!fontTried)
                 {
                     fontTried = true;
-                    try { uiFont = Font.CreateDynamicFontFromOSFont(new[] { "Segoe UI", "Helvetica Neue", "Roboto", "Noto Sans", "Arial" }, 32); }
-                    catch (System.Exception) { uiFont = null; }
+                    // the web player has no OS fonts: an OS font there drew no text (title menu empty) and logged
+                    // "Unable to load font face" for every label every frame (12,900 warnings, part of the 1 fps)
+                    if (Application.platform == RuntimePlatform.WebGLPlayer) uiFont = BuiltinFont();
+                    else
+                    {
+                        try { uiFont = Font.CreateDynamicFontFromOSFont(new[] { "Segoe UI", "Helvetica Neue", "Roboto", "Noto Sans", "Arial" }, 32); }
+                        catch (System.Exception) { uiFont = null; }
+                    }
                 }
                 return uiFont;
             }
+        }
+
+        /// <summary>Unity's built-in font (its glyph data ships in the build): "LegacyRuntime.ttf" since Unity 2022.2,
+        /// "Arial.ttf" before. Null when neither exists (IMGUI then uses the skin's own font).</summary>
+        public static Font BuiltinFont()
+        {
+            foreach (var n in new[] { "LegacyRuntime.ttf", "Arial.ttf" })
+            {
+                try { var f = Resources.GetBuiltinResource<Font>(n); if (f != null) return f; }
+                catch (System.Exception) { }
+            }
+            return null;
         }
 
         static GUIStyle Text(int size, FontStyle fs, TextAnchor a, Color c, bool wrap)

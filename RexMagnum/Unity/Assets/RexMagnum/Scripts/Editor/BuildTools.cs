@@ -114,23 +114,55 @@ namespace RexMagnum.EditorTools
             // our page: title picture, loading bar, FULL SCREEN button (Assets/WebGLTemplates/RexMagnum)
             // (kept in Assets/RexMagnum/WebTemplate so a folder swap brings it; Unity reads templates from Assets/WebGLTemplates)
             if (CopyWebTemplate()) PlayerSettings.WebGL.template = "PROJECT:RexMagnum";
-            // a smaller download: every texture at most 1024 px in the web build only (the PC build keeps full size)
-            var maxTex = typeof(EditorUserBuildSettings).GetProperty("overrideMaxTextureSize", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-            object oldMax = maxTex?.GetValue(null);
-            try { maxTex?.SetValue(null, 1024); } catch (System.Exception) { }
+            // web: let the page keep the game's saves (PlayerPrefs / save.json live in the browser's IndexedDB)
+            WebSetting("autoSyncPersistentDataPath", true);
+            // a smaller download: WebGL-only texture sizes (kept in each texture's import settings; the PC and phone
+            // builds keep theirs). This replaced the global 1024 px build override: the 1024 cap alone still left
+            // ~237 megapixels of textures (the 217 MB Web.data)
+            WebTextureCaps();
             string path = WebFolder;
-            BuildReport r;
-            try
+            BuildReport r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
-                r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
-                {
-                    scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
-                });
-            }
-            finally { try { if (maxTex != null && oldMax != null) maxTex.SetValue(null, oldMax); } catch (System.Exception) { } }
+                scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
+            });
             if (r.summary.result == BuildResult.Succeeded) WriteWebLauncher(path);
             Report(r, path);
             if (r.summary.result == BuildResult.Succeeded) PlayWeb();
+        }
+
+        /// <summary>WebGL import override on every game texture: at most 512 px (1024 for the menus' pictures, Rex, his
+        /// arms and the weapons: seen up close or full screen), crunched DXT (several times smaller to download; the
+        /// browser gets plain DXT). Only textures whose WebGL setting is not already this are changed (one reimport,
+        /// the first time).</summary>
+        static void WebTextureCaps()
+        {
+            int changed = 0;
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/RexMagnum" }))
+                {
+                    string p = AssetDatabase.GUIDToAssetPath(guid);
+                    if (!(AssetImporter.GetAtPath(p) is TextureImporter ti)) continue;
+                    bool near = p.Contains("/Resources/UI/") || p.Contains("/Characters/Rex/") || p.Contains("/Weapons/");
+                    int want = Mathf.Min(near ? 1024 : 512, ti.maxTextureSize);
+                    var w = ti.GetPlatformTextureSettings("WebGL");
+                    // crunch only for colour / normal maps with a compressed default (not uncompressed UI or data maps)
+                    bool crunch = ti.textureCompression != TextureImporterCompression.Uncompressed;
+                    if (w.overridden && w.maxTextureSize == want && w.crunchedCompression == crunch) continue;
+                    w.overridden = true;
+                    w.maxTextureSize = want;
+                    w.format = TextureImporterFormat.Automatic;
+                    w.textureCompression = crunch ? TextureImporterCompression.Compressed : TextureImporterCompression.Uncompressed;
+                    w.crunchedCompression = crunch;
+                    w.compressionQuality = 50;
+                    ti.SetPlatformTextureSettings(w);
+                    ti.SaveAndReimport();
+                    changed++;
+                }
+            }
+            finally { AssetDatabase.StopAssetEditing(); }
+            if (changed > 0) Debug.Log($"[Rex Magnum] Web texture sizes set on {changed} textures (WebGL only).");
         }
 
         static bool CopyWebTemplate()

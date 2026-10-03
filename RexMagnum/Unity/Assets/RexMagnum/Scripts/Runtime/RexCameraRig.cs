@@ -169,6 +169,16 @@ namespace RexMagnum
             float dt = Time.deltaTime;
             if (InputEnabled)
             {
+                // web: the browser locks the pointer only inside a click / key event, so the lock from the menu may not
+                // have taken (or Esc freed it). Ask again on each click in play; Unity's page code applies it in the
+                // click's own event handler
+                if (Application.platform == RuntimePlatform.WebGLPlayer && Cursor.lockState != CursorLockMode.Locked &&
+                    !PauseMenu.Open && !GameFlow.Busy && UnityEngine.InputSystem.Mouse.current != null &&
+                    UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame)
+                {
+                    Cursor.lockState = CursorLockMode.Locked;
+                    Cursor.visible = false;
+                }
                 if (RMInput.CameraToggle && !(weapons != null && weapons.Scoped))     // not while looking through the scope
                     SetMode(Mode == CameraMode.FirstPerson ? CameraMode.ThirdPerson : CameraMode.FirstPerson);
                 if (RMInput.SwapShoulder) side = -side;

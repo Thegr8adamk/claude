@@ -31,6 +31,7 @@ namespace RexMagnum
 
         class State
         {
+            public string name;
             public Bounds b;
             public Renderer[] detail;     // every LOD level but the lowest
             public bool[] detailOn;
@@ -100,6 +101,22 @@ namespace RexMagnum
 
         public static void ReleaseShown(Bounds box) => pins.Remove(box);
 
+        static bool Web => Application.platform == RuntimePlatform.WebGLPlayer;
+
+        /// <summary>One line for the web start log: each zone and its state (full / low = lowest LOD only / off).</summary>
+        public static string Summary()
+        {
+            if (active == null || active.st == null) return "no zone streaming";
+            var sb = new System.Text.StringBuilder();
+            foreach (var s in active.st)
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(s.name).Append(' ').Append(s.lowHidden ? "off" : s.hidden ? "low" : "full")
+                  .Append(" (").Append(s.detail.Length + s.low.Length).Append(" renderers)");
+            }
+            return sb.ToString();
+        }
+
         bool Pinned(int i)
         {
             foreach (var p in pins) if (st[i].b.Intersects(p)) return true;
@@ -116,7 +133,7 @@ namespace RexMagnum
             for (int i = 0; i < zones.Length; i++)
             {
                 var z = zones[i];
-                var s = st[i] = new State();
+                var s = st[i] = new State { name = z.name };
                 var detail = new System.Collections.Generic.List<Renderer>();
                 var detailSet = new System.Collections.Generic.HashSet<Renderer>();   // membership in O(1): thousands of split parts
                 var lowSet = new System.Collections.Generic.HashSet<Renderer>();
@@ -243,6 +260,7 @@ namespace RexMagnum
         void Hide(State s)
         {
             foreach (var g in s.groups) if (g != null) g.ForceLOD(g.lodCount - 1);
+            if (Web) Debug.Log($"[Rex Magnum] Zone {s.name}: far, lowest LOD only");      // the browser console (F12)
             // a show still in progress: only the renderers already back hold a fresh state
             int upto = s.pending >= 0 ? s.pending : s.detail.Length;
             for (int k = 0; k < s.detail.Length; k++)
@@ -292,6 +310,7 @@ namespace RexMagnum
         void Show(State s, bool instant)
         {
             s.hidden = false;
+            if (Web) Debug.Log($"[Rex Magnum] Zone {s.name}: shown ({s.detail.Length} detail renderers)");
             if (s.lowHidden) ShowLow(s, instant);
             for (int k = 0; k < s.ps.Length; k++) if (s.ps[k] != null && s.psOn[k]) s.ps[k].Play(true);
             s.pending = 0;          // still forced to the lowest LOD until every renderer is back (no holes)

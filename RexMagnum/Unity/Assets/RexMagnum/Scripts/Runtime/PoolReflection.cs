@@ -130,6 +130,7 @@ namespace RexMagnum
         bool Allowed(Camera cam)
         {
             if (reflCam == null || VRMode.Active || Application.isMobilePlatform) return false;   // phones: a whole-hub render
+            if (Application.platform == RuntimePlatform.WebGLPlayer) return false;            // web: a second scene render is too slow
             if (KillCam.Active || EndingSequence.Playing || PhotoAlbum.Capturing) return false;
             if (quality != null && quality.Tier == QualityTier.Low) return false;
             return cam.transform.position.y >= planeY + 0.05f;               // not under water / at the surface

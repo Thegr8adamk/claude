@@ -36,6 +36,35 @@ namespace RexMagnum
         void Start()
         {
             DynamicGI.UpdateEnvironment();     // ambient light from the sky
+            if (Application.platform == RuntimePlatform.WebGLPlayer) StartCoroutine(WebStartLog());
+        }
+
+        /// <summary>Web: no stack trace on info / warning lines (each logged line with its trace was slow in the browser
+        /// console); errors keep theirs.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void WebLogging()
+        {
+            if (Application.platform != RuntimePlatform.WebGLPlayer) return;
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
+        }
+
+        /// <summary>Web: one line in the browser console (F12) once the NavMesh is built (or after 30 s).</summary>
+        System.Collections.IEnumerator WebStartLog()
+        {
+            float t0 = Time.unscaledTime;
+            while (RuntimeNavMesh.Built < RuntimeNavMesh.Total && Time.unscaledTime - t0 < 30f) yield return null;
+            Debug.Log(WebLine("Web start"));
+        }
+
+        /// <summary>"[Rex Magnum] &lt;what&gt;: tier, render scale, NavMesh areas built, zones" (GameFlow logs it again at play).</summary>
+        public static string WebLine(string what)
+        {
+            var q = FindAnyObjectByType<QualityAuto>();
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            return $"[Rex Magnum] {what}: tier {(q != null ? q.Tier.ToString() : "?")}, render scale {(urp != null ? urp.renderScale : 1f):0.00}, " +
+                   $"NavMesh {RuntimeNavMesh.Built}/{RuntimeNavMesh.Total} areas built, zones: {ZoneStreamer.Summary()}, " +
+                   $"GPU {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceVersion}), {Time.frameCount} frames in {Time.realtimeSinceStartup:0} s";
         }
 
         // the tier's anti-aliasing, for cameras made after Apply (kill cam, selfie, ending): they had no
@@ -316,7 +345,8 @@ namespace RexMagnum
             // Phones: MSAA 2x on Medium instead of SMAA (MSAA is nearly free on tiled mobile GPUs, SMAA is not)
             bool mobile = Application.isMobilePlatform;
             int[]   msaa           = { 1,     mobile ? 2 : 1, 2, 4 };
-            bool smaa = t == QualityTier.Medium && !mobile;
+            bool web = Application.platform == RuntimePlatform.WebGLPlayer;
+            bool smaa = t == QualityTier.Medium && !mobile && !web;
             float[] treeDist       = { 250f,  400f,  650f,  900f };
             // grass: max 1 clump (~200 tris) per m2 in the map; worst-case view ~0.1 / 0.6 / 1.4 / 2.6 M triangles
             float[] detailDist     = { 35f,   60f,   80f,   100f };
@@ -326,6 +356,20 @@ namespace RexMagnum
             int[]   cascades       = { 1,     2,     4,     4 };
             int[]   shadowRes      = { 1024,  2048,  2048,  4096 };
             int i = (int)t;
+            if (web)
+            {
+                // the web player (WebGL 2, one thread, browser GPU limits), whatever tier the player picks: smaller
+                // render scale, short shadows, no MSAA, less grass and trees, lower LOD bias (the game ran at ~1 fps)
+                renderScale[i] = Mathf.Min(renderScale[i], t == QualityTier.Low ? 0.7f : 0.85f);
+                shadowDist[i] = Mathf.Min(shadowDist[i], t == QualityTier.Low ? 30f : 60f);
+                msaa[i] = 1;
+                treeDist[i] = Mathf.Min(treeDist[i], t == QualityTier.Low ? 160f : 300f);
+                detailDist[i] = Mathf.Min(detailDist[i], t == QualityTier.Low ? 25f : 40f);
+                detailDensity[i] *= 0.5f;
+                lodBias[i] = Mathf.Min(lodBias[i], t == QualityTier.Low ? 0.5f : 1f);
+                cascades[i] = Mathf.Min(cascades[i], 2);
+                shadowRes[i] = Mathf.Min(shadowRes[i], t == QualityTier.Low ? 1024 : 2048);
+            }
             if (urp != null)
             {
                 urp.renderScale = renderScale[i];
@@ -335,7 +379,9 @@ namespace RexMagnum
                 // soft (filtered) shadow edges from High up, and Medium on desktop: hard 1-tap edges looked jagged
                 SetUrp(urp, "supportsSoftShadows", "m_SoftShadowsSupported", t >= QualityTier.High || (t == QualityTier.Medium && !mobile));
                 // lamp / torch / tunnel-lamp shadows (point + spot) only on Ultra: they are the expensive ones
-                SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t == QualityTier.Ultra);
+                SetUrp(urp, "supportsAdditionalLightShadows", "m_AdditionalLightShadowsSupported", t == QualityTier.Ultra && !web);
+                // web: at most 4 lamps light each object (WebGL 2 forward: every extra light is a loop in every shader)
+                if (web) SetUrp(urp, "maxAdditionalLightsCount", "m_AdditionalLightsPerObjectLimit", 4);
                 // their atlas: 4096 with 512 px tiles on Ultra (64 maps; ShadowLightBudget uses at most 36), 2048 below
                 SetUrp(urp, "additionalLightsShadowmapResolution", "m_AdditionalLightsShadowmapResolution", t == QualityTier.Ultra ? 4096 : 2048);
                 SetUrp(urp, "additionalLightsShadowResolutionTierLow", "m_AdditionalLightsShadowResolutionTierLow", 256);
@@ -350,9 +396,9 @@ namespace RexMagnum
                 {
 #if UNITY_EDITOR
                     if (!featureState.ContainsKey(ssao)) featureState[ssao] = FeatureActive(ssao);
-                    featureNow[ssao] = t >= QualityTier.Medium;
+                    featureNow[ssao] = t >= QualityTier.Medium && !web;
 #endif
-                    FeatureSet(ssao, t >= QualityTier.Medium);
+                    FeatureSet(ssao, t >= QualityTier.Medium && !web);    // web: never (full-screen pass + depth normals)
                     SsaoCost(ssao, t == QualityTier.Medium);
                 }
             }
@@ -499,6 +545,13 @@ namespace RexMagnum
             if (rs > 0 && urp != null) urp.renderScale = RenderScales[rs];
             QualitySettings.vSyncCount = PlayerPrefs.GetInt("RexMagnum_VSync", Application.isMobilePlatform ? 0 : 1);
             Application.targetFrameRate = FpsValues[Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_FpsLimit", FpsDefault), 0, FpsValues.Length - 1)];
+            // web: the browser's own frame timing (requestAnimationFrame) for 60 / no limit; a fixed rate uses a timer.
+            // No full screen from here: the browser only allows it from a click (the page's FULL SCREEN button)
+            if (Application.platform == RuntimePlatform.WebGLPlayer)
+            {
+                if (Application.targetFrameRate >= 60) Application.targetFrameRate = -1;
+                return;
+            }
             if (!Application.isMobilePlatform && !Application.isEditor)
             {
                 var mode = PlayerPrefs.GetInt("RexMagnum_Fullscreen", 1) == 1 ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
