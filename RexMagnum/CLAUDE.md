@@ -1,5 +1,8 @@
 # REX MAGNUM: VACATION VIOLENCE — Project brief for Claude Code
 
+> **New session on the owner's PC: read `HANDOFF_LOCAL.md` first** (current state, open problems, how to build).
+
+
 ## 0. How to work with the owner
 - Owner is a hobbyist. Knows no code or command line. Uses Windows PC (Android Studio installed). Time zone US Central.
 - Write to owner in ASD-STE100 Simplified Technical English: short sentences, active voice, simple words. Owner is a visual learner: show pictures/renders, tables.
