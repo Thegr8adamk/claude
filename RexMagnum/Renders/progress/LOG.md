@@ -73,3 +73,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 - 2026-10-03 00:05 — round3_fixes.png: Owner's round-3 Unity report fixed: ruins ramp, FP arms (bones kept + guard pose), Room304 LOD1, RMFind for obsolete API, n-gons; new Captions on/off + size option.
 - 2026-10-03 16:30 — fp_arms_fix2.png: FP arms fix 2: bone anchors keep all 64 bones (no Rig Errors), placement from head/neck/shoulders, hands-on-screen PASS/FAIL build check, M = second pause key.
 - 2026-10-03 17:05 — web_build.png: New menu Rex Magnum > Make Web Game (HTML): WebGL 2 build, opens in browser; web player safe (Low tier, no VR/QUIT, no threads, no audio limiter).
+- 2026-10-03 18:05 — web_loading_page.png: Web version gets its own page (title picture, loading bar, FULL SCREEN), 1024 px textures (smaller download), PLAY_WEB_GAME.bat launcher, Play Web Game menu.
