@@ -111,12 +111,141 @@ namespace RexMagnum.EditorTools
             if (growth != null && growth.IsEnum) WebSetting("memoryGrowthMode", System.Enum.ToObject(growth, 2));   // 2 = geometric
             WebSetting("maximumMemorySize", 4096);
             WebSetting("initialMemorySize", 512);
-            string path = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Web");
-            var r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            // our page: title picture, loading bar, FULL SCREEN button (Assets/WebGLTemplates/RexMagnum)
+            // (kept in Assets/RexMagnum/WebTemplate so a folder swap brings it; Unity reads templates from Assets/WebGLTemplates)
+            if (CopyWebTemplate()) PlayerSettings.WebGL.template = "PROJECT:RexMagnum";
+            // a smaller download: every texture at most 1024 px in the web build only (the PC build keeps full size)
+            var maxTex = typeof(EditorUserBuildSettings).GetProperty("overrideMaxTextureSize", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            object oldMax = maxTex?.GetValue(null);
+            try { maxTex?.SetValue(null, 1024); } catch (System.Exception) { }
+            string path = WebFolder;
+            BuildReport r;
+            try
             {
-                scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.AutoRunPlayer
-            });
+                r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
+                });
+            }
+            finally { try { if (maxTex != null && oldMax != null) maxTex.SetValue(null, oldMax); } catch (System.Exception) { } }
+            if (r.summary.result == BuildResult.Succeeded) WriteWebLauncher(path);
             Report(r, path);
+            if (r.summary.result == BuildResult.Succeeded) PlayWeb();
+        }
+
+        static bool CopyWebTemplate()
+        {
+            string project = Directory.GetParent(Application.dataPath).FullName;
+            string src = Path.Combine(Application.dataPath, "RexMagnum", "WebTemplate");
+            if (!File.Exists(Path.Combine(src, "index.html"))) return false;
+            string dst = Path.Combine(Application.dataPath, "WebGLTemplates", "RexMagnum");
+            Directory.CreateDirectory(Path.Combine(dst, "TemplateData"));
+            foreach (var f in Directory.GetFiles(src, "*", SearchOption.AllDirectories))
+            {
+                if (f.EndsWith(".meta")) continue;
+                string rel = f.Substring(src.Length + 1);
+                string to = Path.Combine(dst, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(to));
+                File.Copy(f, to, true);
+            }
+            AssetDatabase.Refresh();
+            return true;
+        }
+
+        static string WebFolder => Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Web");
+
+        /// <summary>PLAY_WEB_GAME.bat + serve.ps1 in the web folder: a double-click starts a small local web server
+        /// (Windows PowerShell, nothing to install) and opens the game in the browser, without Unity.</summary>
+        static void WriteWebLauncher(string folder)
+        {
+            File.WriteAllText(Path.Combine(folder, "serve.ps1"),
+@"# Rex Magnum web game: a small local web server for this folder (close this window to stop it).
+$port = 8093
+$root = $PSScriptRoot
+$types = @{ '.html'='text/html'; '.js'='application/javascript'; '.wasm'='application/wasm'; '.css'='text/css';
+            '.png'='image/png'; '.jpg'='image/jpeg'; '.ico'='image/x-icon'; '.json'='application/json'; '.data'='application/octet-stream';
+            '.unityweb'='application/octet-stream' }
+$http = New-Object System.Net.HttpListener
+$http.Prefixes.Add(""http://localhost:$port/"")
+try { $http.Start() } catch { Start-Process ""http://localhost:$port/""; exit }   # already running: just open the page
+Start-Process ""http://localhost:$port/""
+Write-Host ""Rex Magnum is running at http://localhost:$port/  (close this window to stop)""
+while ($http.IsListening) {
+  $ctx = $http.GetContext()
+  $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
+  if ($rel -eq '') { $rel = 'index.html' }
+  $file = [IO.Path]::GetFullPath((Join-Path $root $rel))
+  if ($file.StartsWith($root) -and (Test-Path $file -PathType Leaf)) {
+    $ext = [IO.Path]::GetExtension($file).ToLower()
+    $ctx.Response.ContentType = if ($types.ContainsKey($ext)) { $types[$ext] } else { 'application/octet-stream' }
+    $bytes = [IO.File]::ReadAllBytes($file)
+    $ctx.Response.ContentLength64 = $bytes.Length
+    $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+  } else { $ctx.Response.StatusCode = 404 }
+  $ctx.Response.Close()
+}
+");
+            File.WriteAllText(Path.Combine(folder, "PLAY_WEB_GAME.bat"),
+                "@echo off\r\ntitle Rex Magnum web game\r\npowershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0serve.ps1\"\r\n");
+        }
+
+        static System.Net.HttpListener webServer;
+        const int WebPort = 8093;
+
+        /// <summary>Menu "Rex Magnum > Play Web Game": opens the last web build in the browser through a small local
+        /// web server inside Unity (no new build). The server stops when Unity closes.</summary>
+        [MenuItem("Rex Magnum/Play Web Game (last build)", priority = 23)]
+        public static void PlayWeb()
+        {
+            string root = WebFolder;
+            if (!File.Exists(Path.Combine(root, "index.html")))
+            {
+                EditorUtility.DisplayDialog("Rex Magnum", "No web build yet. Run Rex Magnum > Make Web Game (HTML) first.", "OK");
+                return;
+            }
+            if (webServer == null || !webServer.IsListening)
+            {
+                webServer = new System.Net.HttpListener();
+                webServer.Prefixes.Add($"http://localhost:{WebPort}/");
+                try { webServer.Start(); }
+                catch (System.Exception e) { webServer = null; Debug.LogWarning("[Rex Magnum] Web server: " + e.Message + " (PLAY_WEB_GAME.bat may already run it)"); }
+                if (webServer != null)
+                {
+                    var server = webServer;
+                    new System.Threading.Thread(() => Serve(server, root)) { IsBackground = true }.Start();
+                }
+            }
+            Application.OpenURL($"http://localhost:{WebPort}/");
+            Debug.Log($"[Rex Magnum] Web game: http://localhost:{WebPort}/  (files: {root})");
+        }
+
+        static void Serve(System.Net.HttpListener server, string root)
+        {
+            string full = Path.GetFullPath(root);
+            while (server.IsListening)
+            {
+                System.Net.HttpListenerContext ctx;
+                try { ctx = server.GetContext(); } catch (System.Exception) { return; }
+                try
+                {
+                    string rel = System.Uri.UnescapeDataString(ctx.Request.Url.AbsolutePath.TrimStart('/'));
+                    if (rel.Length == 0) rel = "index.html";
+                    string file = Path.GetFullPath(Path.Combine(full, rel));
+                    if (file.StartsWith(full) && File.Exists(file))
+                    {
+                        string ext = Path.GetExtension(file).ToLowerInvariant();
+                        ctx.Response.ContentType = ext == ".html" ? "text/html" : ext == ".js" ? "application/javascript" :
+                                                   ext == ".wasm" ? "application/wasm" : ext == ".css" ? "text/css" :
+                                                   ext == ".png" ? "image/png" : ext == ".jpg" ? "image/jpeg" : "application/octet-stream";
+                        var bytes = File.ReadAllBytes(file);
+                        ctx.Response.ContentLength64 = bytes.Length;
+                        ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                    }
+                    else ctx.Response.StatusCode = 404;
+                }
+                catch (System.Exception) { }
+                finally { try { ctx.Response.Close(); } catch (System.Exception) { } }
+            }
         }
 
         [MenuItem("Rex Magnum/Make Android Game (.apk)", priority = 21)]

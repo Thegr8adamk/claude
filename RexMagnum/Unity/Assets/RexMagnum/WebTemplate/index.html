@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #08090c; }
+      body { font-family: "Segoe UI", "Helvetica Neue", Roboto, Arial, sans-serif; color: #fff; }
+      #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; background: #08090c; display: block; outline: none; }
+      #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+                background: #08090c url("TemplateData/bg.jpg") center / cover no-repeat; padding-bottom: 9vh; box-sizing: border-box; }
+      #loader::before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0,0,0,0.85)); }
+      #loader > * { position: relative; }
+      #title { font-size: clamp(28px, 6vw, 72px); font-weight: 800; color: #ffcc40; letter-spacing: 0.02em;
+               text-shadow: 3px 4px 0 #2a1203, 0 0 18px rgba(0,0,0,0.6); text-align: center; margin: 0 16px; }
+      #subtitle { font-size: clamp(16px, 2.6vw, 30px); font-weight: 700; color: #ffebcc; margin: 4px 16px 28px; text-align: center; }
+      #bar { width: min(560px, 80vw); height: 14px; border: 2px solid rgba(255,204,64,0.8); border-radius: 8px; overflow: hidden;
+             background: rgba(0,0,0,0.6); }
+      #fill { width: 0%; height: 100%; background: linear-gradient(90deg, #f2a516, #ffd966); transition: width 0.2s; }
+      #status { margin-top: 12px; font-size: 16px; color: #dfe6ee; text-align: center; padding: 0 16px; }
+      #note { margin-top: 8px; font-size: 13px; color: #9aa6b4; text-align: center; padding: 0 16px; max-width: 640px; }
+      #warning { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); max-width: 90vw; z-index: 3; }
+      #warning div { background: #8a1c1c; color: #fff; padding: 8px 14px; border-radius: 6px; margin-bottom: 6px; font-size: 14px; }
+      #fullscreen { position: fixed; right: 14px; bottom: 14px; z-index: 2; display: none; border: 2px solid #ffcc40;
+                    background: rgba(0,0,0,0.55); color: #ffcc40; font-weight: 700; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+      #fullscreen:hover { background: rgba(60,40,5,0.8); }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loader">
+      <div id="title">REX MAGNUM</div>
+      <div id="subtitle">VACATION VIOLENCE</div>
+      <div id="bar"><div id="fill"></div></div>
+      <div id="status">Loading the island... 0%</div>
+      <div id="note">Adult crude humor. The first load is big (about 200 MB) and can take a few minutes. Next time the browser keeps a copy.
+        Click the game to use the mouse. Esc or M = pause menu.</div>
+    </div>
+    <div id="warning"></div>
+    <button id="fullscreen" title="Full screen">FULL SCREEN</button>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+      var loader = document.querySelector("#loader");
+      var fill = document.querySelector("#fill");
+      var statusText = document.querySelector("#status");
+      var fullscreenButton = document.querySelector("#fullscreen");
+
+      // errors and warnings from the game, shown at the top (errors stay, warnings go after 5 s)
+      function showBanner(msg, type) {
+        if (type !== "error") { console.warn(msg); return; }
+        var box = document.querySelector("#warning");
+        var div = document.createElement("div");
+        div.textContent = msg;
+        box.appendChild(div);
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      var config = {
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+#endif
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+        memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        showBanner: showBanner,
+      };
+
+      // the game's own canvas size follows the window (sharp on high-DPI screens, capped for speed)
+      config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+
+      if (location.protocol === "file:") {
+        statusText.textContent = "This page must run from a web server. Use PLAY_WEB_GAME.bat in this folder, or run Rex Magnum > Play Web Game in Unity.";
+      } else {
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = function () {
+          createUnityInstance(canvas, config, function (progress) {
+            var pct = Math.round(progress * 100);
+            fill.style.width = pct + "%";
+            statusText.textContent = pct < 90 ? "Loading the island... " + pct + "%" : "Starting the game...";
+          }).then(function (unityInstance) {
+            loader.style.display = "none";
+            fullscreenButton.style.display = "block";
+            fullscreenButton.onclick = function () { unityInstance.SetFullscreen(1); };
+            canvas.focus();
+          }).catch(function (message) {
+            statusText.textContent = "The game could not start: " + message;
+          });
+        };
+        script.onerror = function () { statusText.textContent = "Could not load the game files (Build folder missing?)."; };
+        document.body.appendChild(script);
+      }
+      canvas.addEventListener("click", function () { canvas.focus(); });
+    </script>
+  </body>
+</html>
