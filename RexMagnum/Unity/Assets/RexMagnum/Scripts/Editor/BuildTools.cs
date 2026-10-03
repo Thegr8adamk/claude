@@ -122,12 +122,13 @@ namespace RexMagnum.EditorTools
             WebTextureCaps();
             string path = WebFolder;
             // the web player: plain Forward (with Forward+ the browser drew no world) and no orientation lock call
-            var modes = ForceForward();
+            var modes = new System.Collections.Generic.List<(Object, string, int)>();
             var oldOrient = PlayerSettings.defaultInterfaceOrientation;
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
             BuildReport r;
             try
             {
+                ForceForward(modes);
+                PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
                 r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
                     scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
@@ -157,6 +158,11 @@ namespace RexMagnum.EditorTools
                 {
                     string p = AssetDatabase.GUIDToAssetPath(guid);
                     if (!(AssetImporter.GetAtPath(p) is TextureImporter ti)) continue;
+                    // not lightmaps, cursors, single-channel data maps, CPU-read or HDR sources (crunch can't do HDR)
+                    if (ti.textureType == TextureImporterType.Lightmap || ti.textureType == TextureImporterType.Cursor ||
+                        ti.textureType == TextureImporterType.SingleChannel || ti.isReadable) continue;
+                    string ext = Path.GetExtension(p).ToLowerInvariant();
+                    if (ext == ".exr" || ext == ".hdr") continue;
                     bool near = p.Contains("/Resources/UI/") || p.Contains("/Characters/Rex/") || p.Contains("/Weapons/");
                     int want = Mathf.Min(near ? 1024 : 512, ti.maxTextureSize);
                     var w = ti.GetPlatformTextureSettings("WebGL");
@@ -197,35 +203,52 @@ namespace RexMagnum.EditorTools
             return true;
         }
 
-        /// <summary>Sets every URP renderer to Forward (m_RenderingMode 0) for the web build; returns the old values.</summary>
-        static System.Collections.Generic.List<(Object, int)> ForceForward()
+        /// <summary>Web build only: every URP renderer to plain Forward, no depth priming, intermediate texture "Auto",
+        /// renderer features (SSAO) off. Returns what to put back after the build.</summary>
+        static void ForceForward(System.Collections.Generic.List<(Object, string, int)> old)
         {
-            var old = new System.Collections.Generic.List<(Object, int)>();
+            void Set(Object o, SerializedObject so, string prop, int v)
+            {
+                var sp = so.FindProperty(prop);
+                if (sp == null) return;
+                bool b = sp.propertyType == SerializedPropertyType.Boolean;
+                int cur = b ? (sp.boolValue ? 1 : 0) : sp.intValue;
+                if (cur == v) return;
+                old.Add((o, prop, cur));
+                if (b) sp.boolValue = v != 0; else sp.intValue = v;
+            }
             foreach (var guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
             {
                 var data = AssetDatabase.LoadAssetAtPath<Object>(AssetDatabase.GUIDToAssetPath(guid));
                 if (data == null) continue;
                 var so = new SerializedObject(data);
-                var mode = so.FindProperty("m_RenderingMode");
-                if (mode == null || mode.intValue == 0) continue;
-                old.Add((data, mode.intValue));
-                mode.intValue = 0;
+                Set(data, so, "m_RenderingMode", 0);          // Forward
+                Set(data, so, "m_DepthPrimingMode", 0);       // Disabled
+                Set(data, so, "m_IntermediateTextureMode", 0); // Auto
                 so.ApplyModifiedPropertiesWithoutUndo();
-                Debug.Log($"[Rex Magnum] Web build: {data.name} uses Forward for this build");
+                var feats = so.FindProperty("m_RendererFeatures");
+                for (int k = 0; feats != null && k < feats.arraySize; k++)
+                {
+                    var f = feats.GetArrayElementAtIndex(k).objectReferenceValue;
+                    if (f == null) continue;
+                    var fso = new SerializedObject(f);
+                    Set(f, fso, "m_Active", 0);
+                    fso.ApplyModifiedPropertiesWithoutUndo();
+                }
+                Debug.Log($"[Rex Magnum] Web build: {data.name} uses Forward, no depth priming, no renderer features for this build");
             }
             AssetDatabase.SaveAssets();
-            return old;
         }
 
-        static void RestoreModes(System.Collections.Generic.List<(Object, int)> old)
+        static void RestoreModes(System.Collections.Generic.List<(Object, string, int)> old)
         {
-            foreach (var (data, v) in old)
+            foreach (var (o, prop, v) in old)
             {
-                if (data == null) continue;
-                var so = new SerializedObject(data);
-                var mode = so.FindProperty("m_RenderingMode");
-                if (mode == null) continue;
-                mode.intValue = v;
+                if (o == null) continue;
+                var so = new SerializedObject(o);
+                var sp = so.FindProperty(prop);
+                if (sp == null) continue;
+                if (sp.propertyType == SerializedPropertyType.Boolean) sp.boolValue = v != 0; else sp.intValue = v;
                 so.ApplyModifiedPropertiesWithoutUndo();
             }
             AssetDatabase.SaveAssets();
@@ -239,16 +262,35 @@ namespace RexMagnum.EditorTools
         {
             File.WriteAllText(Path.Combine(folder, "serve.ps1"),
 @"# Rex Magnum web game: a small local web server for this folder (close this window to stop it).
+# -Lan: phones on the same Wi-Fi can open it too (needs one admin 'Yes' to open the port).
+param([switch]$Lan)
 $port = 8093
 $root = $PSScriptRoot
 $types = @{ '.html'='text/html'; '.js'='application/javascript'; '.wasm'='application/wasm'; '.css'='text/css';
             '.png'='image/png'; '.jpg'='image/jpeg'; '.ico'='image/x-icon'; '.json'='application/json'; '.data'='application/octet-stream';
             '.unityweb'='application/octet-stream' }
 $http = New-Object System.Net.HttpListener
-$http.Prefixes.Add(""http://localhost:$port/"")
+if ($Lan) {
+  $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if (-not $isAdmin) { Start-Process powershell -Verb RunAs -ArgumentList ""-NoProfile -ExecutionPolicy Bypass -File `""$PSCommandPath`"" -Lan""; exit }
+  netsh http add urlacl url=""http://+:$port/"" user=Everyone 2>$null | Out-Null
+  if (-not (Get-NetFirewallRule -DisplayName 'Rex Magnum web game' -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName 'Rex Magnum web game' -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Private | Out-Null
+  }
+  $http.Prefixes.Add(""http://+:$port/"")
+} else { $http.Prefixes.Add(""http://localhost:$port/"") }
 try { $http.Start() } catch { Start-Process ""http://localhost:$port/""; exit }   # already running: just open the page
-Start-Process ""http://localhost:$port/""
-Write-Host ""Rex Magnum is running at http://localhost:$port/  (close this window to stop)""
+if ($Lan) {
+  $ips = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | ForEach-Object { $_.IPAddress }
+  Write-Host """"
+  Write-Host ""ON YOUR PHONE (same Wi-Fi), open one of these in Chrome:"" -ForegroundColor Yellow
+  foreach ($ip in $ips) { Write-Host ""   http://$($ip):$port/"" -ForegroundColor Green }
+  Write-Host """"
+  Write-Host ""Keep this window open while you play. Close it to stop.""
+} else {
+  Start-Process ""http://localhost:$port/""
+  Write-Host ""Rex Magnum is running at http://localhost:$port/  (close this window to stop)""
+}
 while ($http.IsListening) {
   $ctx = $http.GetContext()
   $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
@@ -264,6 +306,8 @@ while ($http.IsListening) {
   $ctx.Response.Close()
 }
 ");
+            File.WriteAllText(Path.Combine(folder, "PLAY_ON_PHONE.bat"),
+                "@echo off\r\ntitle Rex Magnum web game (phone)\r\npowershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0serve.ps1\" -Lan\r\npause\r\n");
             File.WriteAllText(Path.Combine(folder, "PLAY_WEB_GAME.bat"),
                 "@echo off\r\ntitle Rex Magnum web game\r\npowershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0serve.ps1\"\r\n");
         }

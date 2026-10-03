@@ -107,8 +107,55 @@ namespace RexMagnum
         float camCheck;
         readonly System.Collections.Generic.HashSet<Camera> seenCams = new System.Collections.Generic.HashSet<Camera>();
 
+        // web diagnosis: F8 swaps every lit material for a plain unlit copy (base map + colour). If the world shows
+        // then, the lit shaders are the problem in this browser; F8 again puts the real materials back.
+        System.Collections.Generic.Dictionary<Renderer, Material[]> safeSwap;
+        void WebSafeMaterials()
+        {
+            if (safeSwap != null)
+            {
+                foreach (var kv in safeSwap) if (kv.Key != null) kv.Key.sharedMaterials = kv.Value;
+                safeSwap = null;
+                Debug.Log("[Rex Magnum] F8: real materials back");
+                return;
+            }
+            var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null) { Debug.Log("[Rex Magnum] F8: Unlit shader missing"); return; }
+            safeSwap = new System.Collections.Generic.Dictionary<Renderer, Material[]>();
+            var made = new System.Collections.Generic.Dictionary<Material, Material>();
+            int n = 0;
+            foreach (var r in RMFind.All<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer) continue;
+                var mats = r.sharedMaterials;
+                var swapped = new Material[mats.Length];
+                bool any = false;
+                for (int k = 0; k < mats.Length; k++)
+                {
+                    var m = mats[k];
+                    swapped[k] = m;
+                    if (m == null || m.shader == null || !m.shader.name.Contains("Lit") || m.shader.name.Contains("Unlit")) continue;
+                    if (!made.TryGetValue(m, out var u))
+                    {
+                        u = new Material(unlit) { name = m.name + " (safe)" };
+                        if (m.HasProperty("_BaseMap")) u.SetTexture("_BaseMap", m.GetTexture("_BaseMap"));
+                        if (m.HasProperty("_BaseColor")) u.SetColor("_BaseColor", m.GetColor("_BaseColor"));
+                        made[m] = u;
+                    }
+                    swapped[k] = u; any = true;
+                }
+                if (!any) continue;
+                safeSwap[r] = mats;
+                r.sharedMaterials = swapped;
+                n++;
+            }
+            Debug.Log($"[Rex Magnum] F8: {n} objects on plain unlit materials ({made.Count} materials). " + WebSceneLine());
+        }
+
         void Update()
         {
+            if (Application.platform == RuntimePlatform.WebGLPlayer && UnityEngine.InputSystem.Keyboard.current != null &&
+                UnityEngine.InputSystem.Keyboard.current[UnityEngine.InputSystem.Key.F8].wasPressedThisFrame) WebSafeMaterials();
             ShadowLightBudget(false);
             if (Time.unscaledTime < camCheck) return;
             camCheck = Time.unscaledTime + 0.5f;           // twice a second is enough
@@ -394,7 +441,7 @@ namespace RexMagnum
             {
                 // the web player (WebGL 2, one thread, browser GPU limits), whatever tier the player picks: smaller
                 // render scale, short shadows, no MSAA, less grass and trees, lower LOD bias (the game ran at ~1 fps)
-                renderScale[i] = Mathf.Min(renderScale[i], t == QualityTier.Low ? 0.7f : 0.85f);
+                renderScale[i] = 1f;   // web: no scaled intermediate target (the browser test drew only the sky with 0.7)
                 shadowDist[i] = Mathf.Min(shadowDist[i], t == QualityTier.Low ? 30f : 60f);
                 msaa[i] = 1;
                 treeDist[i] = Mathf.Min(treeDist[i], t == QualityTier.Low ? 160f : 300f);
@@ -422,7 +469,14 @@ namespace RexMagnum
                 SetUrp(urp, "additionalLightsShadowResolutionTierMedium", "m_AdditionalLightsShadowResolutionTierMedium", 256);
                 SetUrp(urp, "additionalLightsShadowResolutionTierHigh", "m_AdditionalLightsShadowResolutionTierHigh", 512);
                 urp.msaaSampleCount = msaa[i];
-                urp.supportsCameraDepthTexture = true;    // water depth colour + shore foam
+                // water depth colour + shore foam. Web: no depth copy pass and no HDR target (WebGL 2 drew only the sky
+                // over the world); the water uses its deep colour instead (_RMNoDepth)
+                urp.supportsCameraDepthTexture = !web;
+                if (web)
+                {
+                    SetUrp(urp, "supportsHDR", "m_SupportsHDR", false);
+                    Shader.SetGlobalFloat("_RMNoDepth", 1f);
+                }
                 urp.supportsCameraOpaqueTexture = false;
                 // SSAO only from Medium up (a full-screen pass + depth normals prepass: too slow on Low)
                 var ssao = FindSSAO(urp);
@@ -576,7 +630,7 @@ namespace RexMagnum
         {
             var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             int rs = Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_RenderScale", 0), 0, RenderScales.Length - 1);
-            if (rs > 0 && urp != null) urp.renderScale = RenderScales[rs];
+            if (rs > 0 && urp != null && Application.platform != RuntimePlatform.WebGLPlayer) urp.renderScale = RenderScales[rs];
             QualitySettings.vSyncCount = PlayerPrefs.GetInt("RexMagnum_VSync", Application.isMobilePlatform ? 0 : 1);
             Application.targetFrameRate = FpsValues[Mathf.Clamp(PlayerPrefs.GetInt("RexMagnum_FpsLimit", FpsDefault), 0, FpsValues.Length - 1)];
             // web: the browser's own frame timing (requestAnimationFrame) for 60 / no limit; a fixed rate uses a timer.
