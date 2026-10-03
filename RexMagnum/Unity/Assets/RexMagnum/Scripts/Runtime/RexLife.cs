@@ -284,6 +284,7 @@ namespace RexMagnum
             if (Time.time > nextGoalCheck) { nextGoalCheck = Time.time + 1f; UpdateMaxHealth(); }    // two PlayerPrefs reads a second
             if (Time.time > nextCalmSample) { nextCalmSample = Time.time + 5f; SampleCalm(); }       // the rolling last calm spot
             if (lowSaid && health.Fraction > 0.5f) lowSaid = false;
+            health.damageScale = SettingsPanel.Easy ? 0.6f : 1f;     // Settings > Difficulty EASY: less damage taken
             // slow regen out of the fight: +2 HP/s after 6 s without damage and no living blob within 15 m
             // (food still matters in a fight; a long walk does not leave Rex at 10 HP). Blob check twice a second.
             if (health.IsDead || health.Fraction >= 1f || Time.time - health.LastDamageTime < 6f) return;

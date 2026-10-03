@@ -50,7 +50,7 @@ namespace RexMagnum
             sc.matchWidthOrHeight = 0.5f;          // ultrawide and tall phones: text does not grow with width only
             // one line for the first 15 s: where the full control list is (the room hints teach the rest)
             info = MakeText(go.transform, font, new Vector2(0, 0.5f), new Vector2(30, 0), 22, TextAnchor.MiddleLeft);
-            info.rectTransform.sizeDelta = new Vector2(900, 40);
+            info.rectTransform.sizeDelta = new Vector2(900, 72);       // two lines: pause / help, and the camera key
             info.horizontalOverflow = HorizontalWrapMode.Overflow;
             hudRoot = go.GetComponent<RectTransform>();
             action = MakeText(go.transform, font, new Vector2(1, 0), new Vector2(-40, 40), 40, TextAnchor.LowerRight);
@@ -86,6 +86,7 @@ namespace RexMagnum
             objectiveText.color = new Color(1f, 0.85f, 0.3f);
             BuildCompass(root, font);
             BuildWorldGoal(root, font);
+            BuildEdgeArrow(root);
             BuildHealthBar(root);
             BuildHitMarker(root);
             // damage: red screen edges + an arc that points at the attacker
@@ -189,6 +190,41 @@ namespace RexMagnum
             worldGoalDist = MakeText(worldGoal, font, new Vector2(0.5f, 0.5f), new Vector2(0, -24), 20, TextAnchor.MiddleCenter);
             worldGoalDist.rectTransform.sizeDelta = new Vector2(160, 26);
             worldGoalDist.color = new Color(1f, 0.85f, 0.3f);
+        }
+
+        RectTransform edgeArrow;
+        CanvasGroup edgeArrowGroup;
+
+        /// <summary>The goal off screen (behind, or far to a side): a gold arrow at the screen edge points the way.</summary>
+        void BuildEdgeArrow(Transform root)
+        {
+            var g = new GameObject("GoalArrow", typeof(RectTransform), typeof(CanvasGroup));
+            g.transform.SetParent(root, false);
+            edgeArrow = g.GetComponent<RectTransform>();
+            edgeArrow.sizeDelta = new Vector2(44, 44);
+            edgeArrowGroup = g.GetComponent<CanvasGroup>();
+            edgeArrowGroup.alpha = 0f;
+            edgeArrowGroup.blocksRaycasts = false;
+            var im = MakeImage(edgeArrow, "Arrow", new Color(1f, 0.85f, 0.15f), ArrowSprite());
+            im.rectTransform.sizeDelta = new Vector2(44, 44);
+            im.gameObject.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.8f);
+        }
+
+        /// <summary>A filled triangle pointing up (soft edge).</summary>
+        static Sprite ArrowSprite()
+        {
+            const int s = 64;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+            {
+                float v = (y + 0.5f) / s, u = Mathf.Abs((x + 0.5f) / s - 0.5f) * 2f;   // v: 0 base .. 1 tip
+                float edge = (1f - v) - u;                                            // > 0 inside the triangle
+                float a = Mathf.Clamp01(edge * s * 0.5f) * Mathf.Clamp01(v * s * 0.5f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            }
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f));
         }
 
         void BuildHealthBar(Transform root)
@@ -305,6 +341,8 @@ namespace RexMagnum
 
         Text weapon;
         WeaponId shownWeapon = (WeaponId)(-1);
+        float weaponPopAt = -10f;
+        bool weaponsLooked;
         int shownAmmo = int.MinValue, shownHp = -1, shownCompassM = -1, shownWorldM = -1;
 
         void ShowLine(string line, float seconds)
@@ -373,6 +411,8 @@ namespace RexMagnum
             bool touch = RMInput.LastDevice == RMInput.DeviceKind.Touch;
             if (touch != layoutTouch) ApplyLayout(touch);
             ControlList();
+            // a Rex built without the RexActions -> RexWeapons link: find it once (else the HUD stayed on "Punch")
+            if (actions.weapons == null && !weaponsLooked) { weaponsLooked = true; actions.weapons = actions.GetComponent<RexWeapons>(); }
             action.text = actions.ActionWord;
             if (actions.weapons != null)
             {
@@ -382,10 +422,13 @@ namespace RexMagnum
                 // the string is built only when the weapon or the ammo changes (no garbage every frame)
                 if (d.id != shownWeapon || ammo != shownAmmo)
                 {
+                    if (d.id != shownWeapon && shownWeapon != (WeaponId)(-1)) weaponPopAt = Time.unscaledTime;   // a new weapon in hand: the label pops
                     shownWeapon = d.id; shownAmmo = ammo;
                     weapon.text = d.isGun ? $"{d.name.ToUpper()}  {ammo}" : d.name.ToUpper();
                     weapon.color = d.color;
                 }
+                float pop = Mathf.Clamp01(1f - (Time.unscaledTime - weaponPopAt) / 0.5f);
+                weapon.rectTransform.localScale = Vector3.one * (1f + 0.4f * pop * pop);
             }
             if (PauseMenu.Open)
             {
@@ -417,8 +460,12 @@ namespace RexMagnum
             float t = GameFlow.PlaySeconds;
             if (GameFlow.Busy || t > 15f) { info.text = ""; return; }
             info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((15f - t) / 2f));      // fades out at the end
-            string p = RMInput.LastDevice == RMInput.DeviceKind.Touch ? "II button" : Glyph.B("Pause");
-            info.text = $"{p}: pause.  Pause > HELP shows all controls.";
+            bool touchDev = RMInput.LastDevice == RMInput.DeviceKind.Touch;
+            string p = touchDev ? "II button" : Glyph.B("Pause");
+            // the camera key at the start too (the room teaches it later): the game may start in first person
+            bool fpNow = rig != null && rig.Mode == RexCameraRig.CameraMode.FirstPerson;
+            string camKey = touchDev ? "Camera button" : Glyph.B("Camera");
+            info.text = $"{p}: pause.  Pause > HELP shows all controls.\n{camKey}: {(fpNow ? "third" : "first")} person view.";
         }
 
         // ------------------------------------------------------------ health bar
@@ -618,6 +665,39 @@ namespace RexMagnum
             worldGoalGroup.alpha = show ? 0.9f : 0f;
         }
 
+        /// <summary>The goal is off screen and over 15 m away: an arrow at the screen edge turns toward it. Not over the
+        /// menus, the kill cam, the scope or in VR (a screen edge is outside the headset view; the compass stays).</summary>
+        void EdgeArrow(Camera cam, Transform rex)
+        {
+            bool show = objectiveHas && rex != null && cam != null && !hudHidden && !PauseMenu.Open && !KillCam.Active
+                        && !VRMode.Active && (actions.weapons == null || !actions.weapons.Scoped) && worldGoalGroup.alpha <= 0f;
+            if (show)
+            {
+                Vector3 at = objectiveAt;
+                if (Mathf.Approximately(at.y, 0f)) at.y = rex.position.y + 1.5f;
+                Vector3 flat = at - rex.position; flat.y = 0f;
+                Vector3 sp = cam.WorldToScreenPoint(at);
+                bool onScreen = sp.z > 0f && sp.x > 0f && sp.x < Screen.width && sp.y > 0f && sp.y < Screen.height;
+                show = !onScreen && flat.magnitude > 15f;
+                if (show)
+                {
+                    // direction in the view plane; behind the camera: to the side it is on (never straight down)
+                    Vector3 local = cam.transform.InverseTransformPoint(at);
+                    var dir = new Vector2(local.x, local.z < 0f ? Mathf.Min(local.y, 0f) * 0.3f : local.y);
+                    if (local.z < 0f && Mathf.Abs(dir.x) < 0.5f) dir.x = dir.x < 0f ? -0.5f : 0.5f;
+                    if (dir.sqrMagnitude < 1e-6f) dir = Vector2.right;
+                    dir.Normalize();
+                    var half = hudRoot.rect.size * 0.5f - new Vector2(70f, 70f);
+                    float k = Mathf.Min(half.x / Mathf.Max(1e-4f, Mathf.Abs(dir.x)), half.y / Mathf.Max(1e-4f, Mathf.Abs(dir.y)));
+                    Vector2 pos = dir * k;
+                    pos.y = Mathf.Clamp(pos.y, -half.y + 80f, half.y - 130f);      // clear of the compass / goal line and the health bar
+                    edgeArrow.anchoredPosition = pos;
+                    edgeArrow.localEulerAngles = new Vector3(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f);
+                }
+            }
+            edgeArrowGroup.alpha = show ? 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 4f) : 0f;
+        }
+
         void Compass()
         {
             var cam = Cam;
@@ -634,6 +714,7 @@ namespace RexMagnum
             }
             var rex = RexT;
             WorldGoal(cam, rex);
+            EdgeArrow(cam, rex);
             markerGroup.alpha = objectiveHas && rex != null ? 1f : 0f;
             sideGroup.alpha = sideHas && objectiveHas && rex != null ? 1f : 0f;
             if (sideHas && rex != null)

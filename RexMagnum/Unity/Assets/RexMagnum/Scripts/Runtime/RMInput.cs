@@ -275,7 +275,9 @@ namespace RexMagnum
             {
                 Vector2 v = Vector2.zero;
                 if (LookBlocked) return v;
-                if (M != null) v += M.delta.ReadValue() * MouseSensitivity;
+                // the mouse only with the window focused, and not on the first frames after focus comes back
+                // (the editor's Game view sent one big jump: the view swung to the sky / the floor)
+                if (M != null && Application.isFocused && Time.frameCount > mouseSkipFrame) v += M.delta.ReadValue() * MouseSensitivity;
                 if (G != null) v += LookCurve(LookStick) * StickSensitivity * Time.unscaledDeltaTime;
                 if (TouchState.Active) v += TouchState.LookDelta;
                 v.x *= LookScaleX; v.y *= LookScaleY;
@@ -421,11 +423,14 @@ namespace RexMagnum
         public static Vector2 WheelStick => G == null ? Vector2.zero : LookStick;
         /// <summary>The weapon wheel is open: the camera must not turn.</summary>
         public static bool LookBlocked;
+        static int mouseSkipFrame = -1;
+        /// <summary>Ignore the mouse look for the next few frames (focus regained, cursor locked again).</summary>
+        public static void SkipMouseLook(int frames = 2) => mouseSkipFrame = Time.frameCount + frames;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()       // editor with Domain Reload off
         {
-            LookBlocked = false; ActionBlockedFrame = -1; SkipFrame = -1; rumbleUntil = 0f; rumbling = false;
+            LookBlocked = false; ActionBlockedFrame = -1; SkipFrame = -1; mouseSkipFrame = -1; rumbleUntil = 0f; rumbling = false;
             Application.quitting -= StopRumble;          // a pad must not keep buzzing after the game closes
             Application.quitting += StopRumble;
         }

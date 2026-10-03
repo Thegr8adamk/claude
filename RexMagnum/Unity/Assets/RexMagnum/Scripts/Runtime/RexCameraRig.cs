@@ -154,6 +154,16 @@ namespace RexMagnum
 
         void OnDisable() => RMInput.StopRumble();
 
+        /// <summary>Window focus back (alt-tab, the editor's Game view clicked again): lock the cursor again when in
+        /// play (not over a menu, the title or the intro) and drop the first mouse moves (one big jump).</summary>
+        void OnApplicationFocus(bool focused)
+        {
+            RMInput.SkipMouseLook(focused ? 3 : 1);
+            if (!focused || Application.isMobilePlatform || !InputEnabled || PauseMenu.Open || GameFlow.Busy) return;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
         void LateUpdate()
         {
             RMInput.TickRumble();
@@ -171,7 +181,7 @@ namespace RexMagnum
                 // (guns only: with a melee weapon the slow-down just dragged the turn while fighting a crowd)
                 else if (!VRControlled && RMInput.AimAssist && RMInput.LookIsStick && !TouchState.Active
                          && (weapons == null || weapons.Current.isGun || weapons.Aiming)
-                         && look.sqrMagnitude > 0f && CrosshairOnBlob(3f * cam.fieldOfView / 65f))
+                         && look.sqrMagnitude > 0f && CrosshairOnBlob((SettingsPanel.Easy ? 4.5f : 3f) * cam.fieldOfView / 65f))
                     look *= 0.55f;
                 if (VRControlled)
                 {
@@ -360,7 +370,7 @@ namespace RexMagnum
             if (RMInput.AimAssist && (TouchState.Active || RMInput.LookIsStick) && !(weapons != null && weapons.Scoped))
             {
                 Blob best = null;
-                float bestAng = 4f * cam.fieldOfView / 65f;
+                float bestAng = (SettingsPanel.Easy ? 6.5f : 4f) * cam.fieldOfView / 65f;     // Difficulty EASY: a wider pull
                 foreach (var b in Blob.All)
                 {
                     if (b == null || b.IsDead) continue;

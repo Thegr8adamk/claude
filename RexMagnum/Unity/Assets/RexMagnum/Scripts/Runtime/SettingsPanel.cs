@@ -59,8 +59,16 @@ namespace RexMagnum
             RMInput.InvertY = PlayerPrefs.GetInt("RexMagnum_InvertY", 0) == 1;
             RexCameraRig.FovSetting = PlayerPrefs.GetFloat("RexMagnum_FOV", 65f);
             RexCameraRig.HitTiltEnabled = PlayerPrefs.GetInt(RexCameraRig.HitTiltKey, 1) == 1;
+            DayNight.WindSetting = PlayerPrefs.GetFloat(DayNight.WindKey, 1f);
+            DayNight.ApplyFilmGrain();
+            Easy = PlayerPrefs.GetInt(DifficultyKey, 1) == 0;
             AudioMix.Load();
         }
+
+        /// <summary>Difficulty EASY (Settings > DISPLAY > GAME): Rex takes 0.6x damage (RexLife), food heals 1.5x
+        /// (FoodPickup), aim assist pulls from a wider cone (RexCameraRig). NORMAL is the default.</summary>
+        public static bool Easy { get; private set; }
+        public const string DifficultyKey = "RexMagnum_Difficulty";     // 0 EASY, 1 NORMAL
 
         // ------------------------------------------------------------ rows
 
@@ -108,10 +116,16 @@ namespace RexMagnum
                         Choice("Display", new[] { "WINDOW", "FULL SCREEN" }, () => PlayerPrefs.GetInt("RexMagnum_Fullscreen", 1),
                             v => { PlayerPrefs.SetInt("RexMagnum_Fullscreen", v); QualityAuto.ApplyDisplay(); });
                     Slider("Field of view", "RexMagnum_FOV", 65f, 55f, 95f, v => Mathf.RoundToInt(v) + "°");
+                    Slider("Wind (trees and palms)", DayNight.WindKey, 1f, 0f, 2f, v => v < 0.05f ? "STILL" : v.ToString("0.0") + "x");
+                    Toggle("Film grain", DayNight.GrainKey, 0);       // ApplyAll turns it on / off on the post volume
                     Header("CAPTIONS");
                     Toggle("Captions (spoken lines as text)", "RexMagnum_Subtitles", 1);
                     Choice("Caption size", AudioMix.CaptionSizeNames, () => PlayerPrefs.GetInt("RexMagnum_CaptionSize", 1),
                         v => { PlayerPrefs.SetInt("RexMagnum_CaptionSize", v); ApplyAll(); });
+                    Header("GAME");
+                    Choice("Difficulty", new[] { "EASY", "NORMAL" }, () => PlayerPrefs.GetInt(DifficultyKey, 1),
+                        v => { PlayerPrefs.SetInt(DifficultyKey, v); ApplyAll(); });
+                    Note("EASY: Rex takes less damage, food heals more and aim assist (controller + phone) helps more.");
                     break;
 
                 case 1:

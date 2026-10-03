@@ -30,6 +30,26 @@ namespace RexMagnum
                 if (p.name == "RoomProbe") p.cullingMask |= 1 << DayNight.SkyLayer;
                 else p.cullingMask &= ~(1 << DayNight.SkyLayer);
             }
+            RoomFill();
+        }
+
+        /// <summary>Room 304: the floor read dark blue (the sky ambient from the windows, the only warm light a shadowed
+        /// ceiling lamp). A soft warm fill under the ceiling, no shadows (the shadow-light budget stays as it was).
+        /// Added here at run time, so a scene built before it gets it too.</summary>
+        void RoomFill()
+        {
+            if (!name.StartsWith("Room304")) return;
+            var ceiling = transform.Find("CeilingLight");
+            if (ceiling == null || transform.Find("WarmFill") != null) return;
+            var l = new GameObject("WarmFill").AddComponent<Light>();
+            l.transform.SetParent(transform, false);
+            l.transform.position = ceiling.position + Vector3.down * 0.5f;
+            l.type = LightType.Point;
+            l.color = new Color(1f, 0.74f, 0.5f);
+            l.intensity = 0.55f;
+            l.range = 6.5f;
+            l.shadows = LightShadows.None;
+            l.renderMode = LightRenderMode.Auto;
         }
 
         void Update()

@@ -140,6 +140,7 @@ namespace RexMagnum
             Time.timeScale = o ? 0f : (KillCam.Active && scaleBefore > 0f ? scaleBefore : 1f);
             AudioListener.pause = o;
             Cursor.lockState = o ? CursorLockMode.None : CursorLockMode.Locked;
+            if (!o) RMInput.SkipMouseLook();             // no camera jump from the mouse moved in the menu
             Cursor.visible = o;
             var rex = FindAnyObjectByType<RexController>();
             // resume gives back the input Rex had (still off at the golf cart's wheel or in the ending)

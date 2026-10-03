@@ -56,7 +56,13 @@ namespace RexMagnum
         };
 
         static readonly Dictionary<string, int> last = new Dictionary<string, int>();
-        static float nextAllowed;
+        static float nextAllowed, nextQuip;
+        /// <summary>At most one quip (kill, taunt, photo, slip, idle... lines) every QuipGap s, forced or not, so the
+        /// jokes never pile up. Not for these: story, pain, death, wake-up, rescue, replies in a talk.</summary>
+        const float QuipGap = 8f;
+        static readonly HashSet<string> NotQuips = new HashSet<string>
+        { "Wake", "Death", "Respawn", "Hurt", "LowHealth", "Rescue", "Glorp", "GlorpWin", "Factory", "Night",
+          "FlirtFail", "TauntAnswer", "CartDead", "CartPush", "Door", "Mirror" };
 
         /// <summary>A voice clip plays from SpeakingSince until SpeakingUntil (unscaled time): music ducks under it
         /// (AudioMix.Duck). Other speakers (guests, Carmen, Glorp) can call Speaking(length) too.</summary>
@@ -77,10 +83,11 @@ namespace RexMagnum
             float now = Time.unscaledTime;
             if (SpeakingUntil > now - 0.8f) { SpeakingSince += dt; SpeakingUntil += dt; }     // the duck's tail too
             if (nextAllowed > now) nextAllowed += dt;
+            if (nextQuip > now) nextQuip += dt;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() { SpeakingSince = -10f; SpeakingUntil = -10f; nextAllowed = 0f; }   // editor with Domain Reload off
+        static void ResetStatics() { SpeakingSince = -10f; SpeakingUntil = -10f; nextAllowed = 0f; nextQuip = 0f; }   // editor with Domain Reload off
         public static System.Action<string> Subtitle;   // UI hook (shown about 3 s)
         /// <summary>UI hook with a time: the subtitle stays as long as the voice clip plays.</summary>
         public static System.Action<string, float> SubtitleTimed;
@@ -123,6 +130,8 @@ namespace RexMagnum
         {
             if (!Lines.TryGetValue(group, out var lines)) return;
             if (!force && Time.unscaledTime < nextAllowed) return;
+            bool quip = !NotQuips.Contains(group);
+            if (quip && Time.unscaledTime < nextQuip) return;
             int i = Random.Range(0, lines.Length);
             if (lines.Length > 1 && last.TryGetValue(group, out int prev) && prev == i) i = (i + 1) % lines.Length;
             last[group] = i;
@@ -132,6 +141,7 @@ namespace RexMagnum
             if (force && src != null) src.Stop();                // a forced line cuts the one before (no two Rex voices at once)
             if (clip != null && src != null) { src.PlayOneShot(clip, AudioMix.Voice); Speaking(length); }
             nextAllowed = Time.unscaledTime + length + 0.3f;         // the next line waits until this one is finished
+            if (quip) nextQuip = Time.unscaledTime + Mathf.Max(QuipGap, length + 0.3f);
             ShowSubtitle("REX: " + lines[i], length + 0.4f);
         }
     }

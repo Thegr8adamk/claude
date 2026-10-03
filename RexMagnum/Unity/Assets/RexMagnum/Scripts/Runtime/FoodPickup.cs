@@ -17,13 +17,15 @@ namespace RexMagnum
         public float LastDist { get; private set; } = float.MaxValue;
 
         static readonly string[] Names = { "cocktail", "pizza slice", "fruit plate" };
-        static readonly float[] HealAmount = { 30f, 25f, 20f };
+        static readonly float[] BaseHeal = { 30f, 25f, 20f };
+        /// <summary>Health per kind; Settings > Difficulty EASY: 1.5x.</summary>
+        static float Heal(int k) => BaseHeal[k] * (SettingsPanel.Easy ? 1.5f : 1f);
         GameObject model;
         Vector3 basePos;
         float backAt = -1f;
         Transform rex;
 
-        public string Label => $"{RMInput.Btn("Use")}: {(kind == Kind.Cocktail ? "drink" : "eat")} the {Names[(int)kind]} (+{HealAmount[(int)kind]:0})";
+        public string Label => $"{RMInput.Btn("Use")}: {(kind == Kind.Cocktail ? "drink" : "eat")} the {Names[(int)kind]} (+{Heal((int)kind):0})";
 
         /// <summary>Spawn a food pickup (rescue reward, bars, buffet).</summary>
         public static FoodPickup Spawn(Kind kind, Vector3 at, float respawn, Transform parent = null)
@@ -66,10 +68,10 @@ namespace RexMagnum
             var h = rex.GetComponent<Health>();
             if (h == null || h.IsDead || h.Fraction >= 1f) return;         // full: keep it for later
             RMInput.ConsumeUse();
-            h.Heal(HealAmount[(int)kind]);
+            h.Heal(Heal((int)kind));
             Progress.Add(kind == Kind.Cocktail ? "drinks" : "snacks");
             Sfx.Play(kind == Kind.Cocktail ? "drink" : "eat", basePos);
-            RexTestHUD.Notice($"GOT: {Names[(int)kind].ToUpper()}  (+{HealAmount[(int)kind]:0} HEALTH)", 2f);   // shows with subtitles off too
+            RexTestHUD.Notice($"GOT: {Names[(int)kind].ToUpper()}  (+{Heal((int)kind):0} HEALTH)", 2f);   // shows with subtitles off too
             if (Nearby == this) Nearby = null;
             if (respawnSeconds > 0f) { model.SetActive(false); backAt = Time.time + respawnSeconds; }
             else Destroy(gameObject);

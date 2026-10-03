@@ -653,6 +653,42 @@ namespace RexMagnum
 
         int menuView = -1, hintDrawn = -1;
         float hintSince;
+        GUIStyle doorHintStyle;
+        Renderer stuckDoor;
+        bool doorLooked;
+
+        /// <summary>A simple door picture (frame, leaf, two panels, knob) for the stuck-door hint and its marker.</summary>
+        static void DrawDoorIcon(Rect r, float a)
+        {
+            var t = Texture2D.whiteTexture;
+            GUI.color = new Color(0f, 0f, 0f, 0.85f * a); GUI.DrawTexture(r, t);                              // outline
+            var leaf = new Rect(r.x + r.width * 0.1f, r.y + r.height * 0.06f, r.width * 0.8f, r.height * 0.94f);
+            GUI.color = new Color(0.72f, 0.48f, 0.26f, a); GUI.DrawTexture(leaf, t);
+            GUI.color = new Color(0.55f, 0.35f, 0.18f, a);
+            GUI.DrawTexture(new Rect(leaf.x + leaf.width * 0.15f, leaf.y + leaf.height * 0.08f, leaf.width * 0.7f, leaf.height * 0.36f), t);
+            GUI.DrawTexture(new Rect(leaf.x + leaf.width * 0.15f, leaf.y + leaf.height * 0.52f, leaf.width * 0.7f, leaf.height * 0.4f), t);
+            GUI.color = new Color(1f, 0.82f, 0.3f, a);
+            float k = Mathf.Max(3f, r.width * 0.12f);
+            GUI.DrawTexture(new Rect(leaf.xMax - leaf.width * 0.14f - k * 0.5f, leaf.y + leaf.height * 0.5f, k, k), t);
+            GUI.color = Color.white;
+        }
+
+        /// <summary>The stuck-door hint: a door icon + "PUNCH" over the door while it is in view (not too close).</summary>
+        void DrawDoorMarker(float s)
+        {
+            if (!doorLooked) { doorLooked = true; var sd = FindAnyObjectByType<StuckDoor>(); if (sd != null) stuckDoor = sd.GetComponentInChildren<Renderer>(); }
+            var cam = Camera.main;
+            if (stuckDoor == null || cam == null || StuckDoor.AnyOpen) return;
+            Vector3 at = stuckDoor.bounds.center + Vector3.up * 0.3f;
+            Vector3 sp = cam.WorldToScreenPoint(at);
+            if (sp.z < 1.2f || sp.z > 12f) return;               // behind, or Rex is right at it (the panel says it)
+            float a = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 4f);
+            var r = new Rect(sp.x - 22 * s, Screen.height - sp.y - 40 * s, 44 * s, 64 * s);
+            DrawDoorIcon(r, a);
+            GUI.color = new Color(1f, 0.85f, 0.3f, a);
+            GUI.Label(new Rect(r.center.x - 100 * s, r.yMax + 2 * s, 200 * s, 40 * s), "PUNCH", MenuSkin.Hint);
+            GUI.color = Color.white;
+        }
         float viewSince, titleSince, ua = 1f;
         Color UA => new Color(1f, 1f, 1f, ua);
 
@@ -704,6 +740,9 @@ namespace RexMagnum
                     : new Rect(w * 0.18f, (combatTip ? 180 : 74) * s, w * 0.64f, 92 * s);
                 // each new hint fades in and drops 16 px into place (unscaled: slow-mo does not stretch it)
                 if (shownHint != hintDrawn) { hintDrawn = shownHint; hintSince = Time.unscaledTime; }
+                // the stuck door: a taller panel, bigger text and a door icon (the plain line was easy to miss)
+                bool door = hint == 1;
+                if (door) r.height = 124 * s;
                 float a = MenuSkin.Appear(hintSince, 0.3f);
                 r.y -= (1f - a) * 16 * s;
                 GUI.color = new Color(1f, 1f, 1f, a);
@@ -711,7 +750,17 @@ namespace RexMagnum
                 GUI.color = new Color(1f, 0.78f, 0.25f, 0.95f * a);
                 GUI.DrawTexture(new Rect(r.x, r.yMax - 4 * s, r.width, 4 * s), Texture2D.whiteTexture);
                 GUI.color = new Color(1f, 1f, 1f, a);
-                GUI.Label(r, hint < HintCount ? Hint(hint) : CombatHint(combatHint), MenuSkin.Hint);
+                if (door)
+                {
+                    int fs = Mathf.RoundToInt(MenuSkin.Hint.fontSize * 1.35f);
+                    if (doorHintStyle == null || doorHintStyle.fontSize != fs) doorHintStyle = new GUIStyle(MenuSkin.Hint) { fontSize = fs };
+                    DrawDoorIcon(new Rect(r.x + 18 * s, r.y + 14 * s, 60 * s, 92 * s), a);
+                    GUI.color = new Color(1f, 1f, 1f, a);
+                    GUI.Label(new Rect(r.x + 90 * s, r.y, r.width - 100 * s, r.height), Hint(hint), doorHintStyle);
+                    GUI.color = Color.white;
+                    DrawDoorMarker(s);
+                }
+                else GUI.Label(r, hint < HintCount ? Hint(hint) : CombatHint(combatHint), MenuSkin.Hint);
                 GUI.color = Color.white;
             }
             if (state == State.Play && Time.unscaledTime < bannerUntil && !PauseMenu.Open && !EndingSequence.Playing) DrawBanner(w, h, s);

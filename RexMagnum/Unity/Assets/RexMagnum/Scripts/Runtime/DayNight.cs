@@ -40,6 +40,50 @@ namespace RexMagnum
         float nightLevel;
         int skyDiscMode = -1;       // 0: the cloud layer draws sun + moon, 1: the sky's own sun disc, 2: none (Low tier at night)
 
+        /// <summary>Settings > DISPLAY > Wind (0 = still, 1 = normal, 2 = double); SettingsPanel.ApplyAll sets it.</summary>
+        public static float WindSetting = 1f;
+        public const string WindKey = "RexMagnum_Wind", GrainKey = "RexMagnum_FilmGrain";
+
+        /// <summary>RexMagnum/Foliage's global _RMWind (-1 still, 0 normal, 1 double): the Wind setting times a slow
+        /// gust pulse (~11 s, with a slower swell over it), a bit stronger at dusk and at night. Only in play mode:
+        /// the impostor bake's -1 (edit mode) is not overwritten.</summary>
+        void Wind()
+        {
+            float t = Time.time;
+            float pulse = Mathf.Max(0f, Mathf.Sin(t * 0.57f)) * (0.6f + 0.4f * Mathf.Sin(t * 0.21f + 1.3f));
+            float dusk = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Sin((timeOfDay - 0.25f) * Mathf.PI * 2f)) * 4f);
+            float gust = pulse * 0.5f * (1f + 0.5f * Mathf.Max(dusk, Night));
+            Shader.SetGlobalFloat("_RMWind", WindSetting * (1f + gust) - 1f);
+        }
+
+        /// <summary>Settings > DISPLAY > Film grain: URP's FilmGrain on the global post volume (a run-time copy of its
+        /// profile, the asset is not changed). By reflection: the compile check's URP stubs have no FilmGrain.</summary>
+        static bool grainUsed;
+        public static void ApplyFilmGrain()
+        {
+            bool on = PlayerPrefs.GetInt(GrainKey, 0) == 1;
+            var fgType = System.Type.GetType("UnityEngine.Rendering.Universal.FilmGrain, Unity.RenderPipelines.Universal.Runtime");
+            if (fgType == null || (!on && !grainUsed)) return;     // off and never on: leave the profile as built
+            grainUsed = true;
+            foreach (var vol in RMFind.All<Volume>())
+            {
+                if (vol == null || !vol.isGlobal || vol.sharedProfile == null) continue;
+                var prof = vol.profile;                                 // the run-time copy
+                if (prof == null) continue;
+                VolumeComponent fg = null;
+                foreach (var c in prof.components) if (c != null && c.GetType() == fgType) fg = c;
+                if (fg == null && on)
+                {
+                    var add = typeof(VolumeProfile).GetMethod("Add", new[] { typeof(System.Type), typeof(bool) });
+                    fg = add != null ? add.Invoke(prof, new object[] { fgType, true }) as VolumeComponent : null;
+                }
+                if (fg == null) continue;
+                var intensity = fgType.GetField("intensity")?.GetValue(fg);
+                intensity?.GetType().GetMethod("Override", new[] { typeof(float) })?.Invoke(intensity, new object[] { 0.3f });
+                fg.active = on;
+            }
+        }
+
         void Start()
         {
             if (sun == null) sun = RenderSettings.sun;
@@ -106,7 +150,12 @@ namespace RexMagnum
             }
             RenderSettings.ambientIntensity = Mathf.Lerp(Mathf.Min(NightAmbient, baseAmbient), baseAmbient, day);
             RenderSettings.fogColor = fogColor.Evaluate(timeOfDay);
-            RenderSettings.fogDensity = baseFog * Mathf.Lerp(1.6f, 1f, day);
+            // distance haze per tier: the lower tiers draw trees less far (QualityAuto treeDistance 250 / 400 m),
+            // a bit more haze there hides the edge; Ultra (900 m) a little clearer. Rooms are too small to show it.
+            float tierFog = quality == null ? 1f : quality.Tier == QualityTier.Low ? 1.5f : quality.Tier == QualityTier.Medium ? 1.2f
+                          : quality.Tier == QualityTier.Ultra ? 0.9f : 1f;
+            RenderSettings.fogDensity = baseFog * tierFog * Mathf.Lerp(1.6f, 1f, day);
+            Wind();
             if (sky != null && sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", Mathf.Lerp(Mathf.Min(NightExposure, baseExposure), baseExposure, day));
             // cool moonlit sky (and so a cool skybox ambient) at night; the day colours stay exactly as built
             // sunrise / sunset: 1 with the sun at the horizon, 0 from ~15 deg up (and in deep night)

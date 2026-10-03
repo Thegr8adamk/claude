@@ -323,6 +323,9 @@ namespace RexMagnum
                 if (Progress.AddClue(Clues[(start + i) % Clues.Length])) { clue = Clues[(start + i) % Clues.Length]; break; }
             // own HUD line (not a subtitle): Rex's rescue line does not push it off, and it shows with subtitles off
             RexTestHUD.Notice((calmed ? $"{guestName} calms down. " : "") + $"CLUE from {guestName}: \"{clue}\"  (Pause > Map keeps it)", 6f);
+            // the reward cue: the goal chime a little higher (a pickup click if the chime is not in the build)
+            if (Sfx.Get("goal_chime") != null) Sfx.PlayUI("goal_chime", 0.5f, 1.25f);
+            else Sfx.PlayUI("ui_click", 0.3f, 1.2f);
             if (Random.value < 0.5f || rewardPrefabs == null || rewardPrefabs.Length == 0)
                 FoodPickup.Spawn((FoodPickup.Kind)Random.Range(0, 3), drop, 0f);
             else
