@@ -67,6 +67,40 @@ namespace RexMagnum
                    $"GPU {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceVersion}), {Time.frameCount} frames in {Time.realtimeSinceStartup:0} s";
         }
 
+        /// <summary>Web diagnosis: the active renderer and its rendering path, the main camera (position, far clip,
+        /// culling mask), and how many renderers near it are enabled / drawn last frame.</summary>
+        public static string WebSceneLine()
+        {
+            var urp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            string rend = "?", path = "?";
+            if (urp != null)
+            {
+                var list = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(urp) as ScriptableRendererData[];
+                var idx = typeof(UniversalRenderPipelineAsset).GetField("m_DefaultRendererIndex", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(urp);
+                int di = idx is int ii ? ii : 0;
+                if (list != null && di < list.Length && list[di] != null)
+                {
+                    rend = list[di].name;
+                    var rm = list[di].GetType().GetProperty("renderingMode");
+                    path = rm != null ? rm.GetValue(list[di]).ToString() : "?";
+                }
+            }
+            var cam = Camera.main;
+            if (cam == null) return $"[Rex Magnum] Web scene: renderer {rend} ({path}), NO main camera";
+            int near = 0, on = 0, seen = 0;
+            Vector3 p = cam.transform.position;
+            foreach (var r in RMFind.All<Renderer>())
+            {
+                if ((r.bounds.ClosestPoint(p) - p).sqrMagnitude > 40f * 40f) continue;
+                near++;
+                if (r.enabled && r.gameObject.activeInHierarchy) on++;
+                if (r.isVisible) seen++;
+            }
+            return $"[Rex Magnum] Web scene: renderer {rend} ({path}), camera {cam.name} at {p.x:0},{p.y:0.0},{p.z:0} far {cam.farClipPlane:0} near {cam.nearClipPlane:0.00} " +
+                   $"mask 0x{cam.cullingMask:X} depth {cam.depth}, cameras {Camera.allCamerasCount}; renderers within 40 m: {near}, enabled {on}, drawn {seen}; " +
+                   $"terrains {Terrain.activeTerrains.Length}, lodBias {QualitySettings.lodBias:0.00}, maxLOD {QualitySettings.maximumLODLevel}";
+        }
+
         // the tier's anti-aliasing, for cameras made after Apply (kill cam, selfie, ending): they had no
         // UniversalAdditionalCameraData, so URP gave them no SMAA / the asset's MSAA whatever the tier
         bool tierSmaa, tierMsaa;

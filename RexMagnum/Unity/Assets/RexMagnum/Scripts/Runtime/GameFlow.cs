@@ -532,7 +532,11 @@ namespace RexMagnum
             }
             MarkGoalsShown();
             state = State.Play;
-            if (Application.platform == RuntimePlatform.WebGLPlayer) Debug.Log(QualityAuto.WebLine("Web play"));   // browser console (F12)
+            if (Application.platform == RuntimePlatform.WebGLPlayer)
+            {
+                Debug.Log(QualityAuto.WebLine("Web play"));   // browser console (F12)
+                StartCoroutine(WebSceneLog());
+            }
             dayMixSet = false;
             Busy = false;
             SetPlayerActive(true);
@@ -778,6 +782,15 @@ namespace RexMagnum
                 GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }
+        }
+    
+        /// <summary>Web player: 3 s and 10 s into play, what the camera can draw (to find a missing world).</summary>
+        System.Collections.IEnumerator WebSceneLog()
+        {
+            yield return new WaitForSecondsRealtime(3f);
+            Debug.Log(QualityAuto.WebSceneLine());
+            yield return new WaitForSecondsRealtime(7f);
+            Debug.Log(QualityAuto.WebSceneLine());
         }
     }
 }

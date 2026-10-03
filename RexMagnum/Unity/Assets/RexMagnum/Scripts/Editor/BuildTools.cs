@@ -121,10 +121,23 @@ namespace RexMagnum.EditorTools
             // ~237 megapixels of textures (the 217 MB Web.data)
             WebTextureCaps();
             string path = WebFolder;
-            BuildReport r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            // the web player: plain Forward (with Forward+ the browser drew no world) and no orientation lock call
+            var modes = ForceForward();
+            var oldOrient = PlayerSettings.defaultInterfaceOrientation;
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            BuildReport r;
+            try
             {
-                scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
-            });
+                r = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = Scenes(), locationPathName = path, target = BuildTarget.WebGL, options = BuildOptions.None
+                });
+            }
+            finally
+            {
+                RestoreModes(modes);
+                PlayerSettings.defaultInterfaceOrientation = oldOrient;
+            }
             if (r.summary.result == BuildResult.Succeeded) WriteWebLauncher(path);
             Report(r, path);
             if (r.summary.result == BuildResult.Succeeded) PlayWeb();
@@ -182,6 +195,40 @@ namespace RexMagnum.EditorTools
             }
             AssetDatabase.Refresh();
             return true;
+        }
+
+        /// <summary>Sets every URP renderer to Forward (m_RenderingMode 0) for the web build; returns the old values.</summary>
+        static System.Collections.Generic.List<(Object, int)> ForceForward()
+        {
+            var old = new System.Collections.Generic.List<(Object, int)>();
+            foreach (var guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+            {
+                var data = AssetDatabase.LoadAssetAtPath<Object>(AssetDatabase.GUIDToAssetPath(guid));
+                if (data == null) continue;
+                var so = new SerializedObject(data);
+                var mode = so.FindProperty("m_RenderingMode");
+                if (mode == null || mode.intValue == 0) continue;
+                old.Add((data, mode.intValue));
+                mode.intValue = 0;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log($"[Rex Magnum] Web build: {data.name} uses Forward for this build");
+            }
+            AssetDatabase.SaveAssets();
+            return old;
+        }
+
+        static void RestoreModes(System.Collections.Generic.List<(Object, int)> old)
+        {
+            foreach (var (data, v) in old)
+            {
+                if (data == null) continue;
+                var so = new SerializedObject(data);
+                var mode = so.FindProperty("m_RenderingMode");
+                if (mode == null) continue;
+                mode.intValue = v;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+            AssetDatabase.SaveAssets();
         }
 
         static string WebFolder => Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Builds", "Web");
