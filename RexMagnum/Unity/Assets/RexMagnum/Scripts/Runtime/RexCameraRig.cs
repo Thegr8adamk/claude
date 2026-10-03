@@ -100,10 +100,8 @@ namespace RexMagnum
             foreach (var r in bodyRenderers) saved.Add((r, r.shadowCastingMode));
             if (fpArms != null)
             {
-                var arm = fpArms.GetComponentInChildren<Animator>();
-                Transform armsHead = arm != null && arm.isHuman ? arm.GetBoneTransform(HumanBodyBones.Head) : null;
-                if (armsHead == null) armsHead = FindDeep(fpArms.transform, "mixamorig:Head");     // not humanoid: find the bone by name
-                if (armsHead != null) armsHeadLocal = fpArms.transform.InverseTransformPoint(armsHead.position);
+                // the arms model's "eye": head bone, else neck / shoulders / chest / hands by name, else the mesh top
+                armsHeadLocal = ArmsEyePoint(fpArms.transform, out _);
                 foreach (var r in fpArms.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = ShadowCastingMode.Off;
             }
             int def = PlayerPrefs.GetInt("RexMagnum_CamDefault", 2);     // settings: 0 FP, 1 TP, 2 remember last
@@ -321,16 +319,46 @@ namespace RexMagnum
 
             if (fpArms != null && fpArms.activeSelf)
             {
-                // Put the arms so their head bone sits at the camera (arms follow the view)
+                // Put the arms so their head bone (or its estimate) sits at the camera (arms follow the view)
                 fpArms.transform.localRotation = Quaternion.identity;
                 fpArms.transform.localPosition = -armsHeadLocal + armsOffset;
             }
         }
 
-        static Transform FindDeep(Transform t, string name)
+        /// <summary>Point in the arms root's space that belongs at the camera (Rex's head bone). Without a head bone
+        /// (an import that dropped it) it is estimated from the neck, shoulders, chest or hands (Rex's proportions),
+        /// then from the top of the mesh, so the arms never hang with their feet at the camera.</summary>
+        public static Vector3 ArmsEyePoint(Transform arms, out string how)
         {
-            if (t.name == name) return t;
-            foreach (Transform c in t) { var f = FindDeep(c, name); if (f != null) return f; }
+            var an = arms.GetComponentInChildren<Animator>();
+            Transform hd = an != null && an.isHuman ? an.GetBoneTransform(HumanBodyBones.Head) : null;
+            if (hd == null) hd = FindBone(arms, "Head");
+            if (hd != null) { how = "head bone"; return arms.InverseTransformPoint(hd.position); }
+            var nk = FindBone(arms, "Neck");
+            if (nk != null) { how = "neck bone"; return arms.InverseTransformPoint(nk.position) + Vector3.up * 0.09f; }
+            Transform sl = FindBone(arms, "LeftArm"), sr = FindBone(arms, "RightArm");
+            if (sl != null && sr != null) { how = "shoulder bones"; return arms.InverseTransformPoint((sl.position + sr.position) * 0.5f) + Vector3.up * 0.19f; }
+            var ch = FindBone(arms, "Spine2");
+            if (ch != null) { how = "chest bone"; return arms.InverseTransformPoint(ch.position) + Vector3.up * 0.43f; }
+            Transform hl = FindBone(arms, "LeftHand"), hr = FindBone(arms, "RightHand");
+            if (hl != null && hr != null) { how = "hand bones"; return arms.InverseTransformPoint((hl.position + hr.position) * 0.5f) + new Vector3(0f, 0.49f, -0.15f); }
+            var rs = arms.GetComponentsInChildren<Renderer>(true);
+            if (rs.Length > 0)
+            {
+                Bounds b = rs[0].bounds;
+                foreach (var r in rs) b.Encapsulate(r.bounds);
+                how = "mesh bounds";
+                return arms.InverseTransformPoint(new Vector3(b.center.x, b.max.y, b.center.z)) + Vector3.up * 0.12f;
+            }
+            how = "fixed height";
+            return new Vector3(0f, 1.55f, 0f);
+        }
+
+        /// <summary>Bone by Mixamo name with any prefix ("mixamorig:Head", "Head"); exact, so "LeftArm" is not "LeftForeArm".</summary>
+        public static Transform FindBone(Transform t, string name)
+        {
+            if (t.name == name || t.name.EndsWith(":" + name)) return t;
+            foreach (Transform c in t) { var f = FindBone(c, name); if (f != null) return f; }
             return null;
         }
 

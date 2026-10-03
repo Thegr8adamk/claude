@@ -43,6 +43,14 @@ namespace RexMagnum
 
         void Update()
         {
+            // Unity editor: Escape in the Game view first frees a locked mouse, and the game may never see that key
+            // (the owner's test: Esc 3 times, no menu). A lock that ended while the editor has focus counts as Esc.
+            bool editorFreed = false;
+#if UNITY_EDITOR
+            bool locked = Cursor.lockState == CursorLockMode.Locked;
+            editorFreed = wasLocked && !locked && Application.isFocused && !Open;
+            wasLocked = locked;
+#endif
             if (Open)
             {
                 RexVoice.Freeze(Time.unscaledDeltaTime);      // voice lines, the duck and the subtitles wait while paused
@@ -100,8 +108,11 @@ namespace RexMagnum
                 return;
             }
             if (GameFlow.Busy || traveling) return;
-            if (RMInput.Pause) SetOpen(true);
+            if (RMInput.Pause || editorFreed) SetOpen(true);
         }
+#if UNITY_EDITOR
+        bool wasLocked;
+#endif
 
         int pendingTab = -1;
         float scaleBefore = 1f;
@@ -268,7 +279,7 @@ namespace RexMagnum
         void BottomButtons(float w, float h, float s)
         {
             var dev = RMInput.LastDevice;
-            string resume = dev == RMInput.DeviceKind.Gamepad ? "RESUME  " + Glyph.Token("B") : dev == RMInput.DeviceKind.Keyboard ? "RESUME  (Esc)" : "RESUME";
+            string resume = dev == RMInput.DeviceKind.Gamepad ? "RESUME  " + Glyph.Token("B") : dev == RMInput.DeviceKind.Keyboard ? "RESUME  (Esc / " + RMInput.PauseAltKey + ")" : "RESUME";
             string quit = dev == RMInput.DeviceKind.Gamepad ? "QUIT TO TITLE  " + Glyph.Token("Y") : dev == RMInput.DeviceKind.Keyboard ? "QUIT TO TITLE  (T)" : "QUIT TO TITLE";
             if (GUI.Button(new Rect(w * 0.5f - 350 * s, h - 90 * s, 340 * s, 60 * s), resume, button)) SetOpen(false);
             if (GUI.Button(new Rect(w * 0.5f + 10 * s, h - 90 * s, 340 * s, 60 * s), quit, button)) { confirmQuit = true; quitSel = 1; MenuNav.Click(); }

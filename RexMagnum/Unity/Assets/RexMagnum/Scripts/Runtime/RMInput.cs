@@ -404,7 +404,19 @@ namespace RexMagnum
         /// <summary>The Use press did something (pick up, eat, rescue...): nothing else reacts to it this frame.</summary>
         public static void ConsumeUse() => usedFrame = Time.frameCount;
         // not gated: Esc during a kill cam skips it and opens the menu (the cam waits behind the menu)
-        public static bool Pause => TouchState.Down("Pause") || (KDownRaw("Pause")) || (G != null && PB("Pause").wasPressedThisFrame);
+        public static bool Pause => TouchState.Down("Pause") || (KDownRaw("Pause")) || PauseAltDown || (G != null && PB("Pause").wasPressedThisFrame);
+        /// <summary>Second, fixed pause key: in the Unity editor Escape first frees the mouse and may not reach the game.
+        /// M (menu / map) is free in the default keys (brief section 7); off when the player remapped another action to it.</summary>
+        public const Key PauseAltKey = Key.M;
+        static bool PauseAltDown
+        {
+            get
+            {
+                if (K == null || !K[PauseAltKey].wasPressedThisFrame) return false;
+                foreach (var a in Actions) if (a != "Pause" && KeyFor(a) == PauseAltKey) return false;
+                return true;
+            }
+        }
         /// <summary>Touch Weapon button: a short tap = next weapon, a hold opens the weapon wheel.</summary>
         public const float WheelHoldTime = 0.35f;
         public static bool WheelHeld => KHeld("Wheel") || (G != null && PB("Wheel").isPressed) ||

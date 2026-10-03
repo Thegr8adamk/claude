@@ -461,7 +461,7 @@ namespace RexMagnum
             if (GameFlow.Busy || t > 15f) { info.text = ""; return; }
             info.color = new Color(1f, 1f, 1f, Mathf.Clamp01((15f - t) / 2f));      // fades out at the end
             bool touchDev = RMInput.LastDevice == RMInput.DeviceKind.Touch;
-            string p = touchDev ? "II button" : Glyph.B("Pause");
+            string p = touchDev ? "II button" : RMInput.LastDevice == RMInput.DeviceKind.Keyboard ? Glyph.B("Pause") + " or " + RMInput.PauseAltKey : Glyph.B("Pause");
             // the camera key at the start too (the room teaches it later): the game may start in first person
             bool fpNow = rig != null && rig.Mode == RexCameraRig.CameraMode.FirstPerson;
             string camKey = touchDev ? "Camera button" : Glyph.B("Camera");

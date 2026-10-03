@@ -402,7 +402,39 @@ def fp_arms(body, shirt, arm):
     a.modifiers.move(a.modifiers.find("Subsurf"), 0)     # subdivide before skinning
     apply_non_armature(a)
     s = make(shirt, "Rex_FPArms_Sleeves", 0.6)
+    bone_anchors(a, arm, [a, s])
     return [a, s]
+
+
+def bone_anchors(ob, arm, meshes, size=0.001):
+    """Unity's "Strip Bones" drops every bone no vertex is weighted to: the arms have no leg skin, so the legs
+    vanished and the Humanoid avatar failed ('LeftUpperLeg' not found). One 1 mm triangle per unweighted bone,
+    at the bone's head and fully weighted to it, keeps the whole skeleton in any import setting."""
+    used = set()
+    for m in meshes:
+        names = {g.index: g.name for g in m.vertex_groups}
+        for v in m.data.vertices:
+            for g in v.groups:
+                if g.weight > 0.0 and g.group in names:
+                    used.add(names[g.group])
+    missing = [b for b in arm.data.bones if b.name not in used]
+    if not missing:
+        return 0
+    to_local = ob.matrix_world.inverted() @ arm.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    dl = bm.verts.layers.deform.verify()
+    for b in missing:
+        g = ob.vertex_groups.get(b.name) or ob.vertex_groups.new(name=b.name)
+        p = to_local @ b.head_local
+        tri = [bm.verts.new(p + Vector(d) * size) for d in ((0, 0, 0), (1, 0, 0), (0, 0, 1))]
+        for v in tri:
+            v[dl][g.index] = 1.0
+        bm.faces.new(tri)
+    bm.to_mesh(ob.data)
+    bm.free()
+    print("[Rex] FP arms: anchored", len(missing), "unweighted bones")
+    return len(missing)
 
 
 # ------------------------------------------------------------------ export
