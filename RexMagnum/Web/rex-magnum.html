@@ -241,8 +241,11 @@ const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, rou
 const matWall = M(0xf4ead8), matTrim = M(0xc97b4a), matWood = M(0x8a5a33), matDark = M(0x2a2f38), matRail = M(0xffffff, { roughness: 0.4 });
 
 // ground: sand beach + grass inland
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M(0xffffff, { map: texSand }));
-ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// sand ground in four pieces around the pool basin (x -9..9, z -24..-10), so the pool is a real hole
+const sandMat = M(0xffffff, { map: texSand });
+[[-104.5, -17, 191, 400], [104.5, -17, 191, 400], [0, -120.5, 18, 193], [0, 85.5, 18, 191]].forEach(([x, z, w, d]) => {
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(w, d), sandMat); g.rotation.x = -Math.PI / 2; g.position.set(x, 0, z); g.receiveShadow = true; scene.add(g);
+});
 const lawn = new THREE.Mesh(new THREE.PlaneGeometry(160, 70), M(0xffffff, { map: texGrass }));
 lawn.rotation.x = -Math.PI / 2; lawn.position.set(0, 0.01, 40); lawn.receiveShadow = true; scene.add(lawn);
 
@@ -419,23 +422,79 @@ function respawn() {
   player.pos.set(0, ROOM.y, 11.5); player.vel.set(0, 0, 0); player.yaw = 0; player.pitch = -0.05; player.hp = 100; player.slipT = 0;
 }
 
-// first-person arms: blue flamingo-shirt sleeves, tan hands, gold watch
+// first-person arms: tanned forearms, real fists (knuckles, curled fingers, thumb), short flamingo-shirt sleeves
+// at the elbow, gold watch (left) and gold pinky ring (right). Built from rounded parts, lit by a soft lamp on the camera.
 const arms = new THREE.Group(); camera.add(arms);
-const skin = M(0xd9925f, { roughness: 0.7 }), sleeveMat = M(0xffffff, { map: texShirt });
+const armLight = new THREE.PointLight(0xfff1dc, 0.35, 1.6, 2); armLight.position.set(0, 0.15, 0.1); camera.add(armLight);
+const skin = new THREE.MeshStandardMaterial({ color: 0xa8653b, roughness: 0.55, metalness: 0 });
+const skinDark = new THREE.MeshStandardMaterial({ color: 0x8f5532, roughness: 0.6 });
+const nailMat = new THREE.MeshStandardMaterial({ color: 0xe9c3a8, roughness: 0.35 });
+const sleeveMat = M(0xffffff, { map: texShirt, roughness: 0.8, side: THREE.DoubleSide });
+const goldMat = new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 0.95, roughness: 0.25 });
+// a rounded limb part from a to b (capsule made of a cylinder and two spheres)
+function limb(parent, r0, r1, len, mat) {
+  const g = new THREE.Group();
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 14, 1, true), mat); c.rotation.x = -Math.PI / 2; c.position.z = -len / 2; g.add(c);
+  const s0 = new THREE.Mesh(new THREE.SphereGeometry(r0, 14, 10), mat); g.add(s0);
+  const s1 = new THREE.Mesh(new THREE.SphereGeometry(r1, 14, 10), mat); s1.position.z = -len; g.add(s1);
+  parent.add(g); return g;
+}
+// one finger: segments curl down (negative x-rotation) into a fist
+function finger(parent, x, lens, r, bends, nail) {
+  let joint = new THREE.Group(); joint.position.set(x, 0.004, 0); parent.add(joint);
+  lens.forEach((len, k) => {
+    const j = new THREE.Group(); j.rotation.x = bends[k]; joint.add(j);
+    limb(j, r * (1 - k * 0.08), r * (1 - (k + 1) * 0.08), len, skin);
+    if (k === lens.length - 1 && nail) { const n = new THREE.Mesh(new THREE.BoxGeometry(r * 1.5, r * 0.5, len * 0.7), nailMat); n.position.set(0, -r * 0.75, -len * 0.55); j.add(n); }
+    const next = new THREE.Group(); next.position.z = -len; j.add(next); joint = next;
+  });
+}
 function makeArm(side) {
   const a = new THREE.Group();
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.42, 10), sleeveMat); sleeve.rotation.x = Math.PI / 2; sleeve.position.z = 0.1; a.add(sleeve);
-  const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.32, 10), skin); fore.rotation.x = Math.PI / 2; fore.position.z = -0.24; a.add(fore);
-  const fist = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.12), skin); fist.position.z = -0.44; a.add(fist);
-  if (side < 0) { const watch = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 12), M(0xffc93c, { metalness: 0.9, roughness: 0.3 })); watch.position.z = -0.33; a.add(watch); }
-  a.position.set(0.22 * side, -0.22, -0.18); a.userData.rest = a.position.clone(); a.userData.fist = fist; arms.add(a); return a;
+  // forearm: thicker at the elbow, slimmer at the wrist; slightly flattened like a real forearm
+  const fore = limb(a, 0.052, 0.036, 0.34, skin); fore.scale.set(1.1, 0.9, 1);
+  // short shirt sleeve over the elbow
+  const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.16, 16, 1, true), sleeveMat); sl.rotation.x = -Math.PI / 2; sl.position.z = 0.07; a.add(sl);
+  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.077, 0.008, 6, 18), M(0x2a5cb8)); hem.position.z = -0.01; a.add(hem);
+  // hand at the wrist
+  const hand = new THREE.Group(); hand.position.z = -0.35; a.add(hand);
+  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.05, 18, 12), skin); palm.scale.set(1.0, 0.62, 1.05); palm.position.z = -0.045; hand.add(palm);
+  const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.038, 14, 10), skin); wrist.scale.set(1.1, 0.8, 1); hand.add(wrist);
+  // knuckle row + four curled fingers (fist)
+  const knuck = new THREE.Group(); knuck.position.set(0, 0.008, -0.092); hand.add(knuck);
+  const fx = [-0.033, -0.011, 0.011, 0.031], fl = [[0.03, 0.022, 0.018], [0.033, 0.024, 0.019], [0.031, 0.023, 0.018], [0.026, 0.019, 0.016]];
+  for (let f = 0; f < 4; f++) {
+    const kn = new THREE.Mesh(new THREE.SphereGeometry(0.0125, 10, 8), skinDark); kn.position.set(fx[f] * side, 0.004, 0); knuck.add(kn);
+    finger(knuck, fx[f] * side, fl[f], f === 3 ? 0.0095 : 0.0108, [-1.35, -1.55, -1.15], true);
+    if (f === 3 && side > 0) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.0035, 6, 14), goldMat); ring.position.set(fx[f] * side, -0.02, -0.012); ring.rotation.y = Math.PI / 2; knuck.add(ring); }
+  }
+  // thumb: from the inner side, folded across the front of the fingers
+  // thumb: base on the inner side under the knuckles, laid across the front of the curled fingers
+  const tb = new THREE.Group(); tb.position.set(-0.04 * side, -0.022, -0.075); tb.rotation.set(0.1, -1.25 * side, 0); hand.add(tb);
+  limb(tb, 0.0135, 0.0115, 0.026, skin);
+  const t2 = new THREE.Group(); t2.position.z = -0.026; t2.rotation.y = -0.35 * side; tb.add(t2); limb(t2, 0.0115, 0.0095, 0.02, skin);
+  // gold watch on the left wrist
+  if (side < 0) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.041, 0.009, 8, 20), goldMat); band.position.z = -0.32; a.add(band);
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.008, 16), new THREE.MeshStandardMaterial({ color: 0x0e1a2a, metalness: 0.4, roughness: 0.2 }));
+    face.position.set(0, 0.046, -0.32); a.add(face);
+  }
+  // pose: fists up in a boxer's guard, angled in toward the middle of the screen
+  a.position.set(0.19 * side, -0.24, -0.14); a.rotation.set(0.32, 0.16 * side, -0.12 * side);
+  hand.rotation.set(0.12, 0, -0.35 * side);
+  a.userData.rest = a.position.clone(); a.userData.restRot = a.rotation.clone(); a.userData.hand = hand;
+  arms.add(a); return a;
 }
 const armL = makeArm(-1), armR = makeArm(1);
 const bottleMesh = new THREE.Group();
-{ const glass = M(0x6b3a12, { roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 10), glass); body.position.z = -0.1; body.rotation.x = Math.PI / 2;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.03, 0.09, 10), glass); neck.position.z = 0.02; neck.rotation.x = Math.PI / 2;
-  bottleMesh.add(body, neck); bottleMesh.position.set(0, 0.03, -0.5); bottleMesh.rotation.x = -0.9; bottleMesh.visible = false; armR.add(bottleMesh); }
+{ const glass = new THREE.MeshStandardMaterial({ color: 0x5a2e0c, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.15, 16), glass); body.position.y = 0.11;
+  const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.032, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), glass); shoulder.position.y = 0.185;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.08, 12), glass); neck.position.y = 0.0;
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0325, 0.0325, 0.06, 16, 1, true), M(0xf3e2b3)); label.position.y = 0.11;
+  bottleMesh.add(body, shoulder, neck, label);
+  // held by the neck in the right fist, body up and forward
+  bottleMesh.position.set(0, 0.0, -0.06); bottleMesh.rotation.set(-0.5, 0, 0); bottleMesh.visible = false; armR.userData.hand.add(bottleMesh); }
 
 // ---------------------------------------------------------------- blobs
 const blobs = [], spits = [], puddles = [], particles = [];
@@ -833,13 +892,13 @@ function updateCamera(dt) {
   if (player.punchT > 0) player.punchT -= dt;
   const k = player.punchT > 0 ? Math.sin((1 - player.punchT / 0.28) * Math.PI) : 0;
   [armL, armR].forEach((a, i) => {
-    const r = a.userData.rest; a.position.copy(r);
+    const r = a.userData.rest, rr = a.userData.restRot; a.position.copy(r);
     a.position.y += Math.sin(time * 2 + i) * 0.006 + bob * 0.5;
     const active = (player.weapon === "bottle" ? 1 : player.punchSide) === i;
     if (active && k > 0) {
-      if (player.weapon === "bottle") { a.position.x -= 0.18 * k; a.rotation.y = 0.9 * k; a.rotation.x = -0.4 * k; }
-      else { a.position.z -= 0.32 * k; a.position.x -= 0.1 * (i ? 1 : -1) * k; a.rotation.y = 0; }
-    } else { a.rotation.y *= 0.8; a.rotation.x *= 0.8; }
+      if (player.weapon === "bottle") { a.position.x -= 0.2 * k; a.position.y += 0.05 * k; a.rotation.set(rr.x - 0.5 * k, rr.y + 0.9 * k, rr.z); }
+      else { a.position.z -= 0.3 * k; a.position.x -= 0.11 * (i ? 1 : -1) * k; a.position.y += 0.05 * k; a.rotation.set(rr.x - 0.25 * k, rr.y * (1 - k), rr.z); }
+    } else a.rotation.copy(rr);
   });
   arms.visible = deathT <= 0;
 }

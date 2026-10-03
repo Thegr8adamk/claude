@@ -75,3 +75,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 - 2026-10-03 17:05 — web_build.png: New menu Rex Magnum > Make Web Game (HTML): WebGL 2 build, opens in browser; web player safe (Low tier, no VR/QUIT, no threads, no audio limiter).
 - 2026-10-03 18:05 — web_loading_page.png: Web version gets its own page (title picture, loading bar, FULL SCREEN), 1024 px textures (smaller download), PLAY_WEB_GAME.bat launcher, Play Web Game menu.
 - 2026-10-03 20:05 — web_fixes.png: Web fixes from round 5: built-in font, tiled NavMesh build, no reflections on web, quality caps, pointer lock on click, smaller web textures/audio, Web start/play logs.
+- 2026-10-03 22:30 — web_hands.png: Browser game: real fists (knuckles, curled fingers, thumb, watch, pinky ring), tanned forearms, short sleeves; pool is now a real hole with water.
