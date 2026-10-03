@@ -72,3 +72,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 - 2026-10-02 23:05 — unity_test_fixes.png: Owner's first real Unity build: 0 errors, RMFoliage OK. Fixing NavMesh agent placement, 4 walk-check paths, shadow atlas, LOD1 names, blob eye NaN, weapon polygons, Pool access log.
 - 2026-10-03 00:05 — round3_fixes.png: Owner's round-3 Unity report fixed: ruins ramp, FP arms (bones kept + guard pose), Room304 LOD1, RMFind for obsolete API, n-gons; new Captions on/off + size option.
 - 2026-10-03 16:30 — fp_arms_fix2.png: FP arms fix 2: bone anchors keep all 64 bones (no Rig Errors), placement from head/neck/shoulders, hands-on-screen PASS/FAIL build check, M = second pause key.
+- 2026-10-03 17:05 — web_build.png: New menu Rex Magnum > Make Web Game (HTML): WebGL 2 build, opens in browser; web player safe (Low tier, no VR/QUIT, no threads, no audio limiter).
