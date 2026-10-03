@@ -70,3 +70,4 @@ One line per update: time (UTC), what changed, picture. Ask for changes any time
 - 2026-10-02 22:05 — new_trees.png: Trees re-modelled (palms 3.2–3.8k, jungle 3.6–4.7k triangles, was ~0.7–1k), wind sway shader added. Hotel split into per-floor LOD parts, far zones drop to low detail. 13 small bugs fixed. Clay render (no textures).
 - 2026-10-02 22:05 — area_e_scores.png: All 6 areas re-scored by switched reviewers; all now 8.5. Graphics 8.0→8.5, performance 7.8→8.5 (tree LODs, hotel split, zone culling, probe fixes). 13+ small bugs fixed.
 - 2026-10-02 23:05 — unity_test_fixes.png: Owner's first real Unity build: 0 errors, RMFoliage OK. Fixing NavMesh agent placement, 4 walk-check paths, shadow atlas, LOD1 names, blob eye NaN, weapon polygons, Pool access log.
+- 2026-10-03 00:05 — round3_fixes.png: Owner's round-3 Unity report fixed: ruins ramp, FP arms (bones kept + guard pose), Room304 LOD1, RMFind for obsolete API, n-gons; new Captions on/off + size option.
